@@ -17,7 +17,7 @@ import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 
 STATIC_FILES = {"BridgeNG.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html"}
 STATIC_DIRS = {"images"}
