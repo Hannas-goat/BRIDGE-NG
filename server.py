@@ -19,7 +19,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
 PORT = int(os.environ.get("PORT", 8000))
 
-STATIC_FILES = {"BridgeNG.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html"}
+STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
@@ -730,7 +730,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def serve_static(self, path):
         if path == "/":
-            path = "/BridgeNG.html"
+            path = "/index.html"
         rel_path = urllib.parse.unquote(path).lstrip("/")
         top_level = rel_path.split("/", 1)[0]
         if rel_path not in STATIC_FILES and top_level not in STATIC_DIRS:

@@ -12,7 +12,7 @@
 <body>
 <div class="wrap">
   <div class="nav">
-    <a class="brand" href="BridgeNG.html" style="text-decoration:none;color:inherit;">
+    <a class="brand" href="index.html" style="text-decoration:none;color:inherit;">
       <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
     </a>
   </div>
@@ -213,7 +213,7 @@ async function doSignIn(){
   }
   try{
     await apiLogin(email, password);
-    location.href = 'BridgeNG.html';
+    location.href = 'index.html';
   }catch(err){
     setMsg('signin-msg', err.message, 'error');
   }
@@ -250,7 +250,7 @@ async function doSignUp(){
 
   try{
     await apiSignup(payload);
-    location.href = 'BridgeNG.html';
+    location.href = 'index.html';
   }catch(err){
     setMsg('signup-msg', err.message, 'error');
   }
