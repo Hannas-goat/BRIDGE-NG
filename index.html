@@ -1760,6 +1760,79 @@ function getResumeText(){
   return document.getElementById('s-resume').value.trim();
 }
 
+// --- Lightweight markdown-lite parsing for AI-generated resume/cover-letter text ---
+// The AI is asked (see server.py) to mark section headings with "## ", bullets with "- ", and
+// inline emphasis with "**bold**" — parsed here so the on-page preview, Word doc, and PDF can
+// render real structure (headings, bullet lists, bold) instead of a wall of flat text.
+
+let lastWorkbenchRawText = '';
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function parseInlineRuns(line){
+  const runs = [];
+  const re = /\*\*(.+?)\*\*/g;
+  let last = 0, m;
+  while((m = re.exec(line))){
+    if(m.index > last) runs.push({text: line.slice(last, m.index), bold:false});
+    runs.push({text: m[1], bold:true});
+    last = re.lastIndex;
+  }
+  if(last < line.length) runs.push({text: line.slice(last), bold:false});
+  return runs.length ? runs : [{text: line, bold:false}];
+}
+
+function parseResumeBlocks(text){
+  return (text || '').split('\n').map(raw=>{
+    const line = raw.trim();
+    if(!line) return {type:'space'};
+    if(/^#{1,3}\s+/.test(line)) return {type:'heading', runs: parseInlineRuns(line.replace(/^#{1,3}\s+/,''))};
+    if(/^[-*]\s+/.test(line)) return {type:'bullet', runs: parseInlineRuns(line.replace(/^[-*]\s+/,''))};
+    return {type:'text', runs: parseInlineRuns(line)};
+  });
+}
+
+function runsToPlainText(runs){
+  return runs.map(r=>r.text).join('');
+}
+
+function runsToHtml(runs){
+  return runs.map(r => r.bold ? `<b>${escapeHtml(r.text)}</b>` : escapeHtml(r.text)).join('');
+}
+
+// Clean, structure-preserving plain text (for copy/.txt/PDF) — markdown markers stripped,
+// headings uppercased with surrounding blank lines, bullets get a visible "•".
+function resumeBlocksToPlainText(blocks){
+  const lines = [];
+  blocks.forEach(b=>{
+    if(b.type === 'space'){ lines.push(''); return; }
+    const plain = runsToPlainText(b.runs);
+    if(b.type === 'heading'){ lines.push(''); lines.push(plain.toUpperCase()); lines.push(''); }
+    else if(b.type === 'bullet'){ lines.push('  •  ' + plain); }
+    else lines.push(plain);
+  });
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function resumeBlocksToHtml(blocks){
+  let html = '';
+  let inList = false;
+  blocks.forEach(b=>{
+    if(b.type === 'bullet'){
+      if(!inList){ html += '<ul class="resume-doc-list">'; inList = true; }
+      html += `<li>${runsToHtml(b.runs)}</li>`;
+      return;
+    }
+    if(inList){ html += '</ul>'; inList = false; }
+    if(b.type === 'heading') html += `<h4 class="resume-doc-heading">${runsToHtml(b.runs)}</h4>`;
+    else if(b.type === 'text') html += `<p class="resume-doc-para">${runsToHtml(b.runs)}</p>`;
+  });
+  if(inList) html += '</ul>';
+  return html;
+}
+
 function renderWorkbenchLoading(title, subtitle){
   document.getElementById('ai-workbench').innerHTML = `
     <div class="workbench-card">
@@ -1770,7 +1843,8 @@ function renderWorkbenchLoading(title, subtitle){
 }
 
 function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
-  const safe = text.replace(/</g,'&lt;');
+  lastWorkbenchRawText = text;
+  const bodyHtml = resumeBlocksToHtml(parseResumeBlocks(text));
   let jobBlock = '';
   if(jobInfo){
     const tags = [];
@@ -1791,7 +1865,7 @@ function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
     <div class="workbench-card">
       <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
       ${jobBlock}
-      <div class="workbench-output" id="workbench-text">${safe}</div>
+      <div class="workbench-output" id="workbench-text">${bodyHtml}</div>
       <div class="output-actions">
         <button class="upload-btn" onclick="copyWorkbench()">Copy text</button>
         <button class="upload-btn" onclick="downloadWorkbenchTxt('${baseFilename}.txt')">Download .txt</button>
@@ -1802,11 +1876,38 @@ function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
+// Turns parsed blocks into real docx Paragraphs — bold/larger headings with a rule beneath,
+// genuine bullet-list paragraphs, and inline bold runs — instead of one flat line per Paragraph.
+function buildDocxParagraphs(blocks){
+  const { Paragraph, TextRun } = window.docx;
+  const paragraphs = [];
+  blocks.forEach(b=>{
+    if(b.type === 'space') return;
+    const isHeading = b.type === 'heading';
+    const runs = b.runs.map(r => new TextRun({
+      text: isHeading ? r.text.toUpperCase() : r.text,
+      bold: r.bold || isHeading,
+      size: isHeading ? 24 : 22,
+      color: isHeading ? '1B2A4A' : undefined,
+    }));
+    if(isHeading){
+      paragraphs.push(new Paragraph({
+        children: runs,
+        spacing: { before: 240, after: 120 },
+        border: { bottom: { color: 'DBA93C', space: 2, style: 'single', size: 6 } },
+      }));
+    }else if(b.type === 'bullet'){
+      paragraphs.push(new Paragraph({ children: runs, bullet: { level: 0 }, spacing: { after: 60 } }));
+    }else{
+      paragraphs.push(new Paragraph({ children: runs, spacing: { after: 100 } }));
+    }
+  });
+  return paragraphs;
+}
+
 // Opens a new tab titled "Tailored resume" with a real .docx built client-side (via the docx library)
 // from whatever's currently in the workbench output, and auto-triggers the download in that tab.
 function openTailoredResumeDoc(company){
-  const el = document.getElementById('workbench-text');
-  const text = el ? el.innerText : '';
   const win = window.open('', '_blank');
   if(!win){
     alert('Please allow pop-ups for this site so the Word document can open in a new tab.');
@@ -1815,8 +1916,8 @@ function openTailoredResumeDoc(company){
   win.document.title = 'Tailored resume';
   win.document.body.style.cssText = 'font-family:-apple-system,Segoe UI,sans-serif;';
   win.document.body.innerHTML = '<p style="padding:24px;color:#555;">Preparing your Word document…</p>';
-  const { Document, Packer, Paragraph, TextRun } = window.docx;
-  const paragraphs = text.split('\n').map(line => new Paragraph({ children: [new TextRun(line)] }));
+  const { Document, Packer } = window.docx;
+  const paragraphs = buildDocxParagraphs(parseResumeBlocks(lastWorkbenchRawText));
   Packer.toBlob(new Document({ sections: [{ properties: {}, children: paragraphs }] })).then(blob=>{
     const url = URL.createObjectURL(blob);
     const filename = `Tailored Resume - ${(company || 'Bridge NG').replace(/[^a-z0-9 -]/gi,'')}.docx`;
@@ -1846,13 +1947,11 @@ function renderWorkbenchError(title, err, context){
 }
 
 function copyWorkbench(){
-  const el = document.getElementById('workbench-text');
-  navigator.clipboard.writeText(el.innerText);
+  navigator.clipboard.writeText(resumeBlocksToPlainText(parseResumeBlocks(lastWorkbenchRawText)));
 }
 
 function downloadWorkbenchTxt(filename){
-  const el = document.getElementById('workbench-text');
-  const blob = new Blob([el.innerText], {type:'text/plain'});
+  const blob = new Blob([resumeBlocksToPlainText(parseResumeBlocks(lastWorkbenchRawText))], {type:'text/plain'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
@@ -1861,7 +1960,7 @@ function downloadWorkbenchTxt(filename){
 }
 
 function downloadWorkbenchPDF(filename, heading, subheading){
-  const el = document.getElementById('workbench-text');
+  const blocks = parseResumeBlocks(lastWorkbenchRawText);
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const marginX = 56;
@@ -1887,19 +1986,37 @@ function downloadWorkbenchPDF(filename, heading, subheading){
   doc.line(marginX, y, pageWidth - marginX, y);
   y += 24;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.setTextColor(30, 27, 22);
-  const lines = doc.splitTextToSize(el.innerText, maxWidth);
   const lineHeight = 15;
+  const ensureRoom = (needed)=>{ if(y + needed > pageHeight - 56){ doc.addPage(); y = 56; } };
 
-  lines.forEach(line=>{
-    if(y > pageHeight - 56){
-      doc.addPage();
-      y = 56;
+  blocks.forEach(b=>{
+    if(b.type === 'space'){ y += 6; return; }
+    const plain = runsToPlainText(b.runs);
+    if(b.type === 'heading'){
+      ensureRoom(30);
+      y += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12.5);
+      doc.setTextColor(27, 42, 74);
+      doc.text(plain.toUpperCase(), marginX, y);
+      y += 8;
+      doc.setDrawColor(226, 220, 208);
+      doc.setLineWidth(0.75);
+      doc.line(marginX, y, pageWidth - marginX, y);
+      y += 14;
+      return;
     }
-    doc.text(line, marginX, y);
-    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 27, 22);
+    const indent = b.type === 'bullet' ? 14 : 0;
+    const prefix = b.type === 'bullet' ? '•  ' : '';
+    const lines = doc.splitTextToSize(prefix + plain, maxWidth - indent);
+    lines.forEach(line=>{
+      ensureRoom(lineHeight);
+      doc.text(line, marginX + indent, y);
+      y += lineHeight;
+    });
   });
 
   doc.save(filename);

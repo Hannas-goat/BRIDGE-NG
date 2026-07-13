@@ -1412,14 +1412,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             f"Details: {job_info.get('summary','')}"
         )
 
+        markup_rules = (
+            "Format the output using this exact lightweight markup, so it can be rendered with real "
+            "structure instead of flat text:\n"
+            '- Start each major section with a line beginning "## " (e.g. "## PROFESSIONAL SUMMARY", '
+            '"## WORK EXPERIENCE", "## EDUCATION", "## SKILLS").\n'
+            '- Wrap a role\'s title/company/dates line in "**double asterisks**" for bold.\n'
+            '- Use "- " at the start of a line for every bullet point (achievements, responsibilities, skill lists).\n'
+            "- Write each paragraph or bullet as one single line — never manually wrap text onto a new line "
+            "mid-paragraph. Separate distinct paragraphs with a blank line.\n"
+            "- Use no other markdown (no numbered lists, no italics, no tables, no code fences)."
+        )
+
         if mode == "tailor":
             instruction = (
                 "You are a professional resume writer helping a Nigerian job seeker tailor their CV for one "
                 "specific role. Only reorder, re-emphasize, and rephrase what is already true in the resume — "
                 "never invent employers, degrees, dates, or experience that isn't there.\n\n"
                 f"{job_desc}\n\n"
-                "Return only the tailored resume text, ready to copy, formatted in clean plain text with clear "
-                "section headings."
+                f"{markup_rules}\n\n"
+                "Return only the tailored resume in this format — no commentary before or after."
             )
         else:
             instruction = (
@@ -1427,6 +1439,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'applying to the role below. Base it only on the resume content given — do not invent experience. '
                 'Warm and confident tone, no generic filler phrases like "I am writing to express my interest".\n\n'
                 f"{job_desc}\n\n"
+                "Write each paragraph as a single line (no manual line wrapping) and separate paragraphs with a "
+                "blank line. Use no markdown headings or bullets — this is prose.\n\n"
                 "Return only the cover letter text."
             )
 
