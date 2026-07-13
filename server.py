@@ -33,12 +33,11 @@ STATIC_DIRS = {"images"}
 PBKDF2_ITERATIONS = 200_000
 SESSION_COOKIE = "bridge_session"
 
-# OpenRouter has genuinely free models (no billing required) behind an OpenAI-compatible API.
-# Free models don't include live web search (that costs extra per query via OpenRouter's "online"
-# plugin), so job lookups are best-effort from whatever text is pasted in, not a live browse.
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.2-11b-vision-instruct:free")
-OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+# NVIDIA's build.nvidia.com API catalog is OpenAI-compatible and grants free trial credits on
+# signup — no live web search available, so job lookups are best-effort from pasted text only.
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
+NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
+NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 try:
     from pypdf import PdfReader
@@ -46,7 +45,7 @@ except ImportError:
     PdfReader = None
 
 # Shared secret required to import jobs (POST /api/jobs/import). Unset by default so the
-# endpoint is closed until an operator deliberately opts in — same pattern as OPENROUTER_API_KEY.
+# endpoint is closed until an operator deliberately opts in — same pattern as NVIDIA_API_KEY.
 IMPORT_TOKEN = os.environ.get("IMPORT_TOKEN")
 
 CHAT_FALLBACK_MESSAGE = "Bridge AI is having trouble answering right now. Please try again in a moment."
@@ -348,18 +347,17 @@ def generate_notifications_for_job(conn, job):
         )
 
 
-def call_openrouter(messages, max_tokens=1400):
-    """Calls OpenRouter's OpenAI-compatible chat completions API and returns the reply text.
+def call_nvidia(messages, max_tokens=1400):
+    """Calls NVIDIA's OpenAI-compatible chat completions API and returns the reply text.
     Raises urllib.error.HTTPError on a non-2xx response, or (KeyError, IndexError) if the response
     doesn't contain the expected shape — callers already handle both."""
-    payload = {"model": OPENROUTER_MODEL, "messages": messages, "max_tokens": max_tokens}
+    payload = {"model": NVIDIA_MODEL, "messages": messages, "max_tokens": max_tokens}
     req = urllib.request.Request(
-        OPENROUTER_CHAT_URL,
+        NVIDIA_CHAT_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "X-Title": "Bridge NG",
+            "Authorization": f"Bearer {NVIDIA_API_KEY}",
         },
         method="POST",
     )
@@ -1276,8 +1274,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         })
 
     def handle_chat(self):
-        if not OPENROUTER_API_KEY:
-            print("Chat request received but OPENROUTER_API_KEY is not set — see startup message for how to enable it.")
+        if not NVIDIA_API_KEY:
+            print("Chat request received but NVIDIA_API_KEY is not set — see startup message for how to enable it.")
             return self.send_json(
                 503,
                 {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
@@ -1303,21 +1301,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         chat_messages = [{"role": "system", "content": system_prompt}] + messages
 
         try:
-            reply = call_openrouter(chat_messages)
+            reply = call_nvidia(chat_messages)
         except urllib.error.HTTPError as e:
-            print("OpenRouter chat error:", e.code, e.read().decode("utf-8", errors="replace"))
+            print("NVIDIA chat error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
-            print("Unexpected OpenRouter chat response shape:", e)
+            print("Unexpected NVIDIA chat response shape:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except Exception as e:
-            print("OpenRouter chat request failed:", e)
+            print("NVIDIA chat request failed:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"reply": reply})
 
     def handle_resume_find_job(self):
-        if not OPENROUTER_API_KEY:
+        if not NVIDIA_API_KEY:
             return self.send_json(
                 503,
                 {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
@@ -1343,24 +1341,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "summary should be 1-2 sentences."
         )
         try:
-            reply = call_openrouter([
+            reply = call_nvidia([
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": job_text},
             ])
         except urllib.error.HTTPError as e:
-            print("OpenRouter job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
+            print("NVIDIA job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
-            print("Unexpected OpenRouter job-lookup response shape:", e)
+            print("Unexpected NVIDIA job-lookup response shape:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except Exception as e:
-            print("OpenRouter job-lookup request failed:", e)
+            print("NVIDIA job-lookup request failed:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, parse_job_info_json(reply, job_text))
 
     def handle_resume_generate(self):
-        if not OPENROUTER_API_KEY:
+        if not NVIDIA_API_KEY:
             return self.send_json(
                 503,
                 {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
@@ -1441,15 +1439,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             user_content = instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'
 
         try:
-            reply = call_openrouter([{"role": "user", "content": user_content}])
+            reply = call_nvidia([{"role": "user", "content": user_content}])
         except urllib.error.HTTPError as e:
-            print("OpenRouter resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
+            print("NVIDIA resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
-            print("Unexpected OpenRouter resume-generate response shape:", e)
+            print("Unexpected NVIDIA resume-generate response shape:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except Exception as e:
-            print("OpenRouter resume-generate request failed:", e)
+            print("NVIDIA resume-generate request failed:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"text": reply})
@@ -1464,10 +1462,10 @@ def main():
     server = ThreadingServer(("0.0.0.0", PORT), Handler)
     print(f"Bridge NG server running — open http://localhost:{PORT}/ in your browser")
     print(f"(Accounts are stored in {DB_PATH} and persist across restarts.)")
-    if OPENROUTER_API_KEY:
-        print(f"Ask Bridge AI is live, using model '{OPENROUTER_MODEL}'.")
+    if NVIDIA_API_KEY:
+        print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}'.")
     else:
-        print("Ask Bridge AI is NOT configured — set the OPENROUTER_API_KEY environment variable to enable it.")
+        print("Ask Bridge AI is NOT configured — set the NVIDIA_API_KEY environment variable to enable it.")
     if IMPORT_TOKEN:
         print("Job import is enabled at POST /api/jobs/import and POST /api/jobs/sync (requires the IMPORT_TOKEN as a 'token' field).")
         print(f"Sync jobs from a live Greenhouse/Lever board at http://localhost:{PORT}/admin-jobs-sync.html")
