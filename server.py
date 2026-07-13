@@ -11,11 +11,17 @@ import re
 import secrets
 import socketserver
 import sqlite3
+import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# On hosts like Render, stdout isn't a real terminal, so Python block-buffers print() output
+# instead of flushing per line — logs can end up delayed indefinitely or never show up at all.
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
