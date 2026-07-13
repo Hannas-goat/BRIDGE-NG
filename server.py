@@ -1,7 +1,9 @@
+import base64
 import datetime
 import hashlib
 import html
 import http.server
+import io
 import json
 import mimetypes
 import os
@@ -27,7 +29,15 @@ SESSION_COOKIE = "bridge_session"
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini-search-preview")
+# Resume tailoring/cover letters need vision (to read uploaded image resumes) but not live web
+# search, so they use a plain multimodal model rather than the *-search-preview variant above.
+OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
 
 # Shared secret required to import jobs (POST /api/jobs/import). Unset by default so the
 # endpoint is closed until an operator deliberately opts in — same pattern as OPENAI_API_KEY.
@@ -332,8 +342,34 @@ def generate_notifications_for_job(conn, job):
         )
 
 
+def parse_job_info_json(reply, fallback_text):
+    """Parses the AI job-lookup's JSON reply, tolerating markdown code fences, and falls back to
+    a best-effort shape (rather than erroring out) if the model didn't return valid JSON."""
+    cleaned = reply.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    try:
+        data = json.loads(cleaned)
+        if not isinstance(data, dict):
+            data = {}
+    except json.JSONDecodeError:
+        data = {}
+    return {
+        "title": data.get("title") or fallback_text[:80],
+        "company": data.get("company") or "",
+        "location": data.get("location") or "",
+        "level": data.get("level") or "",
+        "isNigeria": bool(data.get("isNigeria")),
+        "isRemote": bool(data.get("isRemote")),
+        "applicationLink": data.get("applicationLink") or "",
+        "skills": data.get("skills") if isinstance(data.get("skills"), list) else [],
+        "summary": data.get("summary") or fallback_text[:300],
+    }
+
+
 def level_distance(a, b):
-    """Python port of BridgeNG.html's levelDistance() — kept in sync deliberately so a
+    """Python port of index.html's levelDistance() — kept in sync deliberately so a
     real candidate match score means the same thing as the sample-data match score."""
     def norm(s):
         s = s or ""
@@ -346,7 +382,7 @@ def level_distance(a, b):
 
 
 def match_score(required_skills, candidate_skills, req_level, cand_level, req_loc, cand_loc):
-    """Python port of BridgeNG.html's matchScore() — same formula, same 2-99 range."""
+    """Python port of index.html's matchScore() — same formula, same 2-99 range."""
     req = set(required_skills)
     cand = set(candidate_skills)
     intersection = len(req & cand)
@@ -718,6 +754,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_create_application()
         if parsed.path == "/api/employer-jobs":
             return self.handle_post_employer_job()
+        if parsed.path == "/api/resume/find-job":
+            return self.handle_resume_find_job()
+        if parsed.path == "/api/resume/tailor":
+            return self.handle_resume_generate()
         return self.send_json(404, {"error": "Not found"})
 
     def do_PUT(self):
@@ -1267,6 +1307,170 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"reply": reply})
+
+    def handle_resume_find_job(self):
+        if not OPENAI_API_KEY:
+            return self.send_json(
+                503,
+                {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
+            )
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": CHAT_FALLBACK_MESSAGE})
+
+        job_text = (data.get("jobText") or "").strip()
+        if not job_text:
+            return self.send_json(400, {"error": "Paste the job you're applying for first."})
+
+        system_prompt = (
+            "You research job postings for Bridge NG, a Nigerian job-matching platform. Given a pasted job "
+            "posting, a job title + company, or a link, identify the real role. Search the live web if the "
+            "input doesn't already contain enough detail, or to verify or find a real application link. "
+            "Determine whether the role is based in Nigeria and/or offered as fully remote.\n\n"
+            "Respond with ONLY a JSON object (no markdown fences, no commentary) matching exactly this shape:\n"
+            '{"title": string, "company": string, "location": string, "level": string, '
+            '"isNigeria": boolean, "isRemote": boolean, "applicationLink": string, '
+            '"skills": [string, ...], "summary": string}\n\n'
+            "Use an empty string for applicationLink if you can't find a real one — never invent a URL. "
+            "skills should be 3-8 short skill names relevant to the role. summary should be 1-2 sentences."
+        )
+        payload = {
+            "model": OPENAI_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": job_text},
+            ],
+            "web_search_options": {},
+        }
+        req = urllib.request.Request(
+            OPENAI_CHAT_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_API_KEY}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            reply = result["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            print("OpenAI job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except (KeyError, IndexError) as e:
+            print("Unexpected OpenAI job-lookup response shape:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except Exception as e:
+            print("OpenAI job-lookup request failed:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+
+        self.send_json(200, parse_job_info_json(reply, job_text))
+
+    def handle_resume_generate(self):
+        if not OPENAI_API_KEY:
+            return self.send_json(
+                503,
+                {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
+            )
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": CHAT_FALLBACK_MESSAGE})
+
+        mode = data.get("mode")
+        if mode not in ("tailor", "cover"):
+            return self.send_json(400, {"error": CHAT_FALLBACK_MESSAGE})
+
+        job_info = data.get("jobInfo") or {}
+        resume_text = (data.get("resumeText") or "").strip()
+        resume_file = data.get("resumeFile") or None
+        candidate_name = (data.get("candidateName") or "the candidate").strip()
+
+        image_data_url = None
+        if resume_file:
+            kind = resume_file.get("kind")
+            b64 = resume_file.get("base64") or ""
+            if kind == "pdf":
+                if PdfReader is None:
+                    return self.send_json(
+                        500,
+                        {"error": "PDF resume support isn't installed on the server yet — try a JPG/PNG, or paste your resume text instead."},
+                    )
+                try:
+                    pdf_bytes = base64.b64decode(b64)
+                    reader = PdfReader(io.BytesIO(pdf_bytes))
+                    resume_text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+                except Exception as e:
+                    print("PDF extraction failed:", e)
+                    return self.send_json(400, {"error": "Couldn't read that PDF. Try a JPG/PNG instead, or paste your resume text directly."})
+                if len(resume_text) < 50:
+                    return self.send_json(
+                        400,
+                        {"error": "Couldn't find readable text in that PDF (it may be a scanned image). Try a JPG/PNG instead, or paste your resume text directly."},
+                    )
+            elif kind == "image":
+                media_type = resume_file.get("mediaType") or "image/jpeg"
+                image_data_url = f"data:{media_type};base64,{b64}"
+
+        if not resume_text and not image_data_url:
+            return self.send_json(400, {"error": "Upload or paste your CV/resume first."})
+
+        job_desc = (
+            f"Job: {job_info.get('title','')} at {job_info.get('company','')}, {job_info.get('location','')}\n"
+            f"Experience level: {job_info.get('level','')}\n"
+            f"Key skills: {', '.join(job_info.get('skills') or [])}\n"
+            f"Details: {job_info.get('summary','')}"
+        )
+
+        if mode == "tailor":
+            instruction = (
+                "You are a professional resume writer helping a Nigerian job seeker tailor their CV for one "
+                "specific role. Only reorder, re-emphasize, and rephrase what is already true in the resume — "
+                "never invent employers, degrees, dates, or experience that isn't there.\n\n"
+                f"{job_desc}\n\n"
+                "Return only the tailored resume text, ready to copy, formatted in clean plain text with clear "
+                "section headings."
+            )
+        else:
+            instruction = (
+                f'Write a concise, specific, professional cover letter (under 350 words) for {candidate_name}, '
+                'applying to the role below. Base it only on the resume content given — do not invent experience. '
+                'Warm and confident tone, no generic filler phrases like "I am writing to express my interest".\n\n'
+                f"{job_desc}\n\n"
+                "Return only the cover letter text."
+            )
+
+        if image_data_url:
+            user_content = [
+                {"type": "text", "text": instruction + "\n\nThe candidate's resume is attached as an image — read it directly."},
+                {"type": "image_url", "image_url": {"url": image_data_url}},
+            ]
+        else:
+            user_content = instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'
+
+        payload = {
+            "model": OPENAI_VISION_MODEL,
+            "messages": [{"role": "user", "content": user_content}],
+            "max_tokens": 1400,
+        }
+        req = urllib.request.Request(
+            OPENAI_CHAT_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_API_KEY}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            reply = result["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            print("OpenAI resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except (KeyError, IndexError) as e:
+            print("Unexpected OpenAI resume-generate response shape:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except Exception as e:
+            print("OpenAI resume-generate request failed:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+
+        self.send_json(200, {"text": reply})
 
 
 class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):

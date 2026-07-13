@@ -151,6 +151,8 @@ function apiCancelAppointment(id){ return apiRequest('/api/appointments/cancel',
 function apiCreateApplication(payload){ return apiRequest('/api/applications', 'POST', payload); }
 function apiListApplications(){ return apiRequest('/api/applications', 'GET'); }
 function apiPostEmployerJob(payload){ return apiRequest('/api/employer-jobs', 'POST', payload); }
+function apiFindJob(jobText){ return apiRequest('/api/resume/find-job', 'POST', {jobText}); }
+function apiGenerateResumeDoc(payload){ return apiRequest('/api/resume/tailor', 'POST', payload); }
 
 // --- Friendly fallback copy for AI-related failures — never surface raw codes/stack traces. ---
 
