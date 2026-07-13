@@ -33,12 +33,12 @@ STATIC_DIRS = {"images"}
 PBKDF2_ITERATIONS = 200_000
 SESSION_COOKIE = "bridge_session"
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini-search-preview")
-# Resume tailoring/cover letters need vision (to read uploaded image resumes) but not live web
-# search, so they use a plain multimodal model rather than the *-search-preview variant above.
-OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
-OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+# Google Gemini (via Google AI Studio) has a genuinely free tier — no billing required — and,
+# unlike OpenAI's split between search-preview and vision-capable model variants, a single Flash
+# model supports web-search grounding and image input at the same time.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 try:
     from pypdf import PdfReader
@@ -46,7 +46,7 @@ except ImportError:
     PdfReader = None
 
 # Shared secret required to import jobs (POST /api/jobs/import). Unset by default so the
-# endpoint is closed until an operator deliberately opts in — same pattern as OPENAI_API_KEY.
+# endpoint is closed until an operator deliberately opts in — same pattern as GEMINI_API_KEY.
 IMPORT_TOKEN = os.environ.get("IMPORT_TOKEN")
 
 CHAT_FALLBACK_MESSAGE = "Bridge AI is having trouble answering right now. Please try again in a moment."
@@ -346,6 +346,27 @@ def generate_notifications_for_job(conn, job):
             "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
             (row["user_id"], "followed_company", message, job["title"], job["company"]),
         )
+
+
+def call_gemini(contents, system_prompt=None, use_search=False, max_output_tokens=1400):
+    """Calls the Gemini generateContent API and returns the reply text. Raises urllib.error.HTTPError
+    on a non-2xx response, or (KeyError, IndexError) if the response doesn't contain the expected shape —
+    callers already handle both, matching the pattern used everywhere else in this file."""
+    body = {"contents": contents, "generationConfig": {"maxOutputTokens": max_output_tokens}}
+    if system_prompt:
+        body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+    if use_search:
+        body["tools"] = [{"google_search": {}}]
+    req = urllib.request.Request(
+        f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        result = json.loads(resp.read().decode("utf-8"))
+    parts = result["candidates"][0]["content"]["parts"]
+    return "".join(p.get("text", "") for p in parts).strip()
 
 
 def parse_job_info_json(reply, fallback_text):
@@ -1256,8 +1277,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         })
 
     def handle_chat(self):
-        if not OPENAI_API_KEY:
-            print("Chat request received but OPENAI_API_KEY is not set — see startup message for how to enable it.")
+        if not GEMINI_API_KEY:
+            print("Chat request received but GEMINI_API_KEY is not set — see startup message for how to enable it.")
             return self.send_json(
                 503,
                 {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
@@ -1280,42 +1301,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "Keep answers concise, warm, and practical.\n\n"
             "Reference data about the website and its current listings:\n" + context
         )
+        contents = [
+            {"role": "model" if m.get("role") == "assistant" else "user", "parts": [{"text": m.get("content", "")}]}
+            for m in messages
+        ]
 
-        payload = {
-            "model": OPENAI_MODEL,
-            "messages": [{"role": "system", "content": system_prompt}] + messages,
-            "web_search_options": {},
-        }
-        req = urllib.request.Request(
-            OPENAI_CHAT_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-            },
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
+            reply = call_gemini(contents, system_prompt=system_prompt, use_search=True)
         except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", errors="replace")
-            print("OpenAI API error:", e.code, detail)
+            print("Gemini chat error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except (KeyError, IndexError) as e:
+            print("Unexpected Gemini chat response shape:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except Exception as e:
-            print("OpenAI request failed:", e)
-            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
-
-        try:
-            reply = result["choices"][0]["message"]["content"]
-        except (KeyError, IndexError):
-            print("Unexpected OpenAI response shape:", result)
+            print("Gemini chat request failed:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"reply": reply})
 
     def handle_resume_find_job(self):
-        if not OPENAI_API_KEY:
+        if not GEMINI_API_KEY:
             return self.send_json(
                 503,
                 {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
@@ -1340,38 +1346,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "Use an empty string for applicationLink if you can't find a real one — never invent a URL. "
             "skills should be 3-8 short skill names relevant to the role. summary should be 1-2 sentences."
         )
-        payload = {
-            "model": OPENAI_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": job_text},
-            ],
-            "web_search_options": {},
-        }
-        req = urllib.request.Request(
-            OPENAI_CHAT_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_API_KEY}"},
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-            reply = result["choices"][0]["message"]["content"]
+            reply = call_gemini(
+                [{"role": "user", "parts": [{"text": job_text}]}],
+                system_prompt=system_prompt,
+                use_search=True,
+            )
         except urllib.error.HTTPError as e:
-            print("OpenAI job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
+            print("Gemini job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
-            print("Unexpected OpenAI job-lookup response shape:", e)
+            print("Unexpected Gemini job-lookup response shape:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except Exception as e:
-            print("OpenAI job-lookup request failed:", e)
+            print("Gemini job-lookup request failed:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, parse_job_info_json(reply, job_text))
 
     def handle_resume_generate(self):
-        if not OPENAI_API_KEY:
+        if not GEMINI_API_KEY:
             return self.send_json(
                 503,
                 {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
@@ -1389,7 +1383,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         resume_file = data.get("resumeFile") or None
         candidate_name = (data.get("candidateName") or "the candidate").strip()
 
-        image_data_url = None
+        image_part = None
         if resume_file:
             kind = resume_file.get("kind")
             b64 = resume_file.get("base64") or ""
@@ -1413,9 +1407,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     )
             elif kind == "image":
                 media_type = resume_file.get("mediaType") or "image/jpeg"
-                image_data_url = f"data:{media_type};base64,{b64}"
+                image_part = {"inline_data": {"mime_type": media_type, "data": b64}}
 
-        if not resume_text and not image_data_url:
+        if not resume_text and not image_part:
             return self.send_json(400, {"error": "Upload or paste your CV/resume first."})
 
         job_desc = (
@@ -1443,37 +1437,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "Return only the cover letter text."
             )
 
-        if image_data_url:
-            user_content = [
-                {"type": "text", "text": instruction + "\n\nThe candidate's resume is attached as an image — read it directly."},
-                {"type": "image_url", "image_url": {"url": image_data_url}},
+        if image_part:
+            parts = [
+                {"text": instruction + "\n\nThe candidate's resume is attached as an image — read it directly."},
+                image_part,
             ]
         else:
-            user_content = instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'
+            parts = [{"text": instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'}]
 
-        payload = {
-            "model": OPENAI_VISION_MODEL,
-            "messages": [{"role": "user", "content": user_content}],
-            "max_tokens": 1400,
-        }
-        req = urllib.request.Request(
-            OPENAI_CHAT_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_API_KEY}"},
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-            reply = result["choices"][0]["message"]["content"]
+            reply = call_gemini([{"role": "user", "parts": parts}])
         except urllib.error.HTTPError as e:
-            print("OpenAI resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
+            print("Gemini resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
-            print("Unexpected OpenAI resume-generate response shape:", e)
+            print("Unexpected Gemini resume-generate response shape:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except Exception as e:
-            print("OpenAI resume-generate request failed:", e)
+            print("Gemini resume-generate request failed:", e)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"text": reply})
@@ -1488,10 +1469,10 @@ def main():
     server = ThreadingServer(("0.0.0.0", PORT), Handler)
     print(f"Bridge NG server running — open http://localhost:{PORT}/ in your browser")
     print(f"(Accounts are stored in {DB_PATH} and persist across restarts.)")
-    if OPENAI_API_KEY:
-        print(f"Ask Bridge AI is live, using model '{OPENAI_MODEL}'.")
+    if GEMINI_API_KEY:
+        print(f"Ask Bridge AI is live, using model '{GEMINI_MODEL}'.")
     else:
-        print("Ask Bridge AI is NOT configured — set the OPENAI_API_KEY environment variable to enable it.")
+        print("Ask Bridge AI is NOT configured — set the GEMINI_API_KEY environment variable to enable it.")
     if IMPORT_TOKEN:
         print("Job import is enabled at POST /api/jobs/import and POST /api/jobs/sync (requires the IMPORT_TOKEN as a 'token' field).")
         print(f"Sync jobs from a live Greenhouse/Lever board at http://localhost:{PORT}/admin-jobs-sync.html")
