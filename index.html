@@ -1850,11 +1850,16 @@ function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
     const tags = [];
     if(jobInfo.isNigeria) tags.push('<span class="skill-pill match">Nigeria</span>');
     if(jobInfo.isRemote) tags.push('<span class="skill-pill match">Remote-friendly</span>');
-    const linkHtml = jobInfo.applicationLink
-      ? `<a class="apply-btn" href="${jobInfo.applicationLink}" target="_blank" rel="noopener noreferrer">Apply to this role ↗</a>`
-      : `<span class="fit-none">No application link found — search for this role directly on the company's careers page.</span>`;
+    let linkHtml;
+    if(jobInfo.applicationLink){
+      linkHtml = `<a class="apply-btn" href="${jobInfo.applicationLink}" target="_blank" rel="noopener noreferrer">Apply to this role ↗</a>`;
+    }else{
+      const q = encodeURIComponent([jobInfo.title, jobInfo.company, 'careers apply'].filter(Boolean).join(' '));
+      linkHtml = `<a class="apply-btn" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener noreferrer">Search for this role & apply ↗</a>
+        <p style="font-size:11px;color:var(--ink-soft);margin:6px 0 0;">No direct link was in what you pasted, so this searches for it instead of linking straight to it.</p>`;
+    }
     jobBlock = `
-      <div class="fit-skill-block">
+      <div class="fit-skill-block" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
         <p class="fit-skill-label">About this role</p>
         <div class="skill-row">${tags.join('') || '<span class="fit-none">Location unconfirmed</span>'}</div>
         <div style="margin-top:10px;">${linkHtml}</div>
@@ -1864,7 +1869,6 @@ function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
   document.getElementById('ai-workbench').innerHTML = `
     <div class="workbench-card">
       <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
-      ${jobBlock}
       <div class="workbench-output" id="workbench-text">${bodyHtml}</div>
       <div class="output-actions">
         <button class="upload-btn" onclick="copyWorkbench()">Copy text</button>
@@ -1872,6 +1876,7 @@ function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
         <button class="ai-btn" onclick="downloadWorkbenchPDF('${baseFilename}.pdf', '${title.replace(/'/g,"")}', '${subtitle.replace(/'/g,"")}')">Download PDF</button>
         <button class="ai-btn" onclick="openTailoredResumeDoc('${company}')">Download Word doc ↗</button>
       </div>
+      ${jobBlock}
     </div>`;
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
