@@ -1,0 +1,2095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bridge — Nigerian talent, matched right</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="images/bridgeng-logo-icon.png">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="nav">
+    <div class="nav-top">
+      <div class="nav-left">
+        <button class="menu-toggle" id="menu-toggle" onclick="toggleMobileNav()" aria-label="Open menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="brand">
+          <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
+        </div>
+      </div>
+      <div class="nav-actions">
+        <div class="notif-area" id="notif-area" style="display:none;">
+          <button class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown()" aria-label="Notifications">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
+          </button>
+          <div class="notif-dropdown" id="notif-dropdown">
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button onclick="markAllNotificationsRead()">Mark all read</button>
+            </div>
+            <div id="notif-list"></div>
+          </div>
+        </div>
+        <div class="auth-area" id="auth-area">
+          <a class="auth-btn" href="auth.html?mode=signin">Sign in</a>
+          <a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>
+        </div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-seeker" onclick="showPage('seeker')">Job seeker</button>
+      <button class="tab-btn" id="tab-employer" onclick="showPage('employer')">Employer</button>
+      <button class="tab-btn" id="tab-resume" onclick="showPage('resume')">Resume studio</button>
+      <button class="tab-btn" id="tab-train" onclick="showPage('train')">Train Yourself</button>
+      <button class="tab-btn" id="tab-abroad" onclick="showPage('abroad')">Work Abroad</button>
+      <button class="tab-btn" id="tab-interview" onclick="showPage('interview')">Interview Tips</button>
+      <button class="tab-btn" id="tab-appointment" onclick="showPage('appointment')">Book Appointment</button>
+      <button class="tab-btn" id="tab-explore" onclick="showPage('explore')">Explore Jobs</button>
+    </div>
+    <div class="nav-backdrop" id="nav-backdrop" onclick="closeMobileNav()"></div>
+  </div>
+
+  <div class="hero">
+    <div id="hero-left-default">
+      <h1>Closing the gap between <em>graduating</em> and <em>getting hired</em>.</h1>
+      <p>Bridge matches Nigerian students and early or mid-career professionals to roles by actual skill overlap, not just keywords on a CV — and gives employers a shortlist that's already relevant.</p>
+      <div class="stat-row">
+        <div class="stat"><b>36+</b><span>Sample roles, 18 sectors</span></div>
+        <div class="stat"><b>9</b><span>States covered</span></div>
+        <div class="stat"><b>Live pay data</b><span>Sourced &amp; estimated</span></div>
+      </div>
+    </div>
+    <div id="hero-left-resume" style="display:none;">
+      <h1>Turn Your Experience Into <em>Opportunity</em></h1>
+      <p>Your CV should do more than list qualifications—it should show employers exactly why you are the right fit.</p>
+      <p>Bridge helps you create a clear, professional, and role-focused CV that highlights your skills, achievements, and career potential.</p>
+      <p class="hero-cta-line">Stand out. Get noticed. Move closer to your next opportunity.</p>
+    </div>
+    <div id="hero-left-employer" style="display:none;">
+      <h1>Find the Right Talent, <em>Faster</em></h1>
+      <p>BridgeNG connects you with pre-vetted Nigerian professionals whose verified skills align with your role.</p>
+      <p class="hero-cta-line">Receive a focused shortlist, reduce hiring time, and build stronger teams with confidence.</p>
+    </div>
+    <div id="hero-left-train" style="display:none;">
+      <h1>Grow Your Skills. <em>Grow Your Career.</em></h1>
+      <p>Build practical, career-relevant skills at your own pace.</p>
+      <p class="hero-cta-line">BridgeNG connects you with focused learning resources designed to strengthen your expertise and prepare you for better opportunities.</p>
+    </div>
+    <div id="hero-left-abroad" style="display:none;">
+      <h1>Connect with Employers <em>Beyond Borders</em>.</h1>
+      <p>Access remote opportunities with international employers while living in Nigeria.</p>
+      <p class="hero-cta-line">BridgeNG connects skilled professionals with companies looking for verified talent, making it easier to build a global career from anywhere.</p>
+    </div>
+    <div id="hero-left-interview" style="display:none;">
+      <h1>Interview Strong. <em>Make Your First Impression Count.</em></h1>
+      <p>Walk in prepared, composed, and ready to show them exactly why you're the right person for the role.</p>
+      <p class="hero-cta-line">Every interview is a chance to grow — however it goes, you'll walk out sharper than you walked in.</p>
+    </div>
+    <div id="hero-left-appointment" style="display:none;">
+      <h1>Stay Organized. <em>Make Every Appointment Count.</em></h1>
+      <p>Keep track of every interview and follow-up you schedule with the companies you're applying to, all in one place.</p>
+      <p class="hero-cta-line">Every appointment you lock in is one step closer to your next opportunity — you're already ahead of most.</p>
+    </div>
+    <div id="hero-left-explore" style="display:none;">
+      <h1>Cross the bridge to your <em>next career</em>.</h1>
+      <p>Browse opportunities, submit applications, and take the first step towards a rewarding future.</p>
+    </div>
+    <div class="hero-photo-single" id="hero-photo-single">
+      <img id="hero-photo-img" src="images/Bridge NG - New Hire.png" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
+    </div>
+  </div>
+
+  <!-- SEEKER PANEL -->
+  <div class="panel" id="panel-seeker">
+    <div id="remote-jobs-feed"></div>
+    <div id="recent-jobs-feed"></div>
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Build your profile</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Personal details</p>
+      <div class="field-row">
+        <div>
+          <label>Full name</label>
+          <input type="text" id="s-name" placeholder="e.g. Amaka Nwosu">
+        </div>
+        <div>
+          <label>Date of birth</label>
+          <input type="date" id="s-dob">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Sex</label>
+          <select id="s-sex">
+            <option>Prefer not to say</option>
+            <option>Female</option>
+            <option>Male</option>
+          </select>
+        </div>
+        <div>
+          <label>Phone number</label>
+          <input type="tel" id="s-phone" placeholder="e.g. 0803 123 4567">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Email address</label>
+          <input type="email" id="s-email" placeholder="e.g. amaka.nwosu@email.com">
+        </div>
+        <div>
+          <label>Address</label>
+          <input type="text" id="s-address" placeholder="e.g. 14 Allen Avenue, Ikeja">
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:var(--ink-soft);margin:20px 0 18px;border-top:1px solid var(--line);padding-top:16px;">Background &amp; preferences</p>
+      <div class="field-row">
+        <div>
+          <label>Highest level of education</label>
+          <select id="s-education">
+            <option>Secondary school</option>
+            <option>OND / HND (Polytechnic)</option>
+            <option>NCE (College of Education)</option>
+            <option>Bachelor's degree (B.Sc / B.A / B.Eng)</option>
+            <option>Master's degree</option>
+            <option>Doctorate (Ph.D)</option>
+            <option>Professional certification</option>
+          </select>
+        </div>
+        <div>
+          <label>Career stage</label>
+          <select id="s-level">
+            <option>Student</option>
+            <option>Early career (0-3 yrs)</option>
+            <option>Mid career (4-8 yrs)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Field of study / background</label>
+          <input type="text" id="s-field" placeholder="e.g. Computer Science, UNILAG">
+        </div>
+        <div>
+          <label>Preferred location</label>
+          <select id="s-loc"></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Open to fully remote roles abroad?</label>
+          <select id="s-remote">
+            <option value="no">No, I'm looking within Nigeria</option>
+            <option value="yes">Yes — show me remote roles with companies abroad</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+      <label>Your skills — tap to select, or type your own</label>
+      <div class="chip-field" id="s-skills"></div>
+      <div class="skill-add-row">
+        <input type="text" id="s-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-skills', seekerSkills, 's-skill-input');}">
+        <button class="upload-btn" onclick="addCustomSkill('s-skills', seekerSkills, 's-skill-input')">Add skill</button>
+      </div>
+      <div class="btn-row">
+        <button class="go-btn" style="margin-top:0;" onclick="findJobs()">Find matching jobs →</button>
+        <button class="ai-btn" onclick="saveCurrentSearch()">🔔 Save this search &amp; get alerts</button>
+        <button class="ai-btn" id="save-profile-btn" style="display:none;" onclick="saveProfile()">Save my profile ↗</button>
+      </div>
+      <p class="form-msg" id="profile-save-msg"></p>
+      <div id="saved-searches-list"></div>
+    </div>
+    <div id="my-applications-list"></div>
+    <div id="seeker-results"></div>
+  </div>
+
+  <!-- RESUME STUDIO PAGE -->
+  <div class="panel" id="panel-resume" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">Resume studio</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 20px;">Upload or paste your CV once, pick a role, and generate a tailored resume and cover letter for it.</p>
+
+      <label>Choose a role to tailor for</label>
+      <select id="rs-job-select" style="margin-bottom:20px;"></select>
+
+      <div class="resume-box" style="border-top:none;margin-top:0;padding-top:0;">
+        <label>Your CV / resume — PDF, image (JPG/PNG), or text</label>
+        <div class="resume-upload-row">
+          <button class="upload-btn" onclick="document.getElementById('s-resume-file').click()">Upload file</button>
+          <input type="file" id="s-resume-file" accept=".txt,.md,.pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleResumeUpload(event)">
+          <span class="file-name" id="s-resume-filename">No file uploaded — you can also paste your CV text below</span>
+          <button class="upload-btn" id="s-resume-remove" style="display:none;" onclick="clearResumeFile()">Remove file</button>
+        </div>
+        <textarea id="s-resume" placeholder="Paste your current CV / resume text here (or upload a PDF/image above instead)..."></textarea>
+      </div>
+
+      <div class="btn-row" style="margin-top:18px;">
+        <button class="go-btn" style="margin-top:0;" onclick="tailorResumeFor(Number(document.getElementById('rs-job-select').value))">Tailor my resume →</button>
+        <button class="go-btn" style="margin-top:0;background:var(--gold-deep);" onclick="writeCoverLetterFor(Number(document.getElementById('rs-job-select').value))">Write cover letter →</button>
+        <button class="ai-btn" onclick="checkResumeFit(Number(document.getElementById('rs-job-select').value))">Check my fit for this role →</button>
+      </div>
+    </div>
+    <div class="workbench" id="ai-workbench"></div>
+  </div>
+
+  <!-- TRAIN YOURSELF PAGE -->
+  <div class="panel" id="panel-train" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">Train yourself</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 20px;">Build the skills employers are hiring for. Pick a skill below for curated free and paid courses from YouTube, Udemy, Khan Academy, and Coursera — then add it straight to your Bridge profile.</p>
+      <label>Search or type any subject you want to learn</label>
+      <div class="skill-add-row" style="margin-bottom:4px;">
+        <input type="text" id="train-search" placeholder="Type any subject, e.g. Blockchain, French, Public Speaking..." oninput="renderTrainSkillGrid()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTrainTopic();}">
+        <button class="go-btn" style="margin-top:0;" onclick="searchTrainTopic()">Search →</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink-soft);margin:0 0 12px;">Tap a suggestion below, or type anything and press Enter / Search — it isn't limited to this list.</p>
+      <div class="chip-field" id="train-skill-grid"></div>
+    </div>
+    <div id="train-resources">
+      <div class="empty">Pick a skill above to see curated courses from YouTube, Udemy, Khan Academy, and Coursera.</div>
+    </div>
+  </div>
+
+  <!-- WORK ABROAD PAGE -->
+  <div class="panel" id="panel-abroad" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Work abroad, stay in Nigeria</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Fully remote roles with international companies that hire Nigeria-based talent — paid in USD, no relocation required.</p>
+      <div class="field-row">
+        <div>
+          <label>Career stage</label>
+          <select id="ab-level">
+            <option>Student</option>
+            <option>Early career (0-3 yrs)</option>
+            <option>Mid career (4-8 yrs)</option>
+          </select>
+        </div>
+        <div>
+          <label>Preferred region / timezone overlap</label>
+          <select id="ab-region"></select>
+        </div>
+      </div>
+      <label>Your skills — tap to select, or type your own</label>
+      <div class="chip-field" id="ab-skills"></div>
+      <div class="skill-add-row">
+        <input type="text" id="ab-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input');}">
+        <button class="upload-btn" onclick="addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input')">Add skill</button>
+      </div>
+      <button class="go-btn" onclick="findAbroadJobs()">Find remote roles →</button>
+    </div>
+    <div id="abroad-results"></div>
+  </div>
+
+  <!-- INTERVIEW TIPS PAGE -->
+  <div class="panel" id="panel-interview" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Interview tips</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0;">Feeling nervous is normal — preparation is what turns nerves into confidence. Work through this guide at your own pace, from the night before to the thank-you note after. You've already done the hard part by showing up to prepare. You've got this.</p>
+    </div>
+
+    <div class="results-head"><h2>Before the Interview</h2><span>Get ready with confidence</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Research the company thoroughly.</li>
+          <li>Learn the company's mission and values.</li>
+          <li>Read the job description several times.</li>
+          <li>Match your skills to the job requirements.</li>
+          <li>Research the interviewer if their name is available.</li>
+          <li>Practice answering common interview questions.</li>
+          <li>Prepare your own questions for the interviewer.</li>
+          <li>Print extra copies of your resume.</li>
+          <li>Bring a notebook and pen.</li>
+          <li>Know where the interview location is.</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Do a practice drive or check transportation.</li>
+          <li>Plan to arrive 10–15 minutes early.</li>
+          <li>Choose professional clothing the day before.</li>
+          <li>Make sure your clothes are clean and wrinkle-free.</li>
+          <li>Get a good night's sleep.</li>
+          <li>Eat a light meal before the interview.</li>
+          <li>Turn your phone completely off or to silent.</li>
+          <li>Review your accomplishments.</li>
+          <li>Think of examples that show leadership.</li>
+          <li>Think of examples that show teamwork.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>Making a Great First Impression</h2><span>First few minutes matter</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Smile when you meet people.</li>
+          <li>Offer a confident handshake (if appropriate).</li>
+          <li>Make eye contact.</li>
+          <li>Introduce yourself clearly.</li>
+          <li>Be polite to everyone — including receptionists.</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Show enthusiasm.</li>
+          <li>Sit with good posture.</li>
+          <li>Avoid slouching.</li>
+          <li>Don't interrupt the interviewer.</li>
+          <li>Listen carefully before answering.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>Answering Questions</h2><span>Let your experience speak for itself</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Speak clearly.</li>
+          <li>Don't rush your answers.</li>
+          <li>Be honest.</li>
+          <li>Use specific examples.</li>
+          <li>Tell stories instead of giving one-word answers.</li>
+          <li>Use the STAR Method (Situation, Task, Action, Result).</li>
+          <li>Focus on what you learned.</li>
+          <li>Highlight transferable skills.</li>
+          <li>Explain school projects confidently.</li>
+          <li>Mention volunteer experience.</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Talk about internships.</li>
+          <li>Discuss extracurricular activities.</li>
+          <li>Explain leadership roles.</li>
+          <li>Don't criticize previous employers or teachers.</li>
+          <li>Admit when you don't know something.</li>
+          <li>Stay positive.</li>
+          <li>Show willingness to learn.</li>
+          <li>Explain how you solve problems.</li>
+          <li>Mention times you overcame challenges.</li>
+          <li>Demonstrate confidence without arrogance.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>Body Language</h2><span>Your posture speaks before you do</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Keep good eye contact.</li>
+          <li>Smile naturally.</li>
+          <li>Avoid crossing your arms.</li>
+          <li>Don't fidget.</li>
+          <li>Keep your hands relaxed.</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list">
+          <li>Nod while listening.</li>
+          <li>Sit up straight.</li>
+          <li>Avoid looking at your phone.</li>
+          <li>Keep your feet still.</li>
+          <li>Show energy through your posture.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>Questions You Should Be Ready For</h2><span>Common — and totally answerable</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list questions">
+          <li>Tell me about yourself.</li>
+          <li>Why do you want this job?</li>
+          <li>Why should we hire you?</li>
+          <li>What are your strengths?</li>
+          <li>What is one weakness you're working on?</li>
+          <li>Tell me about a challenge you've faced.</li>
+          <li>Describe a time you worked on a team.</li>
+          <li>Tell me about a time you showed leadership.</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list questions">
+          <li>Where do you see yourself in five years?</li>
+          <li>Why did you choose your major?</li>
+          <li>Tell me about a project you're proud of.</li>
+          <li>How do you handle stress?</li>
+          <li>Describe a difficult situation.</li>
+          <li>What motivates you?</li>
+          <li>Why do you want to work here?</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>Questions You Should Ask the Employer</h2><span>Interviews go both ways</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list questions">
+          <li>What does success look like in this role?</li>
+          <li>What training is provided?</li>
+          <li>What does a typical day look like?</li>
+          <li>What qualities make someone successful here?</li>
+          <li>What opportunities are there for growth?</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list questions">
+          <li>How is performance evaluated?</li>
+          <li>What is the team culture like?</li>
+          <li>What are the biggest challenges in this role?</li>
+          <li>What do you enjoy most about working here?</li>
+          <li>What are the next steps in the hiring process?</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>Common Mistakes to Avoid</h2><span>Easy to sidestep once you know them</span></div>
+    <div class="grid">
+      <div class="tip-card">
+        <ul class="tip-list mistakes">
+          <li>Arriving late.</li>
+          <li>Dressing too casually.</li>
+          <li>Speaking negatively about others.</li>
+          <li>Giving overly long answers.</li>
+          <li>Using slang or inappropriate language.</li>
+        </ul>
+      </div>
+      <div class="tip-card">
+        <ul class="tip-list mistakes">
+          <li>Forgetting the interviewer's name.</li>
+          <li>Not asking any questions.</li>
+          <li>Lying on your resume.</li>
+          <li>Looking bored or distracted.</li>
+          <li>Forgetting to thank the interviewer.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="results-head"><h2>After the Interview</h2><span>Finish as strong as you started</span></div>
+    <div class="grid">
+      <div class="tip-card" style="grid-column:1 / -1;">
+        <ul class="tip-list">
+          <li>Thank the interviewer before leaving.</li>
+          <li>Send a thank-you email within 24 hours.</li>
+          <li>Reflect on what went well.</li>
+          <li>Learn from any mistakes.</li>
+          <li>Stay confident — every interview is valuable experience, whether you get the job or not.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tip-encourage">
+      <p>"Stay confident — every interview is valuable experience, whether you get the job or not."</p>
+      <span>You've prepared. You're ready. Go show them what you've got.</span>
+    </div>
+  </div>
+
+  <!-- BOOK APPOINTMENT PAGE -->
+  <div class="panel" id="panel-appointment" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Book an appointment</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Request an interview or follow-up slot with a company you're applying to. Sign in first so your requests are saved to your account.</p>
+      <div class="field-row">
+        <div>
+          <label>Company</label>
+          <input type="text" id="appt-company" list="appt-company-list" placeholder="e.g. Paystack">
+          <datalist id="appt-company-list"></datalist>
+        </div>
+        <div>
+          <label>Role you're applying for</label>
+          <input type="text" id="appt-role" placeholder="e.g. Junior Data Analyst">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Preferred date</label>
+          <input type="date" id="appt-date">
+        </div>
+        <div>
+          <label>Preferred time</label>
+          <input type="time" id="appt-time">
+        </div>
+      </div>
+      <label>Notes for the employer (optional)</label>
+      <textarea id="appt-notes" class="form-textarea" placeholder="e.g. I'm available any weekday after 2pm..."></textarea>
+      <button class="go-btn" onclick="requestAppointment()">Request appointment →</button>
+      <p class="form-msg" id="appt-msg"></p>
+    </div>
+    <div id="appointments-list"></div>
+  </div>
+
+  <!-- EXPLORE JOBS PAGE -->
+  <div class="panel" id="panel-explore" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Explore all roles</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Fast keyword search across every role on Bridge NG — no profile required. Sign in and switch on profile matching to see which ones best fit your real skills and background.</p>
+      <div class="field-row">
+        <div>
+          <label>Search title, company, or department</label>
+          <input type="text" id="explore-keyword" placeholder="e.g. designer, analyst, engineering..." oninput="renderExploreResults()">
+        </div>
+        <div>
+          <label>Filter by location</label>
+          <input type="text" id="explore-location" placeholder="e.g. Lagos, Remote, Berlin..." oninput="renderExploreResults()">
+        </div>
+      </div>
+      <button class="follow-btn" id="explore-match-toggle" onclick="toggleExploreMatch()">Match my profile: OFF</button>
+      <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0;">Matching uses your real saved skills, field of study, and career stage — sign in first to turn it on.</p>
+    </div>
+    <div id="explore-results"></div>
+  </div>
+
+  <!-- EMPLOYER PANEL -->
+  <div class="panel" id="panel-employer" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:18px;color:var(--indigo);">Post a role</h3>
+      <div class="field-row">
+        <div>
+          <label>Job title</label>
+          <input type="text" id="e-title" placeholder="e.g. Junior Data Analyst">
+        </div>
+        <div>
+          <label>Company</label>
+          <input type="text" id="e-company" placeholder="e.g. Paystack">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Experience level needed</label>
+          <select id="e-level">
+            <option>Student / Internship</option>
+            <option>Early career (0-3 yrs)</option>
+            <option>Mid career (4-8 yrs)</option>
+          </select>
+        </div>
+        <div>
+          <label>Location</label>
+          <select id="e-loc"></select>
+        </div>
+      </div>
+      <label>Required skills — tap to select, or type your own</label>
+      <div class="chip-field" id="e-skills"></div>
+      <div class="skill-add-row">
+        <input type="text" id="e-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('e-skills', employerSkills, 'e-skill-input');}">
+        <button class="upload-btn" onclick="addCustomSkill('e-skills', employerSkills, 'e-skill-input')">Add skill</button>
+      </div>
+      <div class="field-row" style="margin-top:16px;">
+        <div>
+          <label>Budget — min ₦/month (optional)</label>
+          <input type="text" id="e-pay-min" placeholder="e.g. 200000">
+        </div>
+        <div>
+          <label>Budget — max ₦/month (optional)</label>
+          <input type="text" id="e-pay-max" placeholder="e.g. 400000">
+        </div>
+      </div>
+      <button class="go-btn" onclick="findCandidates()">Find matching candidates →</button>
+    </div>
+    <div id="employer-results"></div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <img src="images/bridgeng-logo-wordmark.png" alt="Bridge NG">
+        <p>Closing the gap between graduating and getting hired.</p>
+      </div>
+      <nav class="footer-links" aria-label="Company">
+        <span class="footer-links-head">Company</span>
+        <a href="#">About</a>
+        <a href="#">Careers</a>
+        <a href="#">Support</a>
+        <a href="#">Contact us</a>
+      </nav>
+      <div class="footer-app-badges">
+        <span class="footer-links-head">Get the app</span>
+        <a class="app-badge" href="#" aria-label="Download on the App Store">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M16.7 12.4c0-2.1 1.7-3.1 1.8-3.2-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.5 2.1 2.6 2.1 1 0 1.4-.7 2.7-.7 1.3 0 1.6.7 2.7.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.3-.1 0-2.2-.8-2.4-3zM14.9 6.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.5.6-1 1.6-.9 2.6 1 .1 2-.5 2.6-1.2z"/></svg>
+          <span class="app-badge-text"><small>Download on the</small><span>App Store</span></span>
+        </a>
+        <a class="app-badge" href="#" aria-label="Get it on Google Play">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 3.3c0-.7.75-1.15 1.35-.8l13.8 8.2c.6.35.6 1.2 0 1.55l-13.8 8.2c-.6.35-1.35-.1-1.35-.8V3.3z"/></svg>
+          <span class="app-badge-text"><small>Get it on</small><span>Google Play</span></span>
+        </a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Bridge NG. All rights reserved.</span>
+      <span>Bridge NG · a concept prototype — not a live product</span>
+    </div>
+  </footer>
+</div>
+
+<!-- SOCIAL LINKS -->
+<div class="social-fab-row with-chat">
+  <a class="social-fab" href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on Facebook" title="Facebook">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13.5 21v-7.5h2.5l.5-3h-3V8.5c0-.9.25-1.5 1.55-1.5H16.5V4.2c-.27-.04-1.2-.12-2.28-.12-2.26 0-3.8 1.38-3.8 3.9V10.5H8v3h2.42V21h3.08z"/></svg>
+  </a>
+  <a class="social-fab" href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on Instagram" title="Instagram">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1"/></svg>
+  </a>
+  <a class="social-fab" href="https://x.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on X" title="X (Twitter)">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.9 3H21.6l-6 6.9L22.8 21h-5.6l-4.4-5.8L7.7 21H5l6.5-7.4L4.5 3h5.7l4 5.3L18.9 3zm-1 16.2h1.6L8.2 4.7H6.5l11.4 14.5z"/></svg>
+  </a>
+  <a class="social-fab" href="https://www.linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on LinkedIn" title="LinkedIn">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M5.3 8.6H2.1V21h3.2V8.6zM3.7 3.4A1.85 1.85 0 1 0 3.7 7a1.85 1.85 0 0 0 0-3.6zM21.9 21h-3.2v-6.3c0-1.5-.03-3.4-2.08-3.4-2.08 0-2.4 1.63-2.4 3.3V21H11V8.6h3.06v1.7h.04c.43-.8 1.47-1.64 3.02-1.64 3.23 0 3.83 2.13 3.83 4.9V21z"/></svg>
+  </a>
+</div>
+
+<!-- Elfsight AI Chatbot | Untitled AI Chatbot -->
+<script src="https://elfsightcdn.com/platform.js" async></script>
+<div class="elfsight-app-b302a970-8a1e-4726-9f0c-fd4ad805e8a2" data-elfsight-app-lazy></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="shared.js"></script>
+<script>
+const CANDIDATES = [
+ {name:"Amaka Nwosu", level:"Early career (0-3 yrs)", field:"Computer Science, UNILAG", loc:"Lagos", skills:["JavaScript","SQL","Data Analysis","Excel"]},
+ {name:"Tunde Bakare", level:"Student", field:"Accounting, OAU", loc:"Ibadan", skills:["Accounting","Excel","Financial Modeling"]},
+ {name:"Fatima Sule", level:"Mid career (4-8 yrs)", field:"Electrical Engineering, ABU Zaria", loc:"Kano", skills:["Electrical Engineering","Project Management","Procurement"]},
+ {name:"Chidinma Eze", level:"Early career (0-3 yrs)", field:"Mass Communication, UNN", loc:"Lagos", skills:["Content Writing","Digital Marketing","Graphic Design"]},
+ {name:"Ifeanyi Obi", level:"Mid career (4-8 yrs)", field:"Petroleum Engineering, UI", loc:"Port Harcourt", skills:["Petroleum Engineering","Project Management","Supply Chain"]},
+ {name:"Zainab Musa", level:"Student", field:"Nursing Science, ABU Zaria", loc:"Kano", skills:["Nursing","Customer Service"]},
+ {name:"Emeka Okafor", level:"Early career (0-3 yrs)", field:"Computer Engineering, Covenant University", loc:"Abuja", skills:["Networking","Cybersecurity","SQL"]},
+ {name:"Blessing Etim", level:"Mid career (4-8 yrs)", field:"Human Resources, UNILAG", loc:"Lagos", skills:["Human Resources","Project Management","Customer Service"]},
+ {name:"Segun Adeyemi", level:"Student", field:"Civil Engineering, OAU", loc:"Ibadan", skills:["Civil Engineering","Project Management"]},
+ {name:"Grace Danladi", level:"Early career (0-3 yrs)", field:"Agricultural Science, ABU Zaria", loc:"Kano", skills:["Agronomy","Data Analysis","Supply Chain"]},
+ {name:"Olumide Fashola", level:"Mid career (4-8 yrs)", field:"Software Engineering, University of Lagos", loc:"Lagos", skills:["JavaScript","Software Development","Cloud Computing"]},
+ {name:"Halima Bello", level:"Early career (0-3 yrs)", field:"Pharmacy, Ahmadu Bello University", loc:"Kano", skills:["Pharmacy","Customer Service"]},
+ {name:"Chukwuemeka Nnadi", level:"Mid career (4-8 yrs)", field:"Law, University of Nigeria Nsukka", loc:"Abuja", skills:["Legal Practice","Project Management"]},
+ {name:"Precious Okon", level:"Student", field:"Estate Management, University of Ibadan", loc:"Ibadan", skills:["Quantity Surveying","Architecture"]},
+ {name:"Aisha Garba", level:"Early career (0-3 yrs)", field:"Mass Communication, Bayero University Kano", loc:"Kano", skills:["Journalism","Content Writing","Social Media Management"]},
+ {name:"Victor Osaigbovo", level:"Mid career (4-8 yrs)", field:"Insurance, University of Benin", loc:"Lagos", skills:["Insurance Underwriting","Banking Operations","Sales"]},
+ {name:"Nkechi Uzoma", level:"Early career (0-3 yrs)", field:"Hospitality Management, Federal Polytechnic Auchi", loc:"Port Harcourt", skills:["Hospitality Management","Customer Service"]},
+ {name:"Yusuf Aliyu", level:"Mid career (4-8 yrs)", field:"Public Administration, ABU Zaria", loc:"Abuja", skills:["Public Administration","Project Management"]},
+ {name:"Chiamaka Onyekwere", level:"Student", field:"Education, University of Nigeria Nsukka", loc:"Ibadan", skills:["Teaching","Content Writing"]},
+ {name:"Kelechi Ibe", level:"Early career (0-3 yrs)", field:"Electrical Engineering, Federal University of Technology Owerri", loc:"Port Harcourt", skills:["Electrical Engineering","Renewable Energy"]},
+];
+
+const JOBS = [
+ // Technology
+ {title:"Junior Software Developer", company:"Andela", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Technology", skills:["JavaScript","Software Development","SQL"], payMin:180000, payMax:350000,
+  desc:"Build and maintain features for client web applications, write tests, and pair with senior engineers on code review."},
+ {title:"Senior Software Engineer", company:"Flutterwave", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Technology", skills:["Software Development","Cloud Computing","JavaScript"], payMin:900000, payMax:2000000,
+  desc:"Own a core payments service end to end, mentor junior engineers, and design for scale across multiple African markets."},
+ // Data & Analytics
+ {title:"Junior Data Analyst", company:"Paystack", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Data & Analytics", skills:["SQL","Data Analysis","Excel"], payMin:150000, payMax:300000,
+  desc:"Support the payments team by building weekly reporting dashboards, writing SQL queries against transaction data, and flagging anomalies to the fraud and finance teams."},
+ {title:"Senior Data Analyst", company:"MTN Nigeria", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Data & Analytics", skills:["Data Analysis","SQL","Python"], payMin:450000, payMax:750000,
+  desc:"Lead subscriber-churn analysis, build executive dashboards, and translate network usage data into commercial recommendations."},
+ // Banking & Finance
+ {title:"Accounting Intern", company:"Dangote Group", loc:"Ibadan", level:"Student / Internship", sector:"Banking & Finance", skills:["Accounting","Excel","Financial Modeling"], payMin:80000, payMax:150000,
+  desc:"Assist the finance department with ledger reconciliation, expense tracking, and building simple Excel models to support monthly close."},
+ {title:"Financial Analyst", company:"Access Bank", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Banking & Finance", skills:["Financial Modeling","Accounting","Data Analysis"], payMin:400000, payMax:750000,
+  desc:"Build financial models for corporate lending decisions, prepare board-level reports, and monitor portfolio risk indicators."},
+ // Oil & Gas
+ {title:"Field Operations Engineer", company:"Shell Nigeria", loc:"Port Harcourt", level:"Mid career (4-8 yrs)", sector:"Oil & Gas", skills:["Petroleum Engineering","Supply Chain","Project Management"], payMin:1500000, payMax:3000000,
+  desc:"Manage upstream field operations, coordinate logistics for equipment and materials, and ensure production targets are met safely."},
+ {title:"Graduate Petroleum Engineer", company:"NNPC Limited", loc:"Port Harcourt", level:"Early career (0-3 yrs)", sector:"Oil & Gas", skills:["Petroleum Engineering","Data Analysis"], payMin:350000, payMax:650000,
+  desc:"Join the reservoir engineering graduate programme, supporting well-performance analysis and production forecasting under senior engineer supervision."},
+ // Engineering
+ {title:"Electrical Site Engineer", company:"Julius Berger", loc:"Kano", level:"Mid career (4-8 yrs)", sector:"Engineering", skills:["Electrical Engineering","Project Management"], payMin:350000, payMax:700000,
+  desc:"Oversee electrical installation works on a large infrastructure site, coordinate subcontractors, and ensure work meets safety and quality standards."},
+ {title:"Structural Design Intern", company:"CCECC Nigeria", loc:"Ibadan", level:"Student / Internship", sector:"Engineering", skills:["Civil Engineering"], payMin:70000, payMax:130000,
+  desc:"Support the design team with structural drawings and calculations for road and rail infrastructure projects under supervision."},
+ {title:"Mechanical Maintenance Engineer", company:"Lafarge Africa", loc:"Ibadan", level:"Mid career (4-8 yrs)", sector:"Engineering", skills:["Mechanical Engineering","Project Management"], payMin:280000, payMax:550000,
+  desc:"Lead preventive maintenance planning for cement plant machinery and reduce unplanned downtime across production lines."},
+ // Telecom & Networking
+ {title:"IT Support / Network Analyst", company:"MTN Nigeria", loc:"Abuja", level:"Early career (0-3 yrs)", sector:"Telecom & IT", skills:["Networking","Cybersecurity"], payMin:150000, payMax:300000,
+  desc:"Maintain internal network infrastructure, respond to IT support tickets, and assist with basic security monitoring and incident response."},
+ {title:"Cybersecurity Analyst", company:"Interswitch", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Telecom & IT", skills:["Cybersecurity","Networking","Software Development"], payMin:500000, payMax:1000000,
+  desc:"Monitor for security incidents across payment infrastructure, run vulnerability assessments, and lead incident response drills."},
+ // Marketing & Creative
+ {title:"Digital Marketing Associate", company:"Jumia", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Marketing & Creative", skills:["Digital Marketing","Content Writing"], payMin:150000, payMax:280000,
+  desc:"Plan and run paid social and email campaigns, write product copy, and track campaign performance across the Jumia marketplace."},
+ {title:"Social Media & Content Lead", company:"GTBank", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Marketing & Creative", skills:["Social Media Management","Content Writing","Graphic Design"], payMin:350000, payMax:650000,
+  desc:"Own brand voice across social channels, direct a small content team, and report on engagement and campaign ROI to leadership."},
+ // HR & People Ops
+ {title:"HR Officer", company:"Nestle Nigeria", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"HR & People Ops", skills:["Human Resources","Recruiting","Customer Service"], payMin:150000, payMax:280000,
+  desc:"Support recruitment, onboarding, and employee-record administration for the Lagos manufacturing plant."},
+ {title:"HR Business Partner", company:"Access Bank", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"HR & People Ops", skills:["Human Resources","Project Management"], payMin:400000, payMax:800000,
+  desc:"Partner with business unit leads on workforce planning, manage performance review cycles, and lead HR process improvement projects."},
+ // Sales & Customer Service
+ {title:"Customer Service Representative", company:"Airtel Nigeria", loc:"Abuja", level:"Early career (0-3 yrs)", sector:"Sales & Customer Service", skills:["Customer Service","Sales"], payMin:100000, payMax:200000,
+  desc:"Handle inbound customer queries across phone and chat, resolve billing issues, and escalate technical faults to the network team."},
+ {title:"Business Development Manager", company:"Jumia", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Sales & Customer Service", skills:["Business Development","Sales","Data Analysis"], payMin:400000, payMax:850000,
+  desc:"Identify and close new vendor partnerships, negotiate commercial terms, and manage a portfolio of key merchant accounts."},
+ // Supply Chain & Logistics
+ {title:"Logistics Coordinator", company:"DHL Nigeria", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Supply Chain & Logistics", skills:["Logistics","Supply Chain","Customer Service"], payMin:150000, payMax:280000,
+  desc:"Coordinate last-mile delivery schedules, track shipment exceptions, and liaise with customs clearing agents."},
+ {title:"Procurement Manager", company:"Flour Mills of Nigeria", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Supply Chain & Logistics", skills:["Procurement","Supply Chain","Financial Modeling"], payMin:400000, payMax:750000,
+  desc:"Manage supplier contracts for raw materials, negotiate pricing, and ensure continuity of supply across manufacturing sites."},
+ // Agriculture
+ {title:"Agribusiness Analyst", company:"Flour Mills of Nigeria", loc:"Kano", level:"Early career (0-3 yrs)", sector:"Agriculture", skills:["Agronomy","Data Analysis","Supply Chain"], payMin:150000, payMax:280000,
+  desc:"Analyze crop yield and supply data across sourcing regions, and support planning for raw material procurement across the season."},
+ {title:"Farm Operations Manager", company:"Olam Agri", loc:"Kano", level:"Mid career (4-8 yrs)", sector:"Agriculture", skills:["Agronomy","Project Management","Supply Chain"], payMin:300000, payMax:600000,
+  desc:"Oversee day-to-day operations across a large-scale farm estate, manage seasonal labor planning, and report on yield targets."},
+ // Healthcare
+ {title:"Ward Nurse", company:"Reddington Hospital", loc:"Kano", level:"Student / Internship", sector:"Healthcare", skills:["Nursing","Customer Service"], payMin:80000, payMax:160000,
+  desc:"Provide direct patient care on the general ward, support senior nurses during rounds, and maintain accurate patient records."},
+ {title:"Community Pharmacist", company:"HealthPlus", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Healthcare", skills:["Pharmacy","Customer Service"], payMin:180000, payMax:350000,
+  desc:"Dispense prescriptions, counsel patients on medication use, and manage inventory for a busy retail pharmacy outlet."},
+ {title:"Medical Laboratory Scientist", company:"Lagos University Teaching Hospital", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Healthcare", skills:["Medical Lab Science","Data Analysis"], payMin:250000, payMax:500000,
+  desc:"Run and interpret diagnostic lab tests, maintain lab equipment calibration, and support clinical teams with timely results."},
+ // Education
+ {title:"Secondary School Teacher", company:"Lagos State Ministry of Education", loc:"Ibadan", level:"Early career (0-3 yrs)", sector:"Education", skills:["Teaching","Content Writing"], payMin:65000, payMax:150000,
+  desc:"Teach a core secondary school subject, prepare lesson plans aligned to the national curriculum, and support students through WAEC exam preparation."},
+ {title:"University Lecturer", company:"University of Ibadan", loc:"Ibadan", level:"Mid career (4-8 yrs)", sector:"Education", skills:["Teaching","Data Analysis"], payMin:250000, payMax:500000,
+  desc:"Deliver undergraduate lectures, supervise final-year research projects, and publish in peer-reviewed journals."},
+ // Legal
+ {title:"Legal Associate", company:"Aluko & Oyebode", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Legal", skills:["Legal Practice","Content Writing"], payMin:200000, payMax:400000,
+  desc:"Support senior counsel on corporate transactions, draft contracts, and conduct legal research for client matters."},
+ {title:"Legal & Compliance Manager", company:"Access Bank", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Legal", skills:["Legal Practice","Project Management"], payMin:500000, payMax:900000,
+  desc:"Advise the bank on regulatory compliance, manage relationships with the Central Bank of Nigeria, and lead internal policy reviews."},
+ // Hospitality
+ {title:"Front Desk & Guest Relations Officer", company:"Transcorp Hilton", loc:"Abuja", level:"Early career (0-3 yrs)", sector:"Hospitality", skills:["Hospitality Management","Customer Service"], payMin:100000, payMax:200000,
+  desc:"Manage guest check-in and check-out, resolve guest complaints, and coordinate with housekeeping and concierge teams."},
+ {title:"Hotel Operations Manager", company:"Eko Hotels & Suites", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Hospitality", skills:["Hospitality Management","Project Management"], payMin:350000, payMax:700000,
+  desc:"Oversee daily hotel operations across departments, manage budgets, and drive guest-satisfaction and occupancy targets."},
+ // Insurance & Real Estate
+ {title:"Insurance Underwriter", company:"AXA Mansard", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Insurance & Real Estate", skills:["Insurance Underwriting","Sales"], payMin:180000, payMax:320000,
+  desc:"Assess risk on new policy applications, calculate premiums, and support the claims team with policy documentation."},
+ {title:"Quantity Surveyor", company:"UPDC Plc", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Insurance & Real Estate", skills:["Quantity Surveying","Architecture","Project Management"], payMin:350000, payMax:650000,
+  desc:"Prepare cost estimates for real estate developments, manage contractor tender processes, and track project budgets to completion."},
+ // Government & NGO
+ {title:"Federal Civil Service Officer (GL 08)", company:"Federal Ministry of Finance", loc:"Abuja", level:"Early career (0-3 yrs)", sector:"Government & NGO", skills:["Public Administration","Data Analysis"], payMin:90000, payMax:130000,
+  desc:"Support policy analysis and budget documentation within a federal ministry department, following NYSC completion."},
+ {title:"NGO Program Officer", company:"Catholic Relief Services Nigeria", loc:"Abuja", level:"Mid career (4-8 yrs)", sector:"Government & NGO", skills:["Project Management","Data Analysis","Public Administration"], payMin:280000, payMax:550000,
+  desc:"Manage a community health program budget, coordinate field teams, and report outcomes to international donors."},
+ // Media
+ {title:"Broadcast Journalist", company:"Channels Television", loc:"Lagos", level:"Early career (0-3 yrs)", sector:"Media", skills:["Journalism","Content Writing","Social Media Management"], payMin:150000, payMax:280000,
+  desc:"Research and file news stories, conduct on-air interviews, and produce content across TV and digital platforms."},
+ {title:"Video Editor", company:"Multichoice Nigeria (DStv)", loc:"Lagos", level:"Mid career (4-8 yrs)", sector:"Media", skills:["Video Editing","Content Writing"], payMin:250000, payMax:500000,
+  desc:"Edit long and short-form video content for broadcast and digital, manage a media asset library, and mentor junior editors."},
+];
+JOBS.forEach((j,i)=>{ j.id = i; });
+
+const INTL_JOBS = [
+ {title:"Remote Frontend Developer", company:"Vertex Software (USA)", region:"Americas", timezone:"4hr overlap with EST", level:"Early career (0-3 yrs)", sector:"Technology", skills:["JavaScript","Software Development","UI/UX Design"], payMin:1500, payMax:2800,
+  desc:"Build and ship UI features for a distributed US-based SaaS team; async-first with a few hours of overlap with Eastern Time."},
+ {title:"Senior Backend Engineer", company:"Northbridge Cloud (UK)", region:"Europe", timezone:"Full overlap with GMT", level:"Mid career (4-8 yrs)", sector:"Technology", skills:["Software Development","Cloud Computing","SQL"], payMin:3000, payMax:5000,
+  desc:"Own backend services for a London-headquartered fintech, working core hours aligned to GMT."},
+ {title:"Remote Data Analyst", company:"Clearview Analytics (Canada)", region:"Americas", timezone:"3hr overlap with EST", level:"Early career (0-3 yrs)", sector:"Data & Analytics", skills:["SQL","Data Analysis","Excel"], payMin:1600, payMax:2600,
+  desc:"Support a Toronto-based analytics team with dashboards and ad-hoc reporting, mostly async work."},
+ {title:"Customer Success Specialist", company:"Loopline SaaS (USA)", region:"Americas", timezone:"5hr overlap with EST", level:"Early career (0-3 yrs)", sector:"Sales & Customer Service", skills:["Customer Service","Sales"], payMin:1200, payMax:2000,
+  desc:"Own onboarding and renewals for SMB customers across US and Canadian time zones."},
+ {title:"Remote Digital Marketing Manager", company:"Halo Growth (UK)", region:"Europe", timezone:"2hr overlap with GMT", level:"Mid career (4-8 yrs)", sector:"Marketing & Creative", skills:["Digital Marketing","Content Writing","Social Media Management"], payMin:2200, payMax:3800,
+  desc:"Lead paid and organic growth campaigns for a European D2C brand, fully remote."},
+ {title:"Virtual Bookkeeper / Accountant", company:"LedgerPro (USA)", region:"Americas", timezone:"4hr overlap with EST", level:"Early career (0-3 yrs)", sector:"Banking & Finance", skills:["Accounting","Excel","Financial Modeling"], payMin:1300, payMax:2200,
+  desc:"Manage bookkeeping and monthly close for a portfolio of small US-based clients."},
+ {title:"Remote UI/UX Designer", company:"Studio Meridian (Germany)", region:"Europe", timezone:"3hr overlap with CET", level:"Mid career (4-8 yrs)", sector:"Marketing & Creative", skills:["UI/UX Design","Graphic Design"], payMin:2500, payMax:4200,
+  desc:"Design product experiences for European fintech clients, async-friendly with weekly core-hours syncs."},
+ {title:"Technical Support Engineer", company:"Ansari Cloud (UAE)", region:"Middle East", timezone:"2hr overlap with GST", level:"Early career (0-3 yrs)", sector:"Telecom & IT", skills:["Networking","Cybersecurity","Customer Service"], payMin:1400, payMax:2400,
+  desc:"Provide tier-2 technical support for a Dubai-based cloud infrastructure company, with easy timezone overlap from Lagos."},
+ {title:"Remote Recruiter / Talent Sourcer", company:"Global Staffing Partners (Global/Distributed)", region:"Global", timezone:"Flexible / async", level:"Early career (0-3 yrs)", sector:"HR & People Ops", skills:["Recruiting","Human Resources"], payMin:1200, payMax:2200,
+  desc:"Source and screen candidates for a fully distributed staffing agency serving clients worldwide."},
+ {title:"Senior Project Manager (Remote)", company:"Beacon Consulting (USA)", region:"Americas", timezone:"4hr overlap with EST", level:"Mid career (4-8 yrs)", sector:"Engineering", skills:["Project Management","Data Analysis"], payMin:3200, payMax:5000,
+  desc:"Manage cross-functional delivery for US enterprise clients, distributed team spanning three continents."},
+];
+INTL_JOBS.forEach((j,i)=>{ j.id = i; });
+
+let seekerSkills = new Set();
+let employerSkills = new Set();
+let abroadSkills = new Set();
+buildChips('s-skills', seekerSkills);
+buildChips('e-skills', employerSkills);
+buildChips('ab-skills', abroadSkills);
+
+populateLocationSelect('s-loc', true);
+populateLocationSelect('e-loc', false);
+
+const REGIONS = ["Any region", "Americas", "Europe", "Middle East", "Asia-Pacific", "Global"];
+document.getElementById('ab-region').innerHTML = REGIONS.map(r => `<option>${r}</option>`).join('');
+
+// --- Job updates & alerts: imported jobs, followed companies, saved searches, notifications ---
+
+let notifications = [];
+let followedCompanies = new Set();
+let savedSearches = [];
+let notifTimer = null;
+
+async function loadImportedJobs(){
+  try{
+    const data = await apiListJobs();
+    (data.jobs || []).forEach(j=>{
+      JOBS.push({
+        id: JOBS.length,
+        title: j.title,
+        company: j.company,
+        loc: j.location || 'Remote',
+        level: j.level || 'Early career (0-3 yrs)',
+        sector: j.sector || 'General',
+        skills: j.skills || [],
+        payMin: j.payMin || 0,
+        payMax: j.payMax || 0,
+        desc: j.description || '',
+        applicationLink: j.applicationLink || '',
+        postedDate: j.postedDate || '',
+        imported: true,
+        remoteFriendly: !!j.remoteFriendly
+      });
+    });
+    populateJobSelect();
+    renderRecentJobsFeed();
+    renderRemoteJobsFeed();
+    populateAppointmentCompanies();
+  }catch(e){
+    // Imported jobs are an enhancement — the rest of the app works fine without them.
+  }
+}
+loadImportedJobs();
+
+// --- Applications: makes "Apply" buttons actually record something, instead of doing nothing ---
+
+let appliedKeys = new Set();
+
+function applicationKey(company, title){
+  return (company + '|' + title).toLowerCase();
+}
+
+let myApplications = [];
+
+async function loadApplications(){
+  if(!currentAccount){ appliedKeys = new Set(); myApplications = []; renderMyApplications(); return; }
+  try{
+    const data = await apiListApplications();
+    myApplications = data.applications || [];
+    appliedKeys = new Set(myApplications.map(a => applicationKey(a.company, a.jobTitle)));
+  }catch(e){
+    appliedKeys = new Set();
+    myApplications = [];
+  }
+  renderMyApplications();
+}
+
+function renderMyApplications(){
+  const el = document.getElementById('my-applications-list');
+  if(!el) return;
+  if(myApplications.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Your applications</h2><span>${myApplications.length} applied</span></div>
+    <div class="grid">
+      ${myApplications.map(a => `
+        <div class="res-card">
+          <div class="res-body">
+            <p class="res-title">${a.jobTitle}</p>
+            <p class="res-sub">${a.company} · applied ${(a.createdAt || '').slice(0, 10)}</p>
+            ${a.applicationLink ? `<a class="apply-btn" href="${a.applicationLink}" target="_blank" rel="noopener noreferrer">View posting ↗</a>` : '<span class="fit-none">Sample listing — no real posting link</span>'}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function applyToJob(title, company, applicationLink, btn){
+  if(!currentAccount){
+    alert('Sign in to apply — this keeps track of the roles you\'ve applied to.');
+    return;
+  }
+  const key = applicationKey(company, title);
+  if(appliedKeys.has(key)){
+    if(applicationLink) window.open(applicationLink, '_blank', 'noopener');
+    return;
+  }
+  try{
+    await apiCreateApplication({jobTitle: title, company, applicationLink: applicationLink || ''});
+    appliedKeys.add(key);
+    if(btn){
+      btn.textContent = '✓ Applied';
+      btn.classList.add('applied');
+    }
+    if(applicationLink){
+      window.open(applicationLink, '_blank', 'noopener');
+    }else{
+      alert(`Application recorded for ${title} at ${company}. This is a sample listing, so there's no real employer inbox behind it yet — but it's saved to your account and you can find it again anytime.`);
+    }
+  }catch(err){
+    alert(friendlyErrorMessage('generic'));
+  }
+}
+
+function applyButtonHtml(job){
+  const title = job.title || '';
+  const company = job.company || '';
+  const link = job.applicationLink || '';
+  const applied = appliedKeys.has(applicationKey(company, title));
+  const safeTitle = title.replace(/'/g, "\\'");
+  const safeCompany = company.replace(/'/g, "\\'");
+  const safeLink = link.replace(/'/g, "\\'");
+  const label = applied ? '✓ Applied' : (link ? 'Apply ↗' : 'Apply');
+  return `<button class="apply-btn${applied ? ' applied' : ''}" onclick="applyToJob('${safeTitle}', '${safeCompany}', '${safeLink}', this)">${label}</button>`;
+}
+
+function followButtonHtml(company){
+  const safe = company.replace(/'/g, "\\'");
+  const following = isFollowingCompany(company);
+  return `<button class="follow-btn${following ? ' following' : ''}" onclick="toggleFollowCompany('${safe}', this)">${following ? '✓ Following' : '+ Follow ' + company}</button>`;
+}
+
+function renderRecentJobsFeed(){
+  const el = document.getElementById('recent-jobs-feed');
+  if(!el) return;
+  const recent = JOBS.filter(j => j.imported).slice(-5).reverse();
+  if(recent.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Just posted</h2><span>${recent.length} new role${recent.length > 1 ? 's' : ''}</span></div>
+    <div class="grid">
+      ${recent.map(j => `
+        <div class="res-card">
+          <div class="res-body">
+            <p class="res-title">${j.title} <span class="new-badge">New</span></p>
+            <p class="res-sub">${j.company} · ${j.loc} · ${j.level}</p>
+            <span class="pay-pill">${payLabel(j)}</span>
+            <div class="skill-row">${j.skills.map(s => `<span class="skill-pill">${s}</span>`).join('')}</div>
+            <div class="btn-row">
+              ${followButtonHtml(j.company)}
+              ${applyButtonHtml(j)}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderRemoteJobsFeed(){
+  const el = document.getElementById('remote-jobs-feed');
+  if(!el) return;
+  if(!currentAccount || !currentAccount.profile.openToRemote){
+    el.innerHTML = '';
+    return;
+  }
+  const remoteJobs = JOBS.filter(j => j.remoteFriendly).slice(0, 6);
+  if(remoteJobs.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Remote roles for you</h2><span>You said you're open to working remotely abroad</span></div>
+    <div class="grid">
+      ${remoteJobs.map(j => `
+        <div class="res-card">
+          <div class="res-body">
+            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-sub">${j.company} · ${j.loc} · ${j.level}</p>
+            <span class="pay-pill">${payLabel(j)}</span>
+            <div class="skill-row">${skillPills(j.skills, seekerSkills)}</div>
+            <div class="btn-row">
+              ${applyButtonHtml(j)}
+              ${followButtonHtml(j.company)}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// --- Explore Jobs: instant keyword/location search + real-profile match highlighting ---
+
+let exploreMatchActive = false;
+
+function toggleExploreMatch(){
+  if(!exploreMatchActive && !currentAccount){
+    alert('Sign in to enable profile matching — this uses your real saved skills, field of study, and career stage, not a placeholder profile.');
+    return;
+  }
+  exploreMatchActive = !exploreMatchActive;
+  const btn = document.getElementById('explore-match-toggle');
+  btn.textContent = 'Match my profile: ' + (exploreMatchActive ? 'ON' : 'OFF');
+  btn.classList.toggle('following', exploreMatchActive);
+  renderExploreResults();
+}
+
+function jobMatchesMyProfile(job){
+  if(!currentAccount) return false;
+  const profile = currentAccount.profile;
+  const mySkills = new Set((profile.skills || []).map(s => s.toLowerCase()));
+  const skillOverlap = (job.skills || []).some(s => mySkills.has(s.toLowerCase()));
+  const fieldWords = (profile.fieldOfStudy || '').toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3);
+  const titleSectorText = (job.title + ' ' + job.sector).toLowerCase();
+  const fieldMatch = fieldWords.some(w => titleSectorText.includes(w));
+  const levelMatch = !!profile.careerLevel && profile.careerLevel === job.level;
+  return skillOverlap || fieldMatch || levelMatch;
+}
+
+function renderExploreResults(){
+  const keywordEl = document.getElementById('explore-keyword');
+  const locationEl = document.getElementById('explore-location');
+  const el = document.getElementById('explore-results');
+  if(!keywordEl || !el) return;
+
+  const keyword = keywordEl.value.trim().toLowerCase();
+  const location = locationEl.value.trim().toLowerCase();
+
+  let jobs = JOBS.filter(j=>{
+    const matchesKeyword = !keyword ||
+      j.title.toLowerCase().includes(keyword) ||
+      j.company.toLowerCase().includes(keyword) ||
+      (j.sector || '').toLowerCase().includes(keyword);
+    const matchesLocation = !location || (j.loc || '').toLowerCase().includes(location);
+    return matchesKeyword && matchesLocation;
+  });
+
+  if(exploreMatchActive){
+    jobs = jobs.filter(jobMatchesMyProfile);
+  }
+
+  const total = jobs.length;
+  jobs = jobs.slice(0, 30); // keep the DOM light with a large combined job list
+
+  if(jobs.length === 0){
+    el.innerHTML = '<div class="empty">No roles match your search right now.</div>';
+    return;
+  }
+
+  const mySkills = currentAccount ? new Set(currentAccount.profile.skills || []) : new Set();
+
+  el.innerHTML = `
+    <div class="results-head"><h2>Roles</h2><span>${jobs.length} shown${total > jobs.length ? ' of ' + total : ''}</span></div>
+    <div class="grid">
+      ${jobs.map(j => `
+        <div class="res-card">
+          <div class="res-body">
+            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''}</p>
+            <p class="res-sub">${j.company} · ${j.loc} · ${j.level}</p>
+            <span class="pay-pill">${payLabel(j)}</span>
+            <div class="skill-row">${skillPills(j.skills, mySkills)}</div>
+            <div class="btn-row">
+              ${applyButtonHtml(j)}
+              ${followButtonHtml(j.company)}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function loadFollowedCompanies(){
+  if(!currentAccount){ followedCompanies = new Set(); return; }
+  try{
+    const data = await apiListFollowedCompanies();
+    followedCompanies = new Set((data.companies || []).map(c => c.toLowerCase()));
+  }catch(e){
+    followedCompanies = new Set();
+  }
+}
+
+function isFollowingCompany(company){
+  return followedCompanies.has(company.toLowerCase());
+}
+
+async function toggleFollowCompany(company, btn){
+  if(!currentAccount){
+    alert('Sign in to follow companies and get notified when they post new roles.');
+    return;
+  }
+  try{
+    if(isFollowingCompany(company)){
+      await apiUnfollowCompany(company);
+      followedCompanies.delete(company.toLowerCase());
+    }else{
+      await apiFollowCompany(company);
+      followedCompanies.add(company.toLowerCase());
+    }
+    if(btn){
+      const following = isFollowingCompany(company);
+      btn.textContent = following ? '✓ Following' : '+ Follow ' + company;
+      btn.classList.toggle('following', following);
+    }
+  }catch(err){
+    alert(friendlyErrorMessage('generic'));
+  }
+}
+
+async function loadSavedSearches(){
+  if(!currentAccount){ savedSearches = []; renderSavedSearches(); return; }
+  try{
+    const data = await apiListSavedSearches();
+    savedSearches = data.searches || [];
+  }catch(e){
+    savedSearches = [];
+  }
+  renderSavedSearches();
+}
+
+function renderSavedSearches(){
+  const el = document.getElementById('saved-searches-list');
+  if(!el) return;
+  if(savedSearches.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `<p class="section-label" style="margin-top:20px;">Your saved searches</p>` +
+    savedSearches.map(s => `
+      <div class="saved-search-chip">
+        <span>${s.label}</span>
+        <button onclick="deleteSavedSearch(${s.id})" aria-label="Delete saved search">×</button>
+      </div>
+    `).join('');
+}
+
+async function saveCurrentSearch(){
+  if(!currentAccount){
+    alert('Sign in to save searches and get alerts when a new job matches.');
+    return;
+  }
+  if(seekerSkills.size === 0){
+    alert('Select at least one skill before saving this search.');
+    return;
+  }
+  const level = document.getElementById('s-level').value;
+  const loc = document.getElementById('s-loc').value;
+  try{
+    await apiCreateSavedSearch({skills: [...seekerSkills], level, location: loc, label: [...seekerSkills].slice(0, 3).join(', ')});
+    await loadSavedSearches();
+    alert("Search saved — you'll get an alert here when a new job matches it.");
+  }catch(err){
+    alert(friendlyErrorMessage('generic'));
+  }
+}
+
+async function deleteSavedSearch(id){
+  try{
+    await apiDeleteSavedSearch(id);
+    await loadSavedSearches();
+  }catch(e){
+    // best-effort
+  }
+}
+
+// --- Book Appointment ---
+
+let myAppointments = [];
+
+function populateAppointmentCompanies(){
+  const el = document.getElementById('appt-company-list');
+  if(!el) return;
+  const companies = [...new Set(JOBS.map(j => j.company))].sort();
+  el.innerHTML = companies.map(c => `<option value="${c.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+
+function formatApptDate(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d)) return dateStr;
+  return d.toLocaleDateString('en-NG', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+}
+
+async function requestAppointment(){
+  const msg = document.getElementById('appt-msg');
+  if(!currentAccount){
+    alert('Sign in to request an appointment — this keeps your requests saved to your account.');
+    return;
+  }
+  const company = document.getElementById('appt-company').value.trim();
+  const date = document.getElementById('appt-date').value;
+  if(!company || !date){
+    msg.textContent = 'Enter a company and a preferred date.';
+    msg.className = 'form-msg error';
+    return;
+  }
+  const payload = {
+    company,
+    role: document.getElementById('appt-role').value.trim(),
+    date,
+    time: document.getElementById('appt-time').value,
+    notes: document.getElementById('appt-notes').value.trim()
+  };
+  try{
+    await apiCreateAppointment(payload);
+    document.getElementById('appt-company').value = '';
+    document.getElementById('appt-role').value = '';
+    document.getElementById('appt-date').value = '';
+    document.getElementById('appt-time').value = '';
+    document.getElementById('appt-notes').value = '';
+    msg.textContent = 'Appointment request saved.';
+    msg.className = 'form-msg success';
+    await loadAppointments();
+  }catch(err){
+    msg.textContent = friendlyErrorMessage('generic');
+    msg.className = 'form-msg error';
+  }
+}
+
+async function loadAppointments(){
+  if(!currentAccount){ myAppointments = []; renderAppointments(); return; }
+  try{
+    const data = await apiListAppointments();
+    myAppointments = data.appointments || [];
+  }catch(e){
+    myAppointments = [];
+  }
+  renderAppointments();
+}
+
+function renderAppointments(){
+  const el = document.getElementById('appointments-list');
+  if(!el) return;
+  if(!currentAccount){
+    el.innerHTML = '<div class="empty">Sign in to request appointments and see your upcoming ones here.</div>';
+    return;
+  }
+  if(myAppointments.length === 0){
+    el.innerHTML = '<div class="empty">No appointments requested yet.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="results-head"><h2>Your appointments</h2><span>${myAppointments.length} requested</span></div>
+    <div class="grid">
+      ${myAppointments.map(a => `
+        <div class="appt-card">
+          <p class="res-title">${a.company}</p>
+          <p class="res-sub">${a.role || 'Role not specified'}</p>
+          <p class="appt-datetime">${formatApptDate(a.date)}${a.time ? ' · ' + a.time : ''}</p>
+          ${a.notes ? `<p class="appt-notes">${a.notes.replace(/</g,'&lt;')}</p>` : ''}
+          <button class="follow-btn" onclick="cancelAppointment(${a.id})">Cancel request</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function cancelAppointment(id){
+  try{
+    await apiCancelAppointment(id);
+    await loadAppointments();
+  }catch(e){
+    // best-effort
+  }
+}
+
+async function loadNotifications(){
+  const area = document.getElementById('notif-area');
+  if(!currentAccount){
+    area.style.display = 'none';
+    notifications = [];
+    return;
+  }
+  area.style.display = '';
+  try{
+    const data = await apiListNotifications();
+    notifications = data.notifications || [];
+    const badge = document.getElementById('notif-badge');
+    if(data.unread > 0){
+      badge.textContent = data.unread > 9 ? '9+' : String(data.unread);
+      badge.style.display = '';
+    }else{
+      badge.style.display = 'none';
+    }
+  }catch(e){
+    notifications = [];
+  }
+  renderNotifDropdown();
+}
+
+function renderNotifDropdown(){
+  const el = document.getElementById('notif-list');
+  if(!el) return;
+  if(notifications.length === 0){
+    el.innerHTML = '<div class="notif-empty">No notifications yet — save a search or follow a company above to get alerted about new roles.</div>';
+    return;
+  }
+  el.innerHTML = notifications.map(n => `
+    <div class="notif-item${n.read ? '' : ' unread'}">
+      <p>${n.message}</p>
+      <span>${n.createdAt}</span>
+    </div>
+  `).join('');
+}
+
+function toggleNotifDropdown(){
+  document.getElementById('notif-dropdown').classList.toggle('open');
+}
+
+function toggleMobileNav(){
+  document.querySelector('.tabs').classList.toggle('open');
+  document.getElementById('nav-backdrop').classList.toggle('open');
+}
+
+function closeMobileNav(){
+  document.querySelector('.tabs').classList.remove('open');
+  document.getElementById('nav-backdrop').classList.remove('open');
+}
+
+async function markAllNotificationsRead(){
+  try{
+    await apiMarkNotificationsRead();
+    await loadNotifications();
+  }catch(e){
+    // best-effort
+  }
+}
+
+function startNotifPolling(){
+  if(notifTimer) return;
+  notifTimer = setInterval(()=>{ if(currentAccount) loadNotifications(); }, 60000);
+}
+
+document.addEventListener('click', (e)=>{
+  const area = document.getElementById('notif-area');
+  if(area && !area.contains(e.target)){
+    document.getElementById('notif-dropdown').classList.remove('open');
+  }
+});
+
+let currentAccount = null; // {email, profile} when signed in, else null
+
+function fillSeekerFormFromProfile(profile){
+  document.getElementById('s-name').value = profile.fullName || '';
+  document.getElementById('s-dob').value = profile.dob || '';
+  if(profile.sex) document.getElementById('s-sex').value = profile.sex;
+  document.getElementById('s-phone').value = profile.phone || '';
+  document.getElementById('s-email').value = currentAccount.email || '';
+  document.getElementById('s-address').value = profile.address || '';
+  if(profile.education) document.getElementById('s-education').value = profile.education;
+  if(profile.careerLevel) document.getElementById('s-level').value = profile.careerLevel;
+  document.getElementById('s-field').value = profile.fieldOfStudy || '';
+  if(profile.preferredLocation) document.getElementById('s-loc').value = profile.preferredLocation;
+  document.getElementById('s-remote').value = profile.openToRemote ? 'yes' : 'no';
+  applySelectedSkills('s-skills', seekerSkills, profile.skills);
+  renderRemoteJobsFeed();
+}
+
+function renderAuthArea(){
+  const el = document.getElementById('auth-area');
+  if(currentAccount){
+    const firstName = (currentAccount.profile.fullName || currentAccount.email).split(' ')[0];
+    el.innerHTML = `<span class="user-greet">Signed in as <b>${firstName}</b></span><button class="auth-btn" onclick="signOut()">Sign out</button>`;
+    document.getElementById('save-profile-btn').style.display = '';
+  }else{
+    el.innerHTML = `<a class="auth-btn" href="auth.html?mode=signin">Sign in</a><a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>`;
+    document.getElementById('save-profile-btn').style.display = 'none';
+  }
+}
+
+async function initAccount(){
+  try{
+    const me = await apiMe();
+    if(me.loggedIn){
+      currentAccount = {email: me.email, profile: me.profile};
+      fillSeekerFormFromProfile(me.profile);
+    }
+  }catch(e){
+    // API not reachable (e.g. page opened directly from disk instead of via server.py) — stay signed out.
+  }
+  renderAuthArea();
+  await loadFollowedCompanies();
+  await loadSavedSearches();
+  await loadNotifications();
+  await loadAppointments();
+  await loadApplications();
+  if(currentAccount) startNotifPolling();
+  renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
+}
+initAccount();
+
+async function signOut(){
+  try{ await apiLogout(); }catch(e){}
+  currentAccount = null;
+  clearInterval(notifTimer);
+  notifTimer = null;
+  renderAuthArea();
+  await loadFollowedCompanies();
+  await loadSavedSearches();
+  await loadNotifications();
+  await loadAppointments();
+  await loadApplications();
+  renderRecentJobsFeed();
+  renderRemoteJobsFeed();
+}
+
+async function saveProfile(){
+  if(!currentAccount) return;
+  const msg = document.getElementById('profile-save-msg');
+  const payload = {
+    fullName: document.getElementById('s-name').value,
+    dob: document.getElementById('s-dob').value,
+    sex: document.getElementById('s-sex').value,
+    phone: document.getElementById('s-phone').value,
+    address: document.getElementById('s-address').value,
+    education: document.getElementById('s-education').value,
+    careerLevel: document.getElementById('s-level').value,
+    fieldOfStudy: document.getElementById('s-field').value,
+    preferredLocation: document.getElementById('s-loc').value,
+    openToRemote: document.getElementById('s-remote').value === 'yes',
+    skills: [...seekerSkills]
+  };
+  try{
+    const res = await apiSaveProfile(payload);
+    currentAccount.profile = res.profile;
+    msg.textContent = 'Profile saved.';
+    msg.className = 'form-msg success';
+    renderRemoteJobsFeed();
+  }catch(err){
+    msg.textContent = "Couldn't save profile (" + err.message + ").";
+    msg.className = 'form-msg error';
+  }
+}
+
+function populateJobSelect(){
+  const sel = document.getElementById('rs-job-select');
+  sel.innerHTML = JOBS.map(j => `<option value="${j.id}">${j.title} — ${j.company} (${j.loc})</option>`).join('');
+}
+populateJobSelect();
+populateAppointmentCompanies();
+
+let selectedTrainSkill = null;
+
+function renderTrainSkillGrid(){
+  const query = (document.getElementById('train-search').value || '').trim().toLowerCase();
+  const grid = document.getElementById('train-skill-grid');
+  grid.innerHTML = '';
+  SKILLS.filter(s => s.toLowerCase().includes(query)).forEach(skill=>{
+    const tile = document.createElement('div');
+    tile.className = 'chip' + (skill === selectedTrainSkill ? ' selected' : '');
+    tile.textContent = skill;
+    tile.onclick = () => selectTrainSkill(skill);
+    grid.appendChild(tile);
+  });
+}
+renderTrainSkillGrid();
+
+function selectTrainSkill(skill){
+  selectedTrainSkill = skill;
+  renderTrainSkillGrid();
+  renderTrainResources(skill);
+}
+
+function searchTrainTopic(){
+  const query = document.getElementById('train-search').value.trim();
+  if(!query){
+    alert('Type a subject to search for, e.g. Blockchain, French, Public Speaking...');
+    return;
+  }
+  selectTrainSkill(query);
+}
+
+function renderTrainResources(skill){
+  const resources = trainingResourcesFor(skill);
+  const el = document.getElementById('train-resources');
+  el.innerHTML = `
+    <div class="results-head"><h2>Learning paths for ${skill}</h2><span>${resources.length} platforms</span></div>
+    <div class="grid">
+      ${resources.map(r => `
+        <div class="train-res-card">
+          <span class="train-badge">${r.badge}</span>
+          <h4>${r.platform}</h4>
+          <p>${r.desc}</p>
+          <a class="ai-btn" href="${r.url}" target="_blank" rel="noopener noreferrer">Open on ${r.platform} ↗</a>
+        </div>
+      `).join('')}
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;"><b style="color:var(--ink);">Suggested path —</b> start with a few free YouTube videos to see if ${skill} clicks for you, then commit to a structured Udemy or Coursera course for a certificate, using Khan Academy for extra practice on the fundamentals.</p>
+      <button class="go-btn" style="margin-top:0;" onclick="addSkillToProfileFromTraining('${skill.replace(/'/g,"\\'")}')">Add ${skill} to my profile skills →</button>
+      <p class="form-msg" id="train-add-msg"></p>
+    </div>
+  `;
+}
+
+function addSkillToProfileFromTraining(skill){
+  const el = document.getElementById('s-skills');
+  const existing = [...el.children].find(c => c.textContent.toLowerCase() === skill.toLowerCase());
+  if(existing){
+    seekerSkills.add(existing.textContent);
+    existing.classList.add('selected');
+  }else{
+    createChip('s-skills', seekerSkills, skill, true);
+  }
+  const msg = document.getElementById('train-add-msg');
+  if(currentAccount){
+    saveProfile();
+    msg.textContent = `${skill} added to your Job seeker profile and saved.`;
+  }else{
+    msg.textContent = `${skill} added to your Job seeker skills. Sign in to save this permanently.`;
+  }
+  msg.className = 'form-msg success';
+}
+
+const HERO_PHOTOS = {
+  default: { src: 'images/Bridge NG - New Hire.png', alt: 'A newly hired graduate celebrating his first day, cheered on by his new team' },
+  resume: { src: 'images/CV-Resume Photo.png', alt: 'A tailored resume and cover letter laid out next to a laptop showing the Bridge NG resume studio' },
+  train: { src: 'images/Train Yourself Photo.png', alt: 'Learn Today. Lead Tomorrow. Self-paced learning for Nigerian professionals who want to grow, upskill, and stay ahead.', noMask: true },
+  employer: { src: 'images/Employer Photo.png', alt: 'Find the Right Hire. Faster. Smarter. Bridge NG matches employers with pre-vetted candidates based on real skills and role fit.', noMask: true },
+  abroad: { src: 'images/Remote Worker.png', alt: 'Your Skills. Global Opportunities. Work remotely for top companies abroad while living in Nigeria.', noMask: true },
+  explore: { src: 'images/explore jobs.png', alt: 'A newly hired candidate celebrating a job offer with a handshake, next to a "Congratulations! You\'re hired!" sign' }
+};
+
+function playFadeIn(el){
+  el.classList.remove('fade-up-in');
+  void el.offsetWidth; // force reflow so the animation restarts every time
+  el.classList.add('fade-up-in');
+}
+
+const HERO_NO_PHOTO_PAGES = ['interview', 'appointment'];
+
+function updateHeroPhoto(page){
+  const container = document.getElementById('hero-photo-single');
+  const heroEl = document.querySelector('.hero');
+  if(HERO_NO_PHOTO_PAGES.includes(page)){
+    container.style.display = 'none';
+    heroEl.classList.add('no-photo');
+    return;
+  }
+  container.style.display = '';
+  heroEl.classList.remove('no-photo');
+  const photo = HERO_PHOTOS[page] || HERO_PHOTOS.default;
+  const img = document.getElementById('hero-photo-img');
+  img.src = photo.src;
+  img.alt = photo.alt;
+  container.classList.toggle('no-mask', !!photo.noMask);
+  playFadeIn(container);
+}
+
+const HERO_LEFT_PANELS = ['default', 'resume', 'employer', 'train', 'abroad', 'interview', 'appointment', 'explore'];
+
+function updateHeroLeft(page){
+  const activeKey = HERO_LEFT_PANELS.includes(page) ? page : 'default';
+  HERO_LEFT_PANELS.forEach(key=>{
+    const el = document.getElementById('hero-left-' + key);
+    el.style.display = key === activeKey ? '' : 'none';
+    if(key === activeKey) playFadeIn(el);
+  });
+}
+
+const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore'];
+
+function showPage(page){
+  TAB_PANELS.forEach(key=>{
+    const panel = document.getElementById('panel-' + key);
+    panel.style.display = key === page ? '' : 'none';
+    if(key === page) playFadeIn(panel);
+    document.getElementById('tab-' + key).classList.toggle('active', key === page);
+  });
+  updateHeroPhoto(page);
+  updateHeroLeft(page);
+  if(page === 'explore') renderExploreResults();
+  closeMobileNav();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function goToResumeStudio(jobId, action){
+  document.getElementById('rs-job-select').value = String(jobId);
+  showPage('resume');
+  if(action === 'resume') tailorResumeFor(jobId);
+  if(action === 'cover') writeCoverLetterFor(jobId);
+}
+
+function levelDistance(a,b){
+  const order = ["Student","Student / Internship","Early career (0-3 yrs)","Mid career (4-8 yrs)"];
+  // normalize student labels to same tier
+  const norm = s => s.startsWith("Student") ? 0 : s.startsWith("Early") ? 1 : 2;
+  return Math.abs(norm(a) - norm(b));
+}
+
+function matchScore(requiredSkills, candidateSkills, reqLevel, candLevel, reqLoc, candLoc){
+  const req = new Set(requiredSkills);
+  const cand = new Set(candidateSkills);
+  const intersection = [...req].filter(s=>cand.has(s)).length;
+  const union = new Set([...req, ...cand]).size;
+  const skillScore = union === 0 ? 0 : intersection/union;
+  const levelPenalty = levelDistance(reqLevel, candLevel) * 0.12;
+  const locBonus = (reqLoc === 'Any location' || candLoc === reqLoc || reqLoc === 'Remote') ? 0.05 : 0;
+  let score = skillScore*0.8 + 0.2 - levelPenalty + locBonus;
+  return Math.max(2, Math.min(99, Math.round(score*100)));
+}
+
+function gaugeColor(pct){
+  if(pct >= 70) return {bg:'var(--green-pale)', fg:'var(--green-deep)'};
+  if(pct >= 40) return {bg:'var(--gold-pale)', fg:'var(--gold-deep)'};
+  return {bg:'#F1EBDC', fg:'var(--ink-soft)'};
+}
+
+function payLabel(job){
+  if(!job.payMin && !job.payMax) return 'Salary not specified';
+  return '₦' + job.payMin.toLocaleString('en-NG') + ' – ₦' + job.payMax.toLocaleString('en-NG') + '/mo';
+}
+
+function skillPills(allSkills, highlightSet){
+  return allSkills.map(s=>{
+    const cls = highlightSet.has(s) ? 'skill-pill match' : 'skill-pill';
+    return `<span class="${cls}">${s}</span>`;
+  }).join('');
+}
+
+function findJobs(){
+  const name = document.getElementById('s-name').value || 'You';
+  const level = document.getElementById('s-level').value;
+  const loc = document.getElementById('s-loc').value;
+  if(seekerSkills.size === 0){
+    alert('Select at least one skill to find matches.');
+    return;
+  }
+  const scored = JOBS.map(j=>({
+    job:j,
+    score: matchScore(j.skills, [...seekerSkills], j.level, level, j.loc, loc)
+  })).sort((a,b)=>b.score-a.score).slice(0,6);
+
+  const results = document.getElementById('seeker-results');
+  results.innerHTML = `
+    <div class="results-head"><h2>Matches for ${name}</h2><span>${scored.length} roles, best fit first</span></div>
+    <div class="grid">
+      ${scored.map(({job,score})=>{
+        const c = gaugeColor(score);
+        return `<div class="res-card">
+          <div class="gauge">
+            <svg width="60" height="42" viewBox="0 0 60 42">
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.fg}" stroke-width="6" fill="none" stroke-linecap="round"
+                stroke-dasharray="94" stroke-dashoffset="${94 - (score/100*94)}"/>
+            </svg>
+            <span class="pct">${score}%</span>
+            <span class="lbl">match</span>
+          </div>
+          <div class="res-body">
+            <p class="res-title">${job.title}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-sub">${job.company} · ${job.loc} · ${job.level}</p>
+            <span class="pay-pill">${payLabel(job)}</span>
+            <div class="skill-row">${skillPills(job.skills, seekerSkills)}</div>
+            <div class="btn-row">
+              ${applyButtonHtml(job)}
+              ${followButtonHtml(job.company)}
+              <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
+              <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'cover')">Write cover letter ↗</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('ai-workbench').innerHTML = '';
+}
+
+function findAbroadJobs(){
+  const level = document.getElementById('ab-level').value;
+  const region = document.getElementById('ab-region').value;
+  if(abroadSkills.size === 0){
+    alert('Select at least one skill to find remote roles.');
+    return;
+  }
+  const scored = INTL_JOBS.map(j=>({
+    job:j,
+    score: matchScore(j.skills, [...abroadSkills], j.level, level, j.region, region)
+  })).sort((a,b)=>b.score-a.score).slice(0,6);
+
+  const results = document.getElementById('abroad-results');
+  results.innerHTML = `
+    <div class="results-head"><h2>Remote roles for you</h2><span>${scored.length} roles, best fit first</span></div>
+    <div class="grid">
+      ${scored.map(({job,score})=>{
+        const c = gaugeColor(score);
+        return `<div class="res-card">
+          <div class="gauge">
+            <svg width="60" height="42" viewBox="0 0 60 42">
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.fg}" stroke-width="6" fill="none" stroke-linecap="round"
+                stroke-dasharray="94" stroke-dashoffset="${94 - (score/100*94)}"/>
+            </svg>
+            <span class="pct">${score}%</span>
+            <span class="lbl">match</span>
+          </div>
+          <div class="res-body">
+            <p class="res-title">${job.title}</p>
+            <p class="res-sub">${job.company} · ${job.region} · ${job.level}</p>
+            <span class="pay-pill">$${job.payMin.toLocaleString('en-US')} – $${job.payMax.toLocaleString('en-US')}/mo</span>
+            <p style="font-size:12px;color:var(--ink-soft);margin:2px 0 10px;">${job.timezone}</p>
+            <div class="skill-row">${skillPills(job.skills, abroadSkills)}</div>
+            <div class="btn-row">
+              ${applyButtonHtml(job)}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+async function callClaude(messages, useWebSearch){
+  const body = {
+    model: "claude-sonnet-4-6",
+    max_tokens: 1000,
+    messages: messages
+  };
+  if(useWebSearch){
+    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+  }
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if(!response.ok){
+    throw new Error("Request failed (" + response.status + ")");
+  }
+  const data = await response.json();
+  return data.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+}
+
+let resumeFile = null; // {kind:'pdf'|'image', mediaType, base64} when a file is uploaded, else null (use textarea)
+
+function clearResumeFile(){
+  resumeFile = null;
+  document.getElementById('s-resume-file').value = '';
+  document.getElementById('s-resume-filename').textContent = 'No file uploaded — you can also paste your CV text below';
+  document.getElementById('s-resume-remove').style.display = 'none';
+  document.getElementById('s-resume').disabled = false;
+  document.getElementById('s-resume').placeholder = 'Paste your current CV / resume text here (or upload a PDF/image above instead)...';
+}
+
+function handleResumeUpload(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const nameLower = file.name.toLowerCase();
+
+  if(nameLower.endsWith('.txt') || nameLower.endsWith('.md')){
+    resumeFile = null;
+    document.getElementById('s-resume-filename').textContent = file.name;
+    document.getElementById('s-resume-remove').style.display = '';
+    document.getElementById('s-resume').disabled = false;
+    const reader = new FileReader();
+    reader.onload = e => { document.getElementById('s-resume').value = e.target.result; };
+    reader.readAsText(file);
+    return;
+  }
+
+  const isPdf = nameLower.endsWith('.pdf');
+  const isImage = nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png');
+  if(!isPdf && !isImage){
+    alert('Please upload a .txt, .md, .pdf, .jpg, or .png file.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const base64 = e.target.result.split(',')[1];
+    resumeFile = { kind: isPdf ? 'pdf' : 'image', mediaType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'), base64 };
+    document.getElementById('s-resume-filename').textContent = file.name + ' (uploaded — used directly, no need to paste text)';
+    document.getElementById('s-resume-remove').style.display = '';
+    document.getElementById('s-resume').value = '';
+    document.getElementById('s-resume').disabled = true;
+    document.getElementById('s-resume').placeholder = 'Using uploaded file above — remove it to paste text instead.';
+  };
+  reader.readAsDataURL(file);
+}
+
+function haveResume(){
+  return !!resumeFile || getResumeText().length > 0;
+}
+
+function getResumeText(){
+  return document.getElementById('s-resume').value.trim();
+}
+
+// Builds the content array for a Claude message: an optional file block plus a text block.
+function buildResumeMessageContent(instructionText){
+  const content = [];
+  if(resumeFile){
+    if(resumeFile.kind === 'pdf'){
+      content.push({ type:"document", source:{ type:"base64", media_type:"application/pdf", data: resumeFile.base64 } });
+    }else{
+      content.push({ type:"image", source:{ type:"base64", media_type: resumeFile.mediaType, data: resumeFile.base64 } });
+    }
+    content.push({ type:"text", text: instructionText + "\n\nThe candidate's resume is attached above (PDF or image) — read it directly." });
+  }else{
+    content.push({ type:"text", text: instructionText + `\n\nCandidate's current resume:\n"""\n${getResumeText()}\n"""` });
+  }
+  return content;
+}
+
+function renderWorkbenchLoading(title, subtitle){
+  document.getElementById('ai-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
+      <p class="loading-line">Generating — this can take a few seconds…</p>
+    </div>`;
+  document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function renderWorkbenchResult(title, subtitle, text, baseFilename){
+  const safe = text.replace(/</g,'&lt;');
+  document.getElementById('ai-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
+      <div class="workbench-output" id="workbench-text">${safe}</div>
+      <div class="output-actions">
+        <button class="upload-btn" onclick="copyWorkbench()">Copy text</button>
+        <button class="upload-btn" onclick="downloadWorkbenchTxt('${baseFilename}.txt')">Download .txt</button>
+        <button class="ai-btn" onclick="downloadWorkbenchPDF('${baseFilename}.pdf', '${title.replace(/'/g,"")}', '${subtitle.replace(/'/g,"")}')">Download PDF</button>
+      </div>
+    </div>`;
+}
+
+function renderWorkbenchError(title, err, context){
+  console.error(title + ' failed:', err);
+  document.getElementById('ai-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>${title}</h3><span>Something went wrong</span></div>
+      <p class="loading-line">${friendlyErrorMessage(context)}</p>
+    </div>`;
+}
+
+function copyWorkbench(){
+  const el = document.getElementById('workbench-text');
+  navigator.clipboard.writeText(el.innerText);
+}
+
+function downloadWorkbenchTxt(filename){
+  const el = document.getElementById('workbench-text');
+  const blob = new Blob([el.innerText], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadWorkbenchPDF(filename, heading, subheading){
+  const el = document.getElementById('workbench-text');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const marginX = 56;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const maxWidth = pageWidth - marginX * 2;
+  let y = 64;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(27, 42, 74);
+  doc.text(heading, marginX, y);
+  y += 20;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(107, 101, 88);
+  doc.text(subheading, marginX, y);
+  y += 26;
+
+  doc.setDrawColor(219, 154, 60);
+  doc.setLineWidth(1.2);
+  doc.line(marginX, y, pageWidth - marginX, y);
+  y += 24;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(30, 27, 22);
+  const lines = doc.splitTextToSize(el.innerText, maxWidth);
+  const lineHeight = 15;
+
+  lines.forEach(line=>{
+    if(y > pageHeight - 56){
+      doc.addPage();
+      y = 56;
+    }
+    doc.text(line, marginX, y);
+    y += lineHeight;
+  });
+
+  doc.save(filename);
+}
+
+async function tailorResumeFor(jobId){
+  const job = JOBS[jobId];
+  if(!haveResume()){
+    alert('Upload or paste your CV/resume first, in the box above.');
+    return;
+  }
+  renderWorkbenchLoading('Tailored resume', job.title + ' · ' + job.company);
+  const instruction = `You are a professional resume writer helping a Nigerian job seeker tailor their CV for one specific role. Only reorder, re-emphasize, and rephrase what is already true in the resume — never invent employers, degrees, dates, or experience that isn't there.
+
+Job: ${job.title} at ${job.company}, ${job.loc}
+Experience level: ${job.level}
+Key required skills: ${job.skills.join(", ")}
+Job description: ${job.desc}
+
+Return only the tailored resume text, ready to copy, formatted in clean plain text with clear section headings.`;
+  try{
+    const text = await callClaude([{role:"user", content: buildResumeMessageContent(instruction)}]);
+    renderWorkbenchResult('Tailored resume', job.title + ' · ' + job.company, text, 'tailored-resume');
+  }catch(err){
+    renderWorkbenchError('Tailored resume', err, 'resume');
+  }
+}
+
+async function writeCoverLetterFor(jobId){
+  const job = JOBS[jobId];
+  if(!haveResume()){
+    alert('Upload or paste your CV/resume first, in the box above.');
+    return;
+  }
+  const name = document.getElementById('s-name').value || 'the candidate';
+  renderWorkbenchLoading('Cover letter', job.title + ' · ' + job.company);
+  const instruction = `Write a concise, specific, professional cover letter (under 350 words) for ${name}, applying to the role below. Base it only on the resume content given — do not invent experience. Warm and confident tone, no generic filler phrases like "I am writing to express my interest".
+
+Job: ${job.title} at ${job.company}, ${job.loc}
+Experience level: ${job.level}
+Key required skills: ${job.skills.join(", ")}
+Job description: ${job.desc}
+
+Return only the cover letter text.`;
+  try{
+    const text = await callClaude([{role:"user", content: buildResumeMessageContent(instruction)}]);
+    renderWorkbenchResult('Cover letter', job.title + ' · ' + job.company, text, 'cover-letter');
+  }catch(err){
+    renderWorkbenchError('Cover letter', err, 'coverletter');
+  }
+}
+
+// --- Resume fit check: deterministic skill-overlap scoring, no AI call needed ---
+
+function computeResumeFit(resumeText, job){
+  const text = resumeText.toLowerCase();
+  const matched = job.skills.filter(s => text.includes(s.toLowerCase()));
+  const missing = job.skills.filter(s => !matched.includes(s));
+  const score = job.skills.length === 0 ? 0 : Math.round(matched.length / job.skills.length * 100);
+  let verdict;
+  if(score >= 75){
+    verdict = `Strong fit — your resume already covers most of what ${job.company} is looking for in this role.`;
+  }else if(score >= 40){
+    verdict = `Moderate fit — you cover some key skills, but a few important ones for this role are missing from your resume.`;
+  }else{
+    verdict = `Limited fit — most of the skills ${job.company} is asking for aren't showing up in your resume yet. Consider adding relevant experience or projects before applying.`;
+  }
+  return {score, matched, missing, verdict};
+}
+
+function checkResumeFit(jobId){
+  const job = JOBS[jobId];
+  const text = getResumeText();
+  if(!text){
+    alert("Paste your resume text above for a fit check. (PDF/image uploads aren't supported for this feature yet — paste the text version instead.)");
+    return;
+  }
+  const fit = computeResumeFit(text, job);
+  renderResumeFit(job, fit);
+}
+
+function renderResumeFit(job, fit){
+  const c = gaugeColor(fit.score);
+  document.getElementById('ai-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>Resume fit check</h3><span>${job.title} · ${job.company}</span></div>
+      <div class="fit-score-row">
+        <div class="gauge">
+          <svg width="60" height="42" viewBox="0 0 60 42">
+            <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
+            <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.fg}" stroke-width="6" fill="none" stroke-linecap="round"
+              stroke-dasharray="94" stroke-dashoffset="${94 - (fit.score/100*94)}"/>
+          </svg>
+          <span class="pct">${fit.score}%</span>
+          <span class="lbl">fit</span>
+        </div>
+        <p class="fit-verdict">${fit.verdict}</p>
+      </div>
+      <div class="fit-skill-block">
+        <p class="fit-skill-label">Matched skills</p>
+        <div class="skill-row">${fit.matched.length ? fit.matched.map(s => `<span class="skill-pill match">${s}</span>`).join('') : '<span class="fit-none">None found</span>'}</div>
+      </div>
+      <div class="fit-skill-block">
+        <p class="fit-skill-label">Missing skills</p>
+        <div class="skill-row">${fit.missing.length ? fit.missing.map(s => `<span class="skill-pill missing">${s}</span>`).join('') : '<span class="fit-none">None — great coverage!</span>'}</div>
+      </div>
+    </div>`;
+  document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+async function findCandidates(){
+  const title = document.getElementById('e-title').value || 'This role';
+  const company = document.getElementById('e-company').value || 'Your company';
+  const level = document.getElementById('e-level').value;
+  const loc = document.getElementById('e-loc').value;
+  const payMin = document.getElementById('e-pay-min').value;
+  const payMax = document.getElementById('e-pay-max').value;
+  if(employerSkills.size === 0){
+    alert('Select at least one required skill to find candidates.');
+    return;
+  }
+
+  const skills = [...employerSkills];
+  const results = document.getElementById('employer-results');
+  results.innerHTML = '<p class="loading-line">Posting this role and checking it against real Bridge NG members…</p>';
+
+  let realMatches = [];
+  let notifiedCount = 0;
+  try{
+    const data = await apiPostEmployerJob({
+      title, company, level, location: loc, skills,
+      payMin: Number(payMin) || 0, payMax: Number(payMax) || 0
+    });
+    realMatches = data.realMatches || [];
+    notifiedCount = data.notifiedCount || 0;
+  }catch(err){
+    console.error('Posting employer job failed:', err);
+    // Real matching is layered on top — the sample results below still render either way.
+  }
+
+  const scored = CANDIDATES.map(c=>({
+    cand:c,
+    score: matchScore(skills, c.skills, level, c.level, loc, c.loc)
+  })).sort((a,b)=>b.score-a.score).slice(0,6);
+
+  const budgetLine = (payMin && payMax)
+    ? `<span class="pay-pill" style="margin-left:10px;">Budget: ₦${Number(payMin).toLocaleString('en-NG')} – ₦${Number(payMax).toLocaleString('en-NG')}/mo</span>`
+    : '';
+
+  const realSection = realMatches.length ? `
+    <div class="results-head"><h2>Real Bridge NG members</h2><span>${realMatches.length} matched${notifiedCount ? ' · ' + notifiedCount + ' notified' : ''}</span></div>
+    <div class="grid">
+      ${realMatches.map(m=>{
+        const g = gaugeColor(m.score);
+        return `<div class="res-card">
+          <div class="gauge">
+            <svg width="60" height="42" viewBox="0 0 60 42">
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${g.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${g.fg}" stroke-width="6" fill="none" stroke-linecap="round"
+                stroke-dasharray="94" stroke-dashoffset="${94 - (m.score/100*94)}"/>
+            </svg>
+            <span class="pct">${m.score}%</span>
+            <span class="lbl">match</span>
+          </div>
+          <div class="res-body">
+            <p class="res-title">${m.fullName} <span class="match-badge">Real member</span></p>
+            <p class="res-sub">${m.fieldOfStudy || 'Field not specified'} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
+            <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  ` : `
+    <div class="results-head"><h2>Real Bridge NG members</h2><span>0 matched yet</span></div>
+    <div class="empty">No registered job seekers match this role yet — as more people sign up with matching skills, they'll show here automatically and get notified.</div>
+  `;
+
+  results.innerHTML = `
+    ${realSection}
+    <div class="results-head" style="margin-top:36px;"><h2>Sample candidates for ${title}${budgetLine}</h2><span>${scored.length} demo profiles, best fit first</span></div>
+    <div class="grid">
+      ${scored.map(({cand,score})=>{
+        const g = gaugeColor(score);
+        return `<div class="res-card">
+          <div class="gauge">
+            <svg width="60" height="42" viewBox="0 0 60 42">
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${g.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
+              <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${g.fg}" stroke-width="6" fill="none" stroke-linecap="round"
+                stroke-dasharray="94" stroke-dashoffset="${94 - (score/100*94)}"/>
+            </svg>
+            <span class="pct">${score}%</span>
+            <span class="lbl">match</span>
+          </div>
+          <div class="res-body">
+            <p class="res-title">${cand.name}</p>
+            <p class="res-sub">${cand.field} · ${cand.loc} · ${cand.level}</p>
+            <div class="skill-row">${skillPills(cand.skills, employerSkills)}</div>
+            <button class="apply-btn">View profile</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

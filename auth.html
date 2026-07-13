@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — Bridge NG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="images/bridgeng-logo-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a class="brand" href="BridgeNG.html" style="text-decoration:none;color:inherit;">
+      <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
+    </a>
+  </div>
+</div>
+
+<div class="auth-wrap">
+  <div class="auth-panel">
+    <div class="auth-toggle">
+      <button class="tab-btn" id="tab-signin" onclick="showMode('signin')">Sign in</button>
+      <button class="tab-btn" id="tab-signup" onclick="showMode('signup')">Sign up</button>
+    </div>
+
+    <!-- SIGN IN -->
+    <div id="mode-signin">
+      <div class="auth-head">
+        <h2 style="color:var(--indigo);">Welcome back</h2>
+        <p>Sign in to load your saved profile and pick up where you left off.</p>
+      </div>
+      <div class="card">
+        <p class="form-msg" id="signin-msg"></p>
+        <div class="field-row">
+          <div>
+            <label>Email address</label>
+            <input type="email" id="si-email" placeholder="e.g. amaka.nwosu@email.com">
+          </div>
+          <div>
+            <label>Password</label>
+            <input type="password" id="si-password" placeholder="Your password">
+          </div>
+        </div>
+        <button class="go-btn" onclick="doSignIn()">Sign in →</button>
+      </div>
+      <p class="auth-switch">New to Bridge NG? <a onclick="showMode('signup')">Create an account</a></p>
+    </div>
+
+    <!-- SIGN UP -->
+    <div id="mode-signup" style="display:none;">
+      <div class="auth-head">
+        <h2 style="color:var(--indigo);">Create your account</h2>
+        <p>Register once — your details are stored and restored every time you sign in, even after a restart.</p>
+      </div>
+      <div class="card">
+        <p class="form-msg" id="signup-msg"></p>
+
+        <p class="section-label">Login details</p>
+        <div class="field-row">
+          <div>
+            <label>Email address</label>
+            <input type="email" id="su-email" placeholder="e.g. amaka.nwosu@email.com">
+          </div>
+          <div>
+            <label>Password</label>
+            <input type="password" id="su-password" placeholder="At least 6 characters">
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>Confirm password</label>
+            <input type="password" id="su-password2" placeholder="Retype your password">
+          </div>
+          <div></div>
+        </div>
+
+        <p class="section-label">Personal details</p>
+        <div class="field-row">
+          <div>
+            <label>Full name</label>
+            <input type="text" id="su-name" placeholder="e.g. Amaka Nwosu">
+          </div>
+          <div>
+            <label>Date of birth</label>
+            <input type="date" id="su-dob">
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>Sex</label>
+            <select id="su-sex">
+              <option>Prefer not to say</option>
+              <option>Female</option>
+              <option>Male</option>
+            </select>
+          </div>
+          <div>
+            <label>Phone number</label>
+            <input type="tel" id="su-phone" placeholder="e.g. 0803 123 4567">
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>Address</label>
+            <input type="text" id="su-address" placeholder="e.g. 14 Allen Avenue, Ikeja">
+          </div>
+          <div></div>
+        </div>
+
+        <p class="section-label">Background &amp; preferences</p>
+        <div class="field-row">
+          <div>
+            <label>Highest level of education</label>
+            <select id="su-education">
+              <option>Secondary school</option>
+              <option>OND / HND (Polytechnic)</option>
+              <option>NCE (College of Education)</option>
+              <option>Bachelor's degree (B.Sc / B.A / B.Eng)</option>
+              <option>Master's degree</option>
+              <option>Doctorate (Ph.D)</option>
+              <option>Professional certification</option>
+            </select>
+          </div>
+          <div>
+            <label>Career stage</label>
+            <select id="su-level">
+              <option>Student</option>
+              <option>Early career (0-3 yrs)</option>
+              <option>Mid career (4-8 yrs)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>Field of study / background</label>
+            <input type="text" id="su-field" placeholder="e.g. Computer Science, UNILAG">
+          </div>
+          <div>
+            <label>Preferred location</label>
+            <select id="su-loc"></select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label>Open to fully remote roles abroad?</label>
+            <select id="su-remote">
+              <option value="no">No, I'm looking within Nigeria</option>
+              <option value="yes">Yes — show me remote roles with companies abroad</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+        <label>Your skills — tap to select, or type your own</label>
+        <div class="chip-field" id="su-skills"></div>
+        <div class="skill-add-row">
+          <input type="text" id="su-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('su-skills', signupSkills, 'su-skill-input');}">
+          <button class="upload-btn" onclick="addCustomSkill('su-skills', signupSkills, 'su-skill-input')">Add skill</button>
+        </div>
+
+        <button class="go-btn" onclick="doSignUp()">Create account →</button>
+      </div>
+      <p class="auth-switch">Already registered? <a onclick="showMode('signin')">Sign in instead</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- SOCIAL LINKS -->
+<div class="social-fab-row">
+  <a class="social-fab" href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on Facebook" title="Facebook">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13.5 21v-7.5h2.5l.5-3h-3V8.5c0-.9.25-1.5 1.55-1.5H16.5V4.2c-.27-.04-1.2-.12-2.28-.12-2.26 0-3.8 1.38-3.8 3.9V10.5H8v3h2.42V21h3.08z"/></svg>
+  </a>
+  <a class="social-fab" href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on Instagram" title="Instagram">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1"/></svg>
+  </a>
+  <a class="social-fab" href="https://x.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on X" title="X (Twitter)">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.9 3H21.6l-6 6.9L22.8 21h-5.6l-4.4-5.8L7.7 21H5l6.5-7.4L4.5 3h5.7l4 5.3L18.9 3zm-1 16.2h1.6L8.2 4.7H6.5l11.4 14.5z"/></svg>
+  </a>
+  <a class="social-fab" href="https://www.linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on LinkedIn" title="LinkedIn">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M5.3 8.6H2.1V21h3.2V8.6zM3.7 3.4A1.85 1.85 0 1 0 3.7 7a1.85 1.85 0 0 0 0-3.6zM21.9 21h-3.2v-6.3c0-1.5-.03-3.4-2.08-3.4-2.08 0-2.4 1.63-2.4 3.3V21H11V8.6h3.06v1.7h.04c.43-.8 1.47-1.64 3.02-1.64 3.23 0 3.83 2.13 3.83 4.9V21z"/></svg>
+  </a>
+</div>
+
+<script src="shared.js"></script>
+<script>
+let signupSkills = new Set();
+buildChips('su-skills', signupSkills);
+populateLocationSelect('su-loc', false);
+
+function showMode(mode){
+  document.getElementById('mode-signin').style.display = mode==='signin' ? '' : 'none';
+  document.getElementById('mode-signup').style.display = mode==='signup' ? '' : 'none';
+  document.getElementById('tab-signin').classList.toggle('active', mode==='signin');
+  document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
+}
+
+const params = new URLSearchParams(location.search);
+showMode(params.get('mode') === 'signup' ? 'signup' : 'signin');
+
+function setMsg(id, text, kind){
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'form-msg ' + kind;
+}
+
+async function doSignIn(){
+  const email = document.getElementById('si-email').value.trim();
+  const password = document.getElementById('si-password').value;
+  if(!email || !password){
+    setMsg('signin-msg', 'Enter your email and password.', 'error');
+    return;
+  }
+  try{
+    await apiLogin(email, password);
+    location.href = 'BridgeNG.html';
+  }catch(err){
+    setMsg('signin-msg', err.message, 'error');
+  }
+}
+
+async function doSignUp(){
+  const email = document.getElementById('su-email').value.trim();
+  const password = document.getElementById('su-password').value;
+  const password2 = document.getElementById('su-password2').value;
+  const fullName = document.getElementById('su-name').value.trim();
+
+  if(!email || !password || !fullName){
+    setMsg('signup-msg', 'Email, password, and full name are required.', 'error');
+    return;
+  }
+  if(password !== password2){
+    setMsg('signup-msg', 'Passwords do not match.', 'error');
+    return;
+  }
+
+  const payload = {
+    email, password, fullName,
+    dob: document.getElementById('su-dob').value,
+    sex: document.getElementById('su-sex').value,
+    phone: document.getElementById('su-phone').value,
+    address: document.getElementById('su-address').value,
+    education: document.getElementById('su-education').value,
+    careerLevel: document.getElementById('su-level').value,
+    fieldOfStudy: document.getElementById('su-field').value,
+    preferredLocation: document.getElementById('su-loc').value,
+    openToRemote: document.getElementById('su-remote').value === 'yes',
+    skills: [...signupSkills]
+  };
+
+  try{
+    await apiSignup(payload);
+    location.href = 'BridgeNG.html';
+  }catch(err){
+    setMsg('signup-msg', err.message, 'error');
+  }
+}
+</script>
+</body>
+</html>
