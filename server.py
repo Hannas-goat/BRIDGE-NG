@@ -34,17 +34,10 @@ PBKDF2_ITERATIONS = 200_000
 SESSION_COOKIE = "bridge_session"
 
 # NVIDIA's build.nvidia.com API catalog is OpenAI-compatible and grants free trial credits on
-# signup. It has no built-in web browsing, so real search (below) is layered on separately.
+# signup — no live web search available, so job lookups are best-effort from pasted text only.
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-
-# Optional: Google Programmable Search (100 free queries/day) for the job-lookup step to find a
-# real application link. Both unset by default — job lookup still works without it, just without
-# a verified live link. Set GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX to enable.
-GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
-GOOGLE_SEARCH_CX = os.environ.get("GOOGLE_SEARCH_CX")
-GOOGLE_SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
 
 try:
     from pypdf import PdfReader
@@ -371,30 +364,6 @@ def call_nvidia(messages, max_tokens=1400):
     with urllib.request.urlopen(req, timeout=45) as resp:
         result = json.loads(resp.read().decode("utf-8"))
     return result["choices"][0]["message"]["content"]
-
-
-def google_search(query, num=5):
-    """Returns up to `num` {"title", "link", "snippet"} results, or [] if search isn't configured
-    or the request fails for any reason — a live search result is a nice-to-have enhancement to
-    the job lookup, never a hard dependency, so failures here are swallowed rather than raised."""
-    if not (GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX):
-        return []
-    params = urllib.parse.urlencode({
-        "key": GOOGLE_SEARCH_API_KEY,
-        "cx": GOOGLE_SEARCH_CX,
-        "q": query,
-        "num": num,
-    })
-    try:
-        with urllib.request.urlopen(f"{GOOGLE_SEARCH_URL}?{params}", timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        print("Google search failed (job lookup will proceed without it):", e)
-        return []
-    return [
-        {"title": it.get("title", ""), "link": it.get("link", ""), "snippet": it.get("snippet", "")}
-        for it in (data.get("items") or [])
-    ]
 
 
 def parse_job_info_json(reply, fallback_text):
@@ -1359,38 +1328,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not job_text:
             return self.send_json(400, {"error": "Paste the job you're applying for first."})
 
-        query = " ".join(job_text.split()[:25]) + " careers apply"
-        search_results = google_search(query)
-        if search_results:
-            search_context = (
-                "\n\nLive web search results for this role — use these to verify details and find a real "
-                "application link. Only use a link from these results if it clearly matches this role; "
-                "never invent one:\n" + "\n".join(
-                    f"- {r['title']}\n  {r['link']}\n  {r['snippet']}" for r in search_results
-                )
-            )
-        else:
-            search_context = ""
-
         system_prompt = (
-            "You classify job postings for Bridge NG, a Nigerian job-matching platform. Identify the role from "
-            "the pasted text below, and judge whether it is based in Nigeria and/or offered as fully remote. "
-            + ("Live web search results are included below the pasted text — use them to verify the role and "
-               "find a real application link." if search_results else
-               "You do not have live internet access here — work only from the pasted text and your own "
-               "general knowledge.") + "\n\n"
+            "You classify job postings for Bridge NG, a Nigerian job-matching platform. You do not have live "
+            "internet access — work only from the pasted text below and your own general knowledge. Identify "
+            "the role, and judge whether it is based in Nigeria and/or offered as fully remote.\n\n"
             "Respond with ONLY a JSON object (no markdown fences, no commentary) matching exactly this shape:\n"
             '{"title": string, "company": string, "location": string, "level": string, '
             '"isNigeria": boolean, "isRemote": boolean, "applicationLink": string, '
             '"skills": [string, ...], "summary": string}\n\n'
-            "Only set applicationLink to a URL that appears in the pasted text or the search results below — "
-            "never invent or guess one, since you can't verify it otherwise. skills should be 3-8 short skill "
-            "names relevant to the role. summary should be 1-2 sentences."
+            "Only set applicationLink if a real URL literally appears in the pasted text — never invent or "
+            "guess one, since you can't verify it. skills should be 3-8 short skill names relevant to the role. "
+            "summary should be 1-2 sentences."
         )
         try:
             reply = call_nvidia([
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": job_text + search_context},
+                {"role": "user", "content": job_text},
             ])
         except urllib.error.HTTPError as e:
             print("NVIDIA job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
@@ -1527,11 +1480,6 @@ def main():
         print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}'.")
     else:
         print("Ask Bridge AI is NOT configured — set the NVIDIA_API_KEY environment variable to enable it.")
-    if GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX:
-        print("Live job lookup is enabled — resume tailoring can find and verify a real application link.")
-    else:
-        print("Live job lookup is NOT configured — set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX to enable it "
-              "(job lookup still works without it, just without a verified live link).")
     if IMPORT_TOKEN:
         print("Job import is enabled at POST /api/jobs/import and POST /api/jobs/sync (requires the IMPORT_TOKEN as a 'token' field).")
         print(f"Sync jobs from a live Greenhouse/Lever board at http://localhost:{PORT}/admin-jobs-sync.html")
