@@ -1835,10 +1835,13 @@ function openTailoredResumeDoc(company){
 
 function renderWorkbenchError(title, err, context){
   console.error(title + ' failed:', err);
+  // Server-provided error messages are already written to be user-facing (e.g. "still getting
+  // set up", "couldn't read that PDF") — show them directly instead of a generic fallback.
+  const message = (err && err.message) || friendlyErrorMessage(context);
   document.getElementById('ai-workbench').innerHTML = `
     <div class="workbench-card">
       <div class="workbench-head"><h3>${title}</h3><span>Something went wrong</span></div>
-      <p class="loading-line">${friendlyErrorMessage(context)}</p>
+      <p class="loading-line">${message}</p>
     </div>`;
 }
 
