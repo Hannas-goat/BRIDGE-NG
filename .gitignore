@@ -1,0 +1,10 @@
+# Runtime data — contains real user accounts (emails + password hashes), never commit
+bridgeng.db
+bridgeng.db.backup-*
+
+# Nested repo — was accidentally tracked as a broken submodule reference
+ngrok-playground/
+
+# Python
+__pycache__/
+*.pyc
