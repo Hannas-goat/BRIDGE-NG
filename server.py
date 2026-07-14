@@ -44,6 +44,18 @@ try:
 except ImportError:
     PdfReader = None
 
+try:
+    import libsql_client
+except ImportError:
+    libsql_client = None
+
+# Optional: Turso (libSQL) for a database that survives redeploys. Render's free tier has no
+# persistent disk, so bridgeng.db normally resets to empty on every deploy. Set both env vars to
+# switch persistence to Turso instead; leave unset to keep using the local sqlite3 file as before.
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL")
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
+USE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and libsql_client)
+
 # Shared secret required to import jobs (POST /api/jobs/import). Unset by default so the
 # endpoint is closed until an operator deliberately opts in — same pattern as NVIDIA_API_KEY.
 IMPORT_TOKEN = os.environ.get("IMPORT_TOKEN")
@@ -84,8 +96,59 @@ PY_SKILLS = ["JavaScript", "Python", "SQL", "Data Analysis", "Excel", "Software 
 db_lock = threading.Lock()
 sessions = {}  # token -> user_id
 
+_turso_client = None
+_turso_client_lock = threading.Lock()
+
+
+def _get_turso_client():
+    """Lazily creates one shared libsql_client connection for the whole process. Spinning up a
+    new client per request would open a new background thread each time (expensive and
+    pointless), so every caller reuses this same client instead."""
+    global _turso_client
+    if _turso_client is None:
+        with _turso_client_lock:
+            if _turso_client is None:
+                _turso_client = libsql_client.create_client_sync(url=TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
+    return _turso_client
+
+
+class TursoCursor:
+    """Shim so conn.execute(...).fetchall()/.fetchone() and cur.lastrowid keep working exactly
+    like they did with sqlite3, backed by libsql_client's ResultSet. libsql_client's own Row type
+    already supports row["col"] / row[0] access the same way sqlite3.Row does, so rows need no
+    further wrapping."""
+    def __init__(self, result_set):
+        self._result_set = result_set
+        self.lastrowid = result_set.last_insert_rowid
+
+    def fetchall(self):
+        return list(self._result_set.rows)
+
+    def fetchone(self):
+        rows = self._result_set.rows
+        return rows[0] if rows else None
+
+
+class TursoConnection:
+    """Wraps the shared libsql_client connection so it's a drop-in replacement for a
+    sqlite3.Connection everywhere else in this file — conn.execute(sql, params), conn.commit(),
+    conn.close() all keep working unchanged, whichever backend is actually in use."""
+    def __init__(self, client):
+        self._client = client
+
+    def execute(self, sql, params=()):
+        return TursoCursor(self._client.execute(sql, list(params)))
+
+    def commit(self):
+        pass  # each statement is already committed individually over Turso's API
+
+    def close(self):
+        pass  # the underlying client is shared across requests and stays open for the process
+
 
 def get_db():
+    if USE_TURSO:
+        return TursoConnection(_get_turso_client())
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -1480,7 +1543,11 @@ def main():
     init_db()
     server = ThreadingServer(("0.0.0.0", PORT), Handler)
     print(f"Bridge NG server running — open http://localhost:{PORT}/ in your browser")
-    print(f"(Accounts are stored in {DB_PATH} and persist across restarts.)")
+    if USE_TURSO:
+        print("Using Turso for persistent storage — accounts survive redeploys.")
+    else:
+        print(f"(Accounts are stored in {DB_PATH} — on Render's free tier this resets on every "
+              f"redeploy. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to persist across deploys.)")
     if NVIDIA_API_KEY:
         print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}'.")
     else:
