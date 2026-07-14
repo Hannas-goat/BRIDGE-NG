@@ -143,6 +143,7 @@
           <div>
             <label>Preferred location</label>
             <select id="su-loc"></select>
+            <p style="font-size:11.5px;color:var(--ink-soft);margin:6px 0 0;">Not sure yet? Leave it as "Any location" to see roles from every state and remote country.</p>
           </div>
         </div>
         <div class="field-row">
@@ -201,7 +202,7 @@
 <script>
 let signupSkills = new Set();
 buildChips('su-skills', signupSkills);
-populateLocationSelect('su-loc', false);
+populateLocationSelect('su-loc', true);
 populatePhoneCountrySelect('su-phone-cc');
 
 function showMode(mode){
