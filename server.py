@@ -27,7 +27,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
 PORT = int(os.environ.get("PORT", 8000))
 
-STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html"}
+STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html",
+                 "about.html", "careers.html", "support.html", "contact.html"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
