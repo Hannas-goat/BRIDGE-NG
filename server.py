@@ -27,7 +27,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
 PORT = int(os.environ.get("PORT", 8000))
 
-STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html"}
+STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
@@ -497,6 +497,17 @@ def job_already_imported(conn, company, title, application_link):
     return row is not None
 
 
+def location_indicates_remote(location):
+    """True only if the location text itself reads as remote/anywhere-work — e.g. 'Remote',
+    'Remote - Nigeria', 'Anywhere', or blank (many ATS boards omit location for fully-remote
+    roles). A real city name is NOT treated as remote here, even if paired with an ATS/import
+    'remoteFriendly' flag — that flag alone has proven unreliable."""
+    loc = (location or "").strip().lower()
+    if not loc:
+        return True
+    return any(kw in loc for kw in ("remote", "anywhere", "worldwide", "global"))
+
+
 def insert_job(conn, job):
     """Insert a normalized job dict into imported_jobs. Does not commit or notify —
     caller commits once after the batch and decides how to generate notifications."""
@@ -507,7 +518,7 @@ def insert_job(conn, job):
     except (TypeError, ValueError):
         pay_min, pay_max = 0, 0
     location = job.get("location", "")
-    remote_friendly = 1 if ("remote" in location.lower() or job.get("remoteFriendly")) else 0
+    remote_friendly = 1 if location_indicates_remote(location) else 0
     cur = conn.execute(
         """INSERT INTO imported_jobs (title, company, location, level, sector, skills,
            pay_min, pay_max, description, application_link, posted_date, remote_friendly)

@@ -118,7 +118,7 @@ async function syncJobs(){
 }
 
 function payLabelFor(job){
-  if(!job.payMin && !job.payMax) return 'Salary not specified';
+  if(!job.payMin && !job.payMax) return 'Competitive salary';
   return '₦' + job.payMin.toLocaleString('en-NG') + ' – ₦' + job.payMax.toLocaleString('en-NG') + '/mo';
 }
 
