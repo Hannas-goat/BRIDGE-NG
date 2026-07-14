@@ -150,6 +150,18 @@ class TursoConnection:
         pass  # the underlying client is shared across requests and stays open for the process
 
 
+def is_duplicate_key_error(e):
+    """True if `e` represents a UNIQUE-constraint violation, under either sqlite3 (local dev)
+    or libsql_client/Turso — the two backends raise different exception types (sqlite3.IntegrityError
+    vs libsql_client.LibsqlError) for the same underlying condition, so callers that only checked
+    for sqlite3.IntegrityError would let a Turso duplicate-key error crash the request uncaught."""
+    if isinstance(e, sqlite3.IntegrityError):
+        return True
+    if libsql_client and isinstance(e, libsql_client.LibsqlError):
+        return "UNIQUE" in str(e)
+    return False
+
+
 def get_db():
     if USE_TURSO:
         return TursoConnection(_get_turso_client())
@@ -306,6 +318,14 @@ PROFILE_COLUMNS = ["full_name", "dob", "sex", "phone", "address", "education",
 
 
 def profile_row_to_json(row):
+    if row is None:
+        # Defensive: a user row should always have a matching profile row, but don't crash
+        # the whole request if that invariant is ever violated — return a blank profile instead.
+        return {
+            "fullName": "", "dob": "", "sex": "", "phone": "", "address": "", "education": "",
+            "careerLevel": "", "fieldOfStudy": "", "preferredLocation": "", "skills": [],
+            "openToRemote": False,
+        }
     return {
         "fullName": row["full_name"],
         "dob": row["dob"],
@@ -974,9 +994,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                      1 if data.get("openToRemote") else 0),
                 )
                 conn.commit()
-            except sqlite3.IntegrityError:
+            except Exception as e:
                 conn.close()
-                return self.send_json(409, {"error": "An account with this email already exists."})
+                if is_duplicate_key_error(e):
+                    return self.send_json(409, {"error": "An account with this email already exists."})
+                raise
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
 
@@ -1179,8 +1201,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 conn.execute("INSERT INTO followed_companies (user_id, company) VALUES (?, ?)", (user_id, company))
                 conn.commit()
-            except sqlite3.IntegrityError:
-                pass  # already following
+            except Exception as e:
+                if not is_duplicate_key_error(e):
+                    conn.close()
+                    raise
+                # already following
             conn.close()
         self.send_json(200, {"ok": True})
 
@@ -1305,8 +1330,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     (user_id, job_title, company, (data.get("applicationLink") or "").strip()),
                 )
                 conn.commit()
-            except sqlite3.IntegrityError:
-                pass  # already applied — treat as a no-op success, not an error
+            except Exception as e:
+                if not is_duplicate_key_error(e):
+                    conn.close()
+                    raise
+                # already applied — treat as a no-op success, not an error
             row = conn.execute(
                 "SELECT * FROM applications WHERE user_id = ? AND job_title = ? AND company = ?",
                 (user_id, job_title, company),
