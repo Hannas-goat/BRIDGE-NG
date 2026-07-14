@@ -105,6 +105,16 @@ _turso_client = None
 _turso_client_lock = threading.Lock()
 
 
+def _turso_http_url(url):
+    """libsql_client defaults libsql:// URLs to a WebSocket connection (wss://), which can fail
+    the handshake behind some platforms' networking (seen on Render: WSServerHandshakeError 400).
+    Using the plain HTTP-based protocol instead is more universally compatible and doesn't need a
+    persistent connection upgrade — same database, just a different transport."""
+    if url.startswith("libsql://"):
+        return "https://" + url[len("libsql://"):]
+    return url
+
+
 def _get_turso_client():
     """Lazily creates one shared libsql_client connection for the whole process. Spinning up a
     new client per request would open a new background thread each time (expensive and
@@ -113,7 +123,9 @@ def _get_turso_client():
     if _turso_client is None:
         with _turso_client_lock:
             if _turso_client is None:
-                _turso_client = libsql_client.create_client_sync(url=TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
+                _turso_client = libsql_client.create_client_sync(
+                    url=_turso_http_url(TURSO_DATABASE_URL), auth_token=TURSO_AUTH_TOKEN
+                )
     return _turso_client
 
 
