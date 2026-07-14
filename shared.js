@@ -7,6 +7,36 @@ const SKILLS = ["JavaScript","Python","SQL","Data Analysis","Excel","Software De
 "Legal Practice","Hospitality Management","Public Administration","Architecture","Quantity Surveying",
 "Insurance Underwriting","Banking Operations","Journalism","Video Editing"];
 
+const PHONE_COUNTRY_CODES = [
+  {cc:"+234", flag:"🇳🇬"},
+  {cc:"+1", flag:"🇺🇸"},
+  {cc:"+44", flag:"🇬🇧"},
+  {cc:"+233", flag:"🇬🇭"},
+  {cc:"+27", flag:"🇿🇦"},
+  {cc:"+254", flag:"🇰🇪"}
+];
+
+function populatePhoneCountrySelect(selectId){
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = PHONE_COUNTRY_CODES.map(c => `<option value="${c.cc}">${c.flag} ${c.cc}</option>`).join('');
+  sel.value = '+234';
+}
+
+function formatPhoneWithCountryCode(cc, number){
+  const cleaned = (number || '').trim().replace(/^0+/, '');
+  return cleaned ? cc + ' ' + cleaned : '';
+}
+
+// Splits a stored phone string like "+234 803 123 4567" back into {cc, number} for editing.
+// Falls back to +234 for numbers saved before this country-code field existed.
+function splitPhoneCountryCode(fullPhone){
+  const value = (fullPhone || '').trim();
+  for(const c of PHONE_COUNTRY_CODES){
+    if(value.startsWith(c.cc)) return {cc: c.cc, number: value.slice(c.cc.length).trim()};
+  }
+  return {cc: '+234', number: value};
+}
+
 const LOCATIONS = {
   "Lagos": ["Lagos","Ikeja","Lekki","Victoria Island","Surulere","Ikorodu","Badagry","Epe"],
   "FCT": ["Abuja","Gwagwalada","Kuje","Bwari"],

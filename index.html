@@ -133,7 +133,10 @@
         </div>
         <div>
           <label>Phone number</label>
-          <input type="tel" id="s-phone" placeholder="e.g. 0803 123 4567">
+          <div class="phone-field-row">
+            <select id="s-phone-cc"></select>
+            <input type="tel" id="s-phone" placeholder="803 123 4567">
+          </div>
         </div>
       </div>
       <div class="field-row">
@@ -688,6 +691,7 @@ buildChips('ab-skills', abroadSkills);
 
 populateLocationSelect('s-loc', true);
 populateLocationSelect('e-loc', false);
+populatePhoneCountrySelect('s-phone-cc');
 
 const REGIONS = ["Any region", "Americas", "Europe", "Middle East", "Asia-Pacific", "Global"];
 document.getElementById('ab-region').innerHTML = REGIONS.map(r => `<option>${r}</option>`).join('');
@@ -1225,7 +1229,9 @@ function fillSeekerFormFromProfile(profile){
   document.getElementById('s-name').value = profile.fullName || '';
   document.getElementById('s-dob').value = profile.dob || '';
   if(profile.sex) document.getElementById('s-sex').value = profile.sex;
-  document.getElementById('s-phone').value = profile.phone || '';
+  const phoneSplit = splitPhoneCountryCode(profile.phone);
+  document.getElementById('s-phone-cc').value = phoneSplit.cc;
+  document.getElementById('s-phone').value = phoneSplit.number;
   document.getElementById('s-email').value = currentAccount.email || '';
   document.getElementById('s-address').value = profile.address || '';
   if(profile.education) document.getElementById('s-education').value = profile.education;
@@ -1292,7 +1298,7 @@ async function saveProfile(){
     fullName: document.getElementById('s-name').value,
     dob: document.getElementById('s-dob').value,
     sex: document.getElementById('s-sex').value,
-    phone: document.getElementById('s-phone').value,
+    phone: formatPhoneWithCountryCode(document.getElementById('s-phone-cc').value, document.getElementById('s-phone').value),
     address: document.getElementById('s-address').value,
     education: document.getElementById('s-education').value,
     careerLevel: document.getElementById('s-level').value,

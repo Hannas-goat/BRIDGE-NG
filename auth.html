@@ -98,7 +98,10 @@
           </div>
           <div>
             <label>Phone number</label>
-            <input type="tel" id="su-phone" placeholder="e.g. 0803 123 4567">
+            <div class="phone-field-row">
+              <select id="su-phone-cc"></select>
+              <input type="tel" id="su-phone" placeholder="803 123 4567">
+            </div>
           </div>
         </div>
         <div class="field-row">
@@ -159,6 +162,10 @@
           <button class="upload-btn" onclick="addCustomSkill('su-skills', signupSkills, 'su-skill-input')">Add skill</button>
         </div>
 
+        <label class="consent-row">
+          <input type="checkbox" id="su-consent">
+          <span>I agree to the <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and consent to Bridge processing my personal data for job matching purposes.</span>
+        </label>
         <button class="go-btn" onclick="doSignUp()">Create account →</button>
       </div>
       <p class="auth-switch">Already registered? <a onclick="showMode('signin')">Sign in instead</a></p>
@@ -195,6 +202,7 @@
 let signupSkills = new Set();
 buildChips('su-skills', signupSkills);
 populateLocationSelect('su-loc', false);
+populatePhoneCountrySelect('su-phone-cc');
 
 function showMode(mode){
   document.getElementById('mode-signin').style.display = mode==='signin' ? '' : 'none';
@@ -241,12 +249,16 @@ async function doSignUp(){
     setMsg('signup-msg', 'Passwords do not match.', 'error');
     return;
   }
+  if(!document.getElementById('su-consent').checked){
+    setMsg('signup-msg', 'Please agree to the Privacy Policy to create an account.', 'error');
+    return;
+  }
 
   const payload = {
     email, password, fullName,
     dob: document.getElementById('su-dob').value,
     sex: document.getElementById('su-sex').value,
-    phone: document.getElementById('su-phone').value,
+    phone: formatPhoneWithCountryCode(document.getElementById('su-phone-cc').value, document.getElementById('su-phone').value),
     address: document.getElementById('su-address').value,
     education: document.getElementById('su-education').value,
     careerLevel: document.getElementById('su-level').value,

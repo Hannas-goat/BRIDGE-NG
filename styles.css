@@ -119,6 +119,12 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .skill-add-row{display:flex;gap:8px;margin:10px 0 4px;}
 .skill-add-row input{flex:1;height:38px;}
 .skill-add-row button{white-space:nowrap;}
+.phone-field-row{display:flex;gap:8px;}
+.phone-field-row select{width:110px;flex:none;}
+.phone-field-row input{flex:1;}
+.consent-row{display:flex;align-items:flex-start;gap:10px;margin:18px 0;font-size:13px;line-height:1.5;color:var(--ink-soft);cursor:pointer;}
+.consent-row input[type=checkbox]{margin-top:3px;width:16px;height:16px;flex:none;cursor:pointer;}
+.consent-row a{color:var(--indigo);}
 .go-btn{margin-top:20px;background:var(--indigo);color:#fff;border:none;padding:13px 26px;border-radius:10px;font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;cursor:pointer;}
 .go-btn:hover{background:#142038;}
 .results-head{display:flex;justify-content:space-between;align-items:baseline;margin:36px 0 16px;}
