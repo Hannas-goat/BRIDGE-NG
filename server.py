@@ -69,10 +69,14 @@ SYNC_FALLBACK_MESSAGE = "Couldn't sync jobs from that board right now. Double-ch
 
 # Real Nigerian/Africa-based companies with verified public Greenhouse/Lever boards
 # (confirmed live and returning real postings — not every Nigerian company runs one of
-# these two ATS platforms, so this is a starting set, not "every job in Nigeria").
+# these two ATS platforms, so this is a starting set, not "every job in Nigeria"). Most
+# Nigerian companies simply don't have a public Greenhouse/Lever board to sync from — this
+# was checked against ~110 real company slugs; oneacrefund and jumia were the only additional
+# genuine hits. oneacrefund in particular currently has real listings in Bauchi, Nasarawa,
+# and Niger states, which is why it's included even though it's not Nigeria-headquartered.
 # Add more as "ats:slug" pairs, comma-separated, via the AUTO_SYNC_COMPANIES env var,
 # or just leave the default — it's already a real, working list.
-DEFAULT_AUTO_SYNC_COMPANIES = "greenhouse:moniepoint,greenhouse:carbon"
+DEFAULT_AUTO_SYNC_COMPANIES = "greenhouse:moniepoint,greenhouse:carbon,greenhouse:oneacrefund,greenhouse:jumia"
 AUTO_SYNC_COMPANIES = os.environ.get("AUTO_SYNC_COMPANIES", DEFAULT_AUTO_SYNC_COMPANIES)
 
 # Real, verified remote-first global companies (open to hiring from anywhere, including
@@ -508,6 +512,39 @@ def location_indicates_remote(location):
     return any(kw in loc for kw in ("remote", "anywhere", "worldwide", "global"))
 
 
+NIGERIAN_PLACE_NAMES = (
+    "nigeria", "lagos", "abuja", "kano", "ibadan", "port harcourt", "kaduna",
+    "enugu", "benin city", "jos", "abeokuta", "owerri", "warri", "calabar",
+    "uyo", "onitsha", "maiduguri", "sokoto", "bauchi", "minna", "lafia",
+    "makurdi", "akure", "osogbo", "ilorin", "yola", "gombe", "jalingo",
+    "damaturu", "dutse", "katsina", "gusau", "birnin kebbi", "asaba", "yenagoa",
+)
+
+
+def location_indicates_nigeria(location):
+    """True if the location text plausibly refers to a Nigerian city/state. Real ATS listings
+    for Nigeria-based roles almost always include the word 'Nigeria' explicitly; the place-name
+    list catches listings that name a city/state without the country."""
+    loc = (location or "").strip().lower()
+    if not loc:
+        return False
+    return any(place in loc for place in NIGERIAN_PLACE_NAMES)
+
+
+def job_passes_relevance_filter(location, relevance):
+    """Used only for automated/unattended sync (not the manual admin tool, which should be free
+    to pull in any company's full board for a human to review). 'nigeria_or_remote' is for the
+    main Nigeria company list — some of those companies (e.g. pan-African NGOs) also post roles
+    in other countries that aren't relevant here. 'remote_only' is for the remote-first company
+    list, where an on-site role in some other country isn't reachable by a Nigeria-based seeker
+    either."""
+    if relevance == "remote_only":
+        return location_indicates_remote(location)
+    if relevance == "nigeria_or_remote":
+        return location_indicates_nigeria(location) or location_indicates_remote(location)
+    return True
+
+
 def insert_job(conn, job):
     """Insert a normalized job dict into imported_jobs. Does not commit or notify —
     caller commits once after the batch and decides how to generate notifications."""
@@ -659,10 +696,13 @@ def normalize_lever_job(raw, company_override, slug):
     }
 
 
-def sync_company_jobs(ats, slug, company_override=""):
+def sync_company_jobs(ats, slug, company_override="", relevance="any"):
     """Fetch + normalize + dedup-insert + notify for one company's public ATS board.
     Used by both the on-demand /api/jobs/sync endpoint and the background auto-sync
-    loop, so a scheduled refresh behaves identically to a manual one.
+    loop, so a scheduled refresh behaves identically to a manual one. `relevance`
+    defaults to "any" (no filtering) for the manual admin tool, which should be free to
+    pull in a company's full board for a human to review — see job_passes_relevance_filter
+    for the filtered modes used by unattended auto-sync.
     Returns (inserted_count, error_message_or_None, inserted_jobs_as_json)."""
     url_template = GREENHOUSE_JOBS_URL if ats == "greenhouse" else LEVER_JOBS_URL
     url = url_template.format(slug=urllib.parse.quote(slug))
@@ -686,6 +726,8 @@ def sync_company_jobs(ats, slug, company_override=""):
         for raw in raw_jobs:
             job = normalize(raw)
             if not job["title"]:
+                continue
+            if not job_passes_relevance_filter(job["location"], relevance):
                 continue
             if job_already_imported(conn, job["company"], job["title"], job["applicationLink"]):
                 continue
@@ -737,9 +779,12 @@ def run_auto_sync_loop():
     interval_seconds = max(AUTO_SYNC_INTERVAL_HOURS, 0.05) * 3600
 
     while True:
-        for ats, slug in companies + remote_companies:
+        for (ats, slug), relevance in (
+            [(cs, "nigeria_or_remote") for cs in companies]
+            + [(cs, "remote_only") for cs in remote_companies]
+        ):
             try:
-                count, error, _ = sync_company_jobs(ats, slug)
+                count, error, _ = sync_company_jobs(ats, slug, relevance=relevance)
                 if error:
                     print(f"[auto-sync] {ats}/{slug} failed: {error}")
                 elif count:

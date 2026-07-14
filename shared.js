@@ -38,15 +38,49 @@ function splitPhoneCountryCode(fullPhone){
 }
 
 const LOCATIONS = {
+  // South West
   "Lagos": ["Lagos","Ikeja","Lekki","Victoria Island","Surulere","Ikorodu","Badagry","Epe"],
-  "FCT": ["Abuja","Gwagwalada","Kuje","Bwari"],
   "Oyo": ["Ibadan","Ogbomoso","Oyo Town","Iseyin","Saki"],
   "Ogun": ["Abeokuta","Sagamu","Ijebu-Ode","Ota","Ilaro"],
   "Osun": ["Osogbo","Ile-Ife","Ilesa","Iwo","Ede"],
   "Ekiti": ["Ado-Ekiti","Ikere-Ekiti","Efon-Alaaye","Ikole-Ekiti"],
+  "Ondo": ["Akure","Ondo Town","Owo","Ikare"],
+  // North Central
+  "FCT": ["Abuja","Gwagwalada","Kuje","Bwari"],
   "Kwara": ["Ilorin","Offa","Omu-Aran","Jebba"],
+  "Benue": ["Makurdi","Gboko","Otukpo","Katsina-Ala"],
+  "Kogi": ["Lokoja","Okene","Idah","Kabba"],
+  "Nasarawa": ["Lafia","Keffi","Akwanga","Nasarawa"],
+  "Niger": ["Minna","Bida","Kontagora","Suleja"],
+  "Plateau": ["Jos","Bukuru","Pankshin","Shendam"],
+  // North West
   "Kano": ["Kano","Wudil","Gaya"],
-  "Kaduna": ["Kaduna","Zaria","Kafanchan","Saminaka"]
+  "Kaduna": ["Kaduna","Zaria","Kafanchan","Saminaka"],
+  "Jigawa": ["Dutse","Hadejia","Gumel","Kazaure"],
+  "Katsina": ["Katsina","Daura","Funtua","Malumfashi"],
+  "Kebbi": ["Birnin Kebbi","Argungu","Yauri","Zuru"],
+  "Sokoto": ["Sokoto","Wurno","Tambuwal","Gwadabawa"],
+  "Zamfara": ["Gusau","Kaura Namoda","Talata Mafara"],
+  // North East
+  "Adamawa": ["Yola","Mubi","Jimeta","Numan"],
+  "Bauchi": ["Bauchi","Azare","Misau","Jama'are"],
+  "Borno": ["Maiduguri","Biu","Bama","Dikwa"],
+  "Gombe": ["Gombe","Kaltungo","Billiri"],
+  "Taraba": ["Jalingo","Wukari","Bali","Gembu"],
+  "Yobe": ["Damaturu","Potiskum","Nguru","Gashua"],
+  // South East
+  "Abia": ["Umuahia","Aba","Ohafia","Arochukwu"],
+  "Anambra": ["Awka","Onitsha","Nnewi","Ekwulobia"],
+  "Ebonyi": ["Abakaliki","Afikpo","Onueke"],
+  "Enugu": ["Enugu","Nsukka","Awgu","Oji River"],
+  "Imo": ["Owerri","Orlu","Okigwe","Mbaise"],
+  // South South
+  "Rivers": ["Port Harcourt","Bonny","Ahoada","Eleme"],
+  "Akwa Ibom": ["Uyo","Eket","Ikot Ekpene"],
+  "Bayelsa": ["Yenagoa","Brass","Sagbama"],
+  "Cross River": ["Calabar","Ikom","Ogoja"],
+  "Delta": ["Asaba","Warri","Sapele","Ughelli"],
+  "Edo": ["Benin City","Auchi","Ekpoma","Uromi"]
 };
 
 function createChip(containerId, targetSet, label, startSelected){
@@ -102,7 +136,7 @@ function populateLocationSelect(selectId, includeAny){
   const sel = document.getElementById(selectId);
   let html = '';
   if(includeAny) html += '<option>Any location</option>';
-  html += '<option>Remote</option><option>Port Harcourt</option>';
+  html += '<option>Remote</option>';
   Object.keys(LOCATIONS).forEach(state=>{
     html += `<optgroup label="${state}">` + LOCATIONS[state].map(c=>`<option>${c}</option>`).join('') + `</optgroup>`;
   });
