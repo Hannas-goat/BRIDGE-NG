@@ -870,6 +870,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/me":
             return self.handle_me()
+        if parsed.path == "/api/debug/db":
+            return self.handle_debug_db()
         if parsed.path == "/api/jobs":
             return self.handle_list_jobs()
         if parsed.path == "/api/saved-searches":
@@ -1047,6 +1049,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
         self.send_json(200, {"loggedIn": True, "email": user["email"], "profile": profile_row_to_json(row)})
+
+    def handle_debug_db(self):
+        """Unauthenticated, read-only: reports which DB backend is actually live and how many
+        accounts exist there. Exists purely to make "is Turso really active?" answerable with one
+        request instead of cross-referencing dashboards and deploy logs by hand."""
+        info = {"backend": "turso" if USE_TURSO else "sqlite", "dbPath": DB_PATH if not USE_TURSO else None}
+        try:
+            with db_lock:
+                conn = get_db()
+                row = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()
+                info["userCount"] = row["c"]
+                conn.close()
+        except Exception as e:
+            info["error"] = str(e)
+        self.send_json(200, info)
 
     def handle_save_profile(self):
         user_id = self.current_user_id()
