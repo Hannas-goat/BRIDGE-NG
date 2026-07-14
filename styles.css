@@ -212,6 +212,8 @@ textarea#s-resume:disabled{background:#F1EBDC;color:var(--ink-soft);}
 .resume-doc-para{margin:0 0 8px;}
 .resume-doc-list{margin:0 0 10px;padding-left:20px;}
 .resume-doc-list li{margin-bottom:4px;}
+.resume-doc-sublist{margin:4px 0 4px;padding-left:20px;list-style-type:circle;}
+.resume-doc-sublist li{margin-bottom:3px;}
 .loading-line{color:var(--ink-soft);font-size:13px;font-style:italic;}
 .output-actions{display:flex;gap:8px;margin-top:12px;}
 

@@ -1413,15 +1413,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
         markup_rules = (
-            "Format the output using this exact lightweight markup, so it can be rendered with real "
-            "structure instead of flat text:\n"
-            '- Start each major section with a line beginning "## " (e.g. "## PROFESSIONAL SUMMARY", '
-            '"## WORK EXPERIENCE", "## EDUCATION", "## SKILLS").\n'
-            '- Wrap a role\'s title/company/dates line in "**double asterisks**" for bold.\n'
-            '- Use "- " at the start of a line for every bullet point (achievements, responsibilities, skill lists).\n'
-            "- Write each paragraph or bullet as one single line — never manually wrap text onto a new line "
-            "mid-paragraph. Separate distinct paragraphs with a blank line.\n"
-            "- Use no other markdown (no numbered lists, no italics, no tables, no code fences)."
+            "Format the output using this exact style, so it can be rendered with real structure "
+            "instead of flat text:\n"
+            '- Put the candidate\'s full name alone on the first line, in "**bold**".\n'
+            '- Start each major section with its name alone on a line in "**bold**", ending with a '
+            'colon (e.g. "**Contact Information:**", "**Professional Experience:**", "**Education:**", '
+            '"**Technical Skills:**").\n'
+            '- Use "* " at the start of a line for a bullet point (e.g. each contact detail, each '
+            'skill, each job or degree entry).\n'
+            '- For a bulleted entry that has its own sub-details (e.g. achievements under a job '
+            'title), put those sub-details on their own lines starting with a tab then "+ ".\n'
+            '- Wrap a bullet\'s lead-in text in "**bold**" when it names something specific, like a '
+            'job title/company/dates line or a degree/institution line.\n'
+            "- Write each bullet or paragraph as a single line — never wrap it across multiple lines.\n"
+            '- Use no other markdown (no numbered lists, no italics, no tables, no code fences, no "##").'
         )
 
         if mode == "tailor":

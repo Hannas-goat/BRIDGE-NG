@@ -1761,9 +1761,10 @@ function getResumeText(){
 }
 
 // --- Lightweight markdown-lite parsing for AI-generated resume/cover-letter text ---
-// The AI is asked (see server.py) to mark section headings with "## ", bullets with "- ", and
-// inline emphasis with "**bold**" — parsed here so the on-page preview, Word doc, and PDF can
-// render real structure (headings, bullet lists, bold) instead of a wall of flat text.
+// The AI is asked (see server.py) to mark section headings as a whole bold line (e.g.
+// "**Professional Experience:**"), bullets with "* " or "- ", nested sub-bullets with a tab/space
+// then "+ ", and inline emphasis with "**bold**" — parsed here so the on-page preview, Word doc,
+// and PDF can render real structure instead of a wall of flat text.
 
 let lastWorkbenchRawText = '';
 
@@ -1786,11 +1787,24 @@ function parseInlineRuns(line){
 
 function parseResumeBlocks(text){
   return (text || '').split('\n').map(raw=>{
-    const line = raw.trim();
-    if(!line) return {type:'space'};
-    if(/^#{1,3}\s+/.test(line)) return {type:'heading', runs: parseInlineRuns(line.replace(/^#{1,3}\s+/,''))};
-    if(/^[-*]\s+/.test(line)) return {type:'bullet', runs: parseInlineRuns(line.replace(/^[-*]\s+/,''))};
-    return {type:'text', runs: parseInlineRuns(line)};
+    const trimmed = raw.trim();
+    if(!trimmed) return {type:'space'};
+    const indented = /^[ \t]/.test(raw);
+
+    if(/^#{1,3}\s+/.test(trimmed)){
+      return {type:'heading', runs: parseInlineRuns(trimmed.replace(/^#{1,3}\s+/,''))};
+    }
+    const boldHeading = trimmed.match(/^\*\*(.+?)\*\*:?$/);
+    if(boldHeading){
+      return {type:'heading', runs: parseInlineRuns(boldHeading[1])};
+    }
+    if(/^\+\s+/.test(trimmed) || (indented && /^[-*]\s+/.test(trimmed))){
+      return {type:'subbullet', runs: parseInlineRuns(trimmed.replace(/^[-*+]\s+/,''))};
+    }
+    if(/^[-*]\s+/.test(trimmed)){
+      return {type:'bullet', runs: parseInlineRuns(trimmed.replace(/^[-*]\s+/,''))};
+    }
+    return {type:'text', runs: parseInlineRuns(trimmed)};
   });
 }
 
@@ -1803,7 +1817,7 @@ function runsToHtml(runs){
 }
 
 // Clean, structure-preserving plain text (for copy/.txt/PDF) — markdown markers stripped,
-// headings uppercased with surrounding blank lines, bullets get a visible "•".
+// headings uppercased with surrounding blank lines, bullets/sub-bullets get visible markers.
 function resumeBlocksToPlainText(blocks){
   const lines = [];
   blocks.forEach(b=>{
@@ -1811,6 +1825,7 @@ function resumeBlocksToPlainText(blocks){
     const plain = runsToPlainText(b.runs);
     if(b.type === 'heading'){ lines.push(''); lines.push(plain.toUpperCase()); lines.push(''); }
     else if(b.type === 'bullet'){ lines.push('  •  ' + plain); }
+    else if(b.type === 'subbullet'){ lines.push('      -  ' + plain); }
     else lines.push(plain);
   });
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -1818,8 +1833,15 @@ function resumeBlocksToPlainText(blocks){
 
 function resumeBlocksToHtml(blocks){
   let html = '';
-  let inList = false;
+  let inList = false, inSubList = false;
   blocks.forEach(b=>{
+    if(b.type === 'subbullet'){
+      if(!inList){ html += '<ul class="resume-doc-list">'; inList = true; }
+      if(!inSubList){ html += '<ul class="resume-doc-sublist">'; inSubList = true; }
+      html += `<li>${runsToHtml(b.runs)}</li>`;
+      return;
+    }
+    if(inSubList){ html += '</ul>'; inSubList = false; }
     if(b.type === 'bullet'){
       if(!inList){ html += '<ul class="resume-doc-list">'; inList = true; }
       html += `<li>${runsToHtml(b.runs)}</li>`;
@@ -1829,6 +1851,7 @@ function resumeBlocksToHtml(blocks){
     if(b.type === 'heading') html += `<h4 class="resume-doc-heading">${runsToHtml(b.runs)}</h4>`;
     else if(b.type === 'text') html += `<p class="resume-doc-para">${runsToHtml(b.runs)}</p>`;
   });
+  if(inSubList) html += '</ul>';
   if(inList) html += '</ul>';
   return html;
 }
@@ -1903,6 +1926,8 @@ function buildDocxParagraphs(blocks){
       }));
     }else if(b.type === 'bullet'){
       paragraphs.push(new Paragraph({ children: runs, bullet: { level: 0 }, spacing: { after: 60 } }));
+    }else if(b.type === 'subbullet'){
+      paragraphs.push(new Paragraph({ children: runs, bullet: { level: 1 }, spacing: { after: 60 } }));
     }else{
       paragraphs.push(new Paragraph({ children: runs, spacing: { after: 100 } }));
     }
@@ -2014,8 +2039,9 @@ function downloadWorkbenchPDF(filename, heading, subheading){
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     doc.setTextColor(30, 27, 22);
-    const indent = b.type === 'bullet' ? 14 : 0;
-    const prefix = b.type === 'bullet' ? '•  ' : '';
+    let indent = 0, prefix = '';
+    if(b.type === 'bullet'){ indent = 14; prefix = '•  '; }
+    else if(b.type === 'subbullet'){ indent = 30; prefix = '-  '; }
     const lines = doc.splitTextToSize(prefix + plain, maxWidth - indent);
     lines.forEach(line=>{
       ensureRoom(lineHeight);
