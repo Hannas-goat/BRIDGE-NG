@@ -107,6 +107,7 @@
 
   <!-- SEEKER PANEL -->
   <div class="panel" id="panel-seeker">
+    <div id="perfect-match-banner"></div>
     <div id="remote-jobs-feed"></div>
     <div id="recent-jobs-feed"></div>
     <div class="card">
@@ -905,6 +906,30 @@ function jobMatchesMyProfile(job){
   return skillOverlap || fieldMatch || levelMatch;
 }
 
+// Maps common general search terms to the specific skill/sector tags actual job data uses, so
+// searching "code" surfaces roles tagged Software Development/JavaScript without the user having
+// to already know the exact tag names.
+const SEARCH_SYNONYMS = {
+  'code': ['software development', 'javascript'], 'coding': ['software development', 'javascript'],
+  'programming': ['software development', 'javascript'], 'developer': ['software development', 'javascript'],
+  'tech': ['software development', 'cloud computing', 'cybersecurity', 'networking'],
+  'finance': ['financial modeling', 'accounting', 'banking operations'],
+  'money': ['accounting', 'financial modeling', 'banking operations'],
+  'marketing': ['digital marketing', 'social media management', 'content writing'],
+  'design': ['graphic design', 'ui/ux design'], 'sales': ['sales', 'business development'],
+  'health': ['nursing', 'pharmacy', 'medical lab science'],
+  'engineering': ['civil engineering', 'mechanical engineering', 'electrical engineering', 'petroleum engineering'],
+  'hr': ['human resources', 'recruiting'], 'legal': ['legal practice'],
+  'writing': ['content writing', 'journalism'], 'data': ['data analysis', 'sql'],
+  'security': ['cybersecurity'],
+};
+
+function expandSearchTerms(keyword){
+  const terms = [keyword];
+  if(SEARCH_SYNONYMS[keyword]) terms.push(...SEARCH_SYNONYMS[keyword]);
+  return terms;
+}
+
 function renderExploreResults(){
   const keywordEl = document.getElementById('explore-keyword');
   const locationEl = document.getElementById('explore-location');
@@ -913,12 +938,15 @@ function renderExploreResults(){
 
   const keyword = keywordEl.value.trim().toLowerCase();
   const location = locationEl.value.trim().toLowerCase();
+  const searchTerms = keyword ? expandSearchTerms(keyword) : [];
 
   let jobs = JOBS.filter(j=>{
-    const matchesKeyword = !keyword ||
-      j.title.toLowerCase().includes(keyword) ||
-      j.company.toLowerCase().includes(keyword) ||
-      (j.sector || '').toLowerCase().includes(keyword);
+    const matchesKeyword = !keyword || searchTerms.some(t=>
+      j.title.toLowerCase().includes(t) ||
+      j.company.toLowerCase().includes(t) ||
+      (j.sector || '').toLowerCase().includes(t) ||
+      (j.skills || []).some(s=>s.toLowerCase().includes(t))
+    );
     const matchesLocation = !location || (j.loc || '').toLowerCase().includes(location);
     return matchesKeyword && matchesLocation;
   });
@@ -1171,6 +1199,30 @@ async function loadNotifications(){
     notifications = [];
   }
   renderNotifDropdown();
+  renderPerfectMatchBanner();
+}
+
+// Surfaces the single highest-scoring unread employer-match notification prominently on the
+// seeker dashboard, instead of leaving it passive inside the notification dropdown.
+function renderPerfectMatchBanner(){
+  const container = document.getElementById('perfect-match-banner');
+  if(!container) return;
+  const best = notifications
+    .filter(n => n.kind === 'employer_match' && !n.read)
+    .map(n => {
+      const m = n.message.match(/(\d+)% match/);
+      return {...n, score: m ? parseInt(m[1], 10) : 0};
+    })
+    .sort((a,b) => b.score - a.score)[0];
+  if(!best){ container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <div class="perfect-match-banner">
+      <div>
+        <span class="perfect-match-badge">${best.score}% match</span>
+        <p><b>${best.jobTitle}</b> at ${best.company}</p>
+      </div>
+      <button class="ai-btn" onclick="markAllNotificationsRead()">View in notifications</button>
+    </div>`;
 }
 
 function renderNotifDropdown(){
@@ -1291,17 +1343,56 @@ async function signOut(){
   renderRemoteJobsFeed();
 }
 
+// Soft, dismissible nudges only — never blocks saving. Career switches and non-traditional
+// paths are legitimate, so these just double-check for likely mistakes, worded accordingly.
+function computeProfileNudges(dob, careerLevel, education){
+  const nudges = [];
+  if(dob){
+    const age = new Date().getFullYear() - new Date(dob).getFullYear();
+    if(!isNaN(age)){
+      if(age >= 32 && (careerLevel === 'Student' || careerLevel === 'Early career (0-3 yrs)')){
+        nudges.push(`Your date of birth suggests more life experience than "${careerLevel}" usually implies — totally fine if you're switching fields, just flagging in case it was a mistake.`);
+      }
+      if(age <= 23 && careerLevel === 'Mid career (4-8 yrs)'){
+        nudges.push(`"Mid career (4-8 yrs)" is unusual for your date of birth — double-check this is the career stage you meant to pick.`);
+      }
+    }
+  }
+  if((education === "Doctorate (Ph.D)" || education === "Master's degree") && (careerLevel === 'Student' || careerLevel === 'Early career (0-3 yrs)')){
+    nudges.push(`A ${education} alongside "${careerLevel}" can read as overqualified to employers for entry-level roles — consider adding a note about your career direction in your field of study.`);
+  }
+  return nudges;
+}
+
+let profileNudgeAcknowledged = false;
+['s-dob', 's-level', 's-education'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', ()=>{ profileNudgeAcknowledged = false; });
+});
+
 async function saveProfile(){
   if(!currentAccount) return;
   const msg = document.getElementById('profile-save-msg');
+  const dob = document.getElementById('s-dob').value;
+  const careerLevel = document.getElementById('s-level').value;
+  const education = document.getElementById('s-education').value;
+
+  if(!profileNudgeAcknowledged){
+    const nudges = computeProfileNudges(dob, careerLevel, education);
+    if(nudges.length){
+      msg.innerHTML = nudges.join('<br>') + '<br><em>Click "Save my profile" again to save anyway.</em>';
+      msg.className = 'form-msg';
+      profileNudgeAcknowledged = true;
+      return;
+    }
+  }
+  profileNudgeAcknowledged = false;
+
   const payload = {
     fullName: document.getElementById('s-name').value,
-    dob: document.getElementById('s-dob').value,
-    sex: document.getElementById('s-sex').value,
+    dob, sex: document.getElementById('s-sex').value,
     phone: formatPhoneWithCountryCode(document.getElementById('s-phone-cc').value, document.getElementById('s-phone').value),
     address: document.getElementById('s-address').value,
-    education: document.getElementById('s-education').value,
-    careerLevel: document.getElementById('s-level').value,
+    education, careerLevel,
     fieldOfStudy: document.getElementById('s-field').value,
     preferredLocation: document.getElementById('s-loc').value,
     openToRemote: document.getElementById('s-remote').value === 'yes',
