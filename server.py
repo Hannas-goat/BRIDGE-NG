@@ -38,6 +38,10 @@ SESSION_COOKIE = "bridge_session"
 # signup — no live web search available, so job lookups are best-effort from pasted text only.
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
+# A bigger, more capable model specifically for the resume/cover-letter writing itself (the part
+# users actually read and download) — quick calls like chat and job lookup stay on the lighter
+# model above since they don't need the extra quality and it costs more trial-credit budget.
+NVIDIA_RESUME_MODEL = os.environ.get("NVIDIA_RESUME_MODEL", "meta/llama-3.2-90b-vision-instruct")
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 try:
@@ -447,11 +451,11 @@ def generate_notifications_for_job(conn, job):
         )
 
 
-def call_nvidia(messages, max_tokens=1400):
+def call_nvidia(messages, max_tokens=1400, model=None):
     """Calls NVIDIA's OpenAI-compatible chat completions API and returns the reply text.
     Raises urllib.error.HTTPError on a non-2xx response, or (KeyError, IndexError) if the response
     doesn't contain the expected shape — callers already handle both."""
-    payload = {"model": NVIDIA_MODEL, "messages": messages, "max_tokens": max_tokens}
+    payload = {"model": model or NVIDIA_MODEL, "messages": messages, "max_tokens": max_tokens}
     req = urllib.request.Request(
         NVIDIA_CHAT_URL,
         data=json.dumps(payload).encode("utf-8"),
@@ -1635,7 +1639,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             user_content = instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'
 
         try:
-            reply = call_nvidia([{"role": "user", "content": user_content}])
+            reply = call_nvidia([{"role": "user", "content": user_content}], model=NVIDIA_RESUME_MODEL)
         except urllib.error.HTTPError as e:
             print("NVIDIA resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
@@ -1663,7 +1667,7 @@ def main():
         print(f"(Accounts are stored in {DB_PATH} — on Render's free tier this resets on every "
               f"redeploy. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to persist across deploys.)")
     if NVIDIA_API_KEY:
-        print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}'.")
+        print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}' (resume writing uses '{NVIDIA_RESUME_MODEL}').")
     else:
         print("Ask Bridge AI is NOT configured — set the NVIDIA_API_KEY environment variable to enable it.")
     if IMPORT_TOKEN:
