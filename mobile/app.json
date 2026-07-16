@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Bridge NG",
+    "slug": "bridge-ng",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FBF6EA",
+    "scheme": "bridgeng",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bridgeng.app"
+    },
+    "android": {
+      "package": "com.bridgeng.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF6EA",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
