@@ -36,6 +36,7 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
+# generated native folder — /android is intentionally committed (see android/.gitignore for its
+# own build-artifact exclusions) since EAS's remote prebuild resolves an incompatible Gradle
+# version for this SDK; /ios stays excluded since we haven't built for it yet.
 /ios
-/android
