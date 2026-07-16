@@ -1851,16 +1851,30 @@ function resumeBlocksToHtml(blocks){
   return html;
 }
 
+let workbenchLoadingTimer = null;
+
+function stopWorkbenchLoadingTimer(){
+  if(workbenchLoadingTimer){ clearInterval(workbenchLoadingTimer); workbenchLoadingTimer = null; }
+}
+
 function renderWorkbenchLoading(title, subtitle){
+  stopWorkbenchLoadingTimer();
   document.getElementById('ai-workbench').innerHTML = `
     <div class="workbench-card">
       <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
-      <p class="loading-line">Generating — this can take a few seconds…</p>
+      <p class="loading-line">Generating — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="workbench-loading-timer">0s</span> elapsed</p>
     </div>`;
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
+  const start = Date.now();
+  workbenchLoadingTimer = setInterval(()=>{
+    const el = document.getElementById('workbench-loading-timer');
+    if(!el){ stopWorkbenchLoadingTimer(); return; }
+    el.textContent = Math.round((Date.now() - start) / 1000) + 's';
+  }, 1000);
 }
 
 function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
+  stopWorkbenchLoadingTimer();
   lastWorkbenchRawText = text;
   const bodyHtml = resumeBlocksToHtml(parseResumeBlocks(text));
   let jobBlock = '';
@@ -1960,6 +1974,7 @@ function openTailoredResumeDoc(company){
 }
 
 function renderWorkbenchError(title, err, context){
+  stopWorkbenchLoadingTimer();
   console.error(title + ' failed:', err);
   // Server-provided error messages are already written to be user-facing (e.g. "still getting
   // set up", "couldn't read that PDF") — show them directly instead of a generic fallback.
