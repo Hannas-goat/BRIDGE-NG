@@ -39,10 +39,14 @@ SESSION_COOKIE = "bridge_session"
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
 # A bigger, more capable model for the resume/cover-letter writing itself (the part users actually
-# read and download). Not every NVIDIA account has access to every catalog model, so this is
-# tried first and falls back to NVIDIA_MODEL on any failure rather than erroring out — see
-# call_nvidia_with_fallback.
+# read and download) — used for image-uploaded resumes, which need vision. Not every NVIDIA
+# account has access to every catalog model, so this is tried first and falls back down the chain
+# on any failure rather than erroring out — see call_nvidia_with_fallbacks.
 NVIDIA_RESUME_MODEL = os.environ.get("NVIDIA_RESUME_MODEL", "meta/llama-3.2-90b-vision-instruct")
+# A reasoning-focused model tried first for text/PDF resumes (no image, so vision isn't needed) —
+# DeepSeek-R1 "thinks" before answering, which tends to produce stronger, better-reasoned writing
+# than a plain instruct model for something like tailoring a resume to a specific role.
+NVIDIA_REASONING_MODEL = os.environ.get("NVIDIA_REASONING_MODEL", "deepseek-ai/deepseek-r1")
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 try:
@@ -471,17 +475,21 @@ def call_nvidia(messages, max_tokens=1400, model=None):
     return result["choices"][0]["message"]["content"]
 
 
-def call_nvidia_with_fallback(messages, primary_model, fallback_model, max_tokens=1400):
-    """Tries `primary_model` first (for higher-quality output) and transparently falls back to
-    `fallback_model` if the account doesn't have access to it or the model name is invalid —
-    NVIDIA accounts don't all have the same catalog access, so this avoids a hard failure just
-    because the bigger model isn't available on this particular account."""
-    try:
-        return call_nvidia(messages, max_tokens=max_tokens, model=primary_model)
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        print(f"NVIDIA model '{primary_model}' unavailable ({e.code}: {detail}) — falling back to '{fallback_model}'.")
-        return call_nvidia(messages, max_tokens=max_tokens, model=fallback_model)
+def call_nvidia_with_fallbacks(messages, models, max_tokens=1400):
+    """Tries each model in `models`, in order, falling back to the next on any HTTP error (e.g.
+    the account doesn't have catalog access to that particular model). NVIDIA accounts don't all
+    have the same catalog access, so this avoids a hard failure just because the best model isn't
+    available on this particular account. Raises the last error if every model in the list fails."""
+    last_error = None
+    for i, model in enumerate(models):
+        try:
+            return call_nvidia(messages, max_tokens=max_tokens, model=model)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            note = f"falling back to '{models[i + 1]}'" if i + 1 < len(models) else "no more fallbacks"
+            print(f"NVIDIA model '{model}' unavailable ({e.code}: {detail}) — {note}.")
+            last_error = e
+    raise last_error
 
 
 def parse_job_info_json(reply, fallback_text):
@@ -1652,10 +1660,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             user_content = instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'
 
+        # Image resumes need a vision-capable model; text/PDF resumes (already extracted to plain
+        # text) can use the reasoning model first for stronger writing quality.
+        if image_part:
+            models_to_try = [NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
+        else:
+            models_to_try = [NVIDIA_REASONING_MODEL, NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
+
         try:
-            reply = call_nvidia_with_fallback(
-                [{"role": "user", "content": user_content}], NVIDIA_RESUME_MODEL, NVIDIA_MODEL
-            )
+            reply = call_nvidia_with_fallbacks([{"role": "user", "content": user_content}], models_to_try)
         except urllib.error.HTTPError as e:
             print("NVIDIA resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
@@ -1683,7 +1696,9 @@ def main():
         print(f"(Accounts are stored in {DB_PATH} — on Render's free tier this resets on every "
               f"redeploy. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to persist across deploys.)")
     if NVIDIA_API_KEY:
-        print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}' (resume writing tries '{NVIDIA_RESUME_MODEL}' first, falling back to '{NVIDIA_MODEL}' if unavailable).")
+        print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}'. Resume/cover-letter writing tries "
+              f"'{NVIDIA_REASONING_MODEL}' (text) or '{NVIDIA_RESUME_MODEL}' (images) first, falling back "
+              f"down to '{NVIDIA_MODEL}' if unavailable.")
     else:
         print("Ask Bridge AI is NOT configured — set the NVIDIA_API_KEY environment variable to enable it.")
     if IMPORT_TOKEN:
