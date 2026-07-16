@@ -30,7 +30,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar",
       [
         "expo-splash-screen",
         {
