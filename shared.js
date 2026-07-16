@@ -96,8 +96,14 @@ function createChip(containerId, targetSet, label, startSelected){
   return c;
 }
 
+// On mobile, showing all ~40 skill chips at once is overwhelming — show just the 3 broadly
+// useful ones and let people type/add anything else via the input next to the chip field
+// (already there for every section that uses buildChips).
+const MOBILE_TOP_SKILLS = ["Data Analysis", "Customer Service", "Project Management"];
+
 function buildChips(containerId, targetSet){
-  SKILLS.forEach(sk => createChip(containerId, targetSet, sk, false));
+  const skillsToShow = window.innerWidth <= 720 ? MOBILE_TOP_SKILLS : SKILLS;
+  skillsToShow.forEach(sk => createChip(containerId, targetSet, sk, false));
 }
 
 function addCustomSkill(containerId, targetSet, inputId){
