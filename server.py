@@ -110,6 +110,21 @@ PY_SKILLS = ["JavaScript", "Python", "SQL", "Data Analysis", "Excel", "Software 
 db_lock = threading.Lock()
 sessions = {}  # token -> user_id
 
+# Recent AI-call failures (capped), for the /api/debug/ai-errors endpoint — a direct way to see
+# why a resume-tailoring/job-lookup call failed without having to find the right line in Render's
+# log viewer, whose time-range filter can silently cut off the moment you actually care about.
+ai_error_lock = threading.Lock()
+LAST_AI_ERRORS = []
+
+
+def record_ai_error(source, model, status, detail):
+    with ai_error_lock:
+        LAST_AI_ERRORS.append({
+            "time": datetime.datetime.utcnow().isoformat() + "Z",
+            "source": source, "model": model, "status": status, "detail": detail[:500],
+        })
+        del LAST_AI_ERRORS[:-15]
+
 _turso_client = None
 _turso_client_lock = threading.Lock()
 
@@ -488,6 +503,7 @@ def call_nvidia_with_fallbacks(messages, models, max_tokens=1400):
             detail = e.read().decode("utf-8", errors="replace")
             note = f"falling back to '{models[i + 1]}'" if i + 1 < len(models) else "no more fallbacks"
             print(f"NVIDIA model '{model}' unavailable ({e.code}: {detail}) — {note}.")
+            record_ai_error("resume-generate", model, e.code, detail)
             last_error = e
     raise last_error
 
@@ -910,6 +926,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_me()
         if parsed.path == "/api/debug/db":
             return self.handle_debug_db()
+        if parsed.path == "/api/debug/ai-errors":
+            return self.handle_debug_ai_errors()
         if parsed.path == "/api/jobs":
             return self.handle_list_jobs()
         if parsed.path == "/api/saved-searches":
@@ -1102,6 +1120,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             info["error"] = str(e)
         self.send_json(200, info)
+
+    def handle_debug_ai_errors(self):
+        """Unauthenticated, read-only: the last several AI-call failures (which model, what
+        status/detail NVIDIA returned), newest first — a direct substitute for hunting through
+        Render's log viewer, whose time-range filter can cut off the exact moment you care about."""
+        with ai_error_lock:
+            errors = list(reversed(LAST_AI_ERRORS))
+        self.send_json(200, {"errors": errors})
 
     def handle_save_profile(self):
         user_id = self.current_user_id()
@@ -1506,7 +1532,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             reply = call_nvidia(chat_messages)
         except urllib.error.HTTPError as e:
-            print("NVIDIA chat error:", e.code, e.read().decode("utf-8", errors="replace"))
+            detail = e.read().decode("utf-8", errors="replace")
+            print("NVIDIA chat error:", e.code, detail)
+            record_ai_error("chat", NVIDIA_MODEL, e.code, detail)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
             print("Unexpected NVIDIA chat response shape:", e)
@@ -1549,7 +1577,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 {"role": "user", "content": job_text},
             ])
         except urllib.error.HTTPError as e:
-            print("NVIDIA job-lookup error:", e.code, e.read().decode("utf-8", errors="replace"))
+            detail = e.read().decode("utf-8", errors="replace")
+            print("NVIDIA job-lookup error:", e.code, detail)
+            record_ai_error("job-lookup", NVIDIA_MODEL, e.code, detail)
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
         except (KeyError, IndexError) as e:
             print("Unexpected NVIDIA job-lookup response shape:", e)
