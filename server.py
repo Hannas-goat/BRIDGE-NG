@@ -39,14 +39,10 @@ SESSION_COOKIE = "bridge_session"
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
 # A bigger, more capable model for the resume/cover-letter writing itself (the part users actually
-# read and download) — used for image-uploaded resumes, which need vision. Not every NVIDIA
-# account has access to every catalog model, so this is tried first and falls back down the chain
-# on any failure rather than erroring out — see call_nvidia_with_fallbacks.
+# read and download). Not every NVIDIA account has access to every catalog model, and bigger
+# models can be slow, so this is tried first (with a longer timeout) and falls back to NVIDIA_MODEL
+# on any failure — wrong/inaccessible model name or timeout alike — rather than erroring out.
 NVIDIA_RESUME_MODEL = os.environ.get("NVIDIA_RESUME_MODEL", "meta/llama-3.2-90b-vision-instruct")
-# A reasoning-focused model tried first for text/PDF resumes (no image, so vision isn't needed) —
-# DeepSeek-R1 "thinks" before answering, which tends to produce stronger, better-reasoned writing
-# than a plain instruct model for something like tailoring a resume to a specific role.
-NVIDIA_REASONING_MODEL = os.environ.get("NVIDIA_REASONING_MODEL", "deepseek-ai/deepseek-r1")
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 try:
@@ -471,7 +467,7 @@ def generate_notifications_for_job(conn, job):
         )
 
 
-def call_nvidia(messages, max_tokens=1400, model=None):
+def call_nvidia(messages, max_tokens=1400, model=None, timeout=45):
     """Calls NVIDIA's OpenAI-compatible chat completions API and returns the reply text.
     Raises urllib.error.HTTPError on a non-2xx response, or (KeyError, IndexError) if the response
     doesn't contain the expected shape — callers already handle both."""
@@ -485,25 +481,31 @@ def call_nvidia(messages, max_tokens=1400, model=None):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=45) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         result = json.loads(resp.read().decode("utf-8"))
     return result["choices"][0]["message"]["content"]
 
 
-def call_nvidia_with_fallbacks(messages, models, max_tokens=1400):
-    """Tries each model in `models`, in order, falling back to the next on any HTTP error (e.g.
-    the account doesn't have catalog access to that particular model). NVIDIA accounts don't all
-    have the same catalog access, so this avoids a hard failure just because the best model isn't
-    available on this particular account. Raises the last error if every model in the list fails."""
+def call_nvidia_with_fallbacks(messages, models, max_tokens=1400, timeout=45):
+    """Tries each model in `models`, in order, falling back to the next on ANY failure — not just
+    an HTTP error (account lacks catalog access, bad model name), but also a timeout or connection
+    error, which bigger/slower models hit more often. Without catching those too, a timeout on a
+    middle model would propagate immediately instead of ever reaching the last, known-working
+    model. Raises the last error if every model in the list fails."""
     last_error = None
     for i, model in enumerate(models):
         try:
-            return call_nvidia(messages, max_tokens=max_tokens, model=model)
+            return call_nvidia(messages, max_tokens=max_tokens, model=model, timeout=timeout)
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", errors="replace")
             note = f"falling back to '{models[i + 1]}'" if i + 1 < len(models) else "no more fallbacks"
             print(f"NVIDIA model '{model}' unavailable ({e.code}: {detail}) — {note}.")
             record_ai_error("resume-generate", model, e.code, detail)
+            last_error = e
+        except Exception as e:
+            note = f"falling back to '{models[i + 1]}'" if i + 1 < len(models) else "no more fallbacks"
+            print(f"NVIDIA model '{model}' failed ({e}) — {note}.")
+            record_ai_error("resume-generate", model, "error", str(e))
             last_error = e
     raise last_error
 
@@ -1690,15 +1692,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             user_content = instruction + f'\n\nCandidate\'s current resume:\n"""\n{resume_text}\n"""'
 
-        # Image resumes need a vision-capable model; text/PDF resumes (already extracted to plain
-        # text) can use the reasoning model first for stronger writing quality.
-        if image_part:
-            models_to_try = [NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
-        else:
-            models_to_try = [NVIDIA_REASONING_MODEL, NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
+        # The bigger model produces better writing but is slower — worth a longer timeout than
+        # the default before falling back, rather than giving up at the same speed as a quick call.
+        models_to_try = [NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
 
         try:
-            reply = call_nvidia_with_fallbacks([{"role": "user", "content": user_content}], models_to_try)
+            reply = call_nvidia_with_fallbacks(
+                [{"role": "user", "content": user_content}], models_to_try, timeout=110
+            )
         except urllib.error.HTTPError as e:
             print("NVIDIA resume-generate error:", e.code, e.read().decode("utf-8", errors="replace"))
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
@@ -1727,8 +1728,7 @@ def main():
               f"redeploy. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to persist across deploys.)")
     if NVIDIA_API_KEY:
         print(f"Ask Bridge AI is live, using model '{NVIDIA_MODEL}'. Resume/cover-letter writing tries "
-              f"'{NVIDIA_REASONING_MODEL}' (text) or '{NVIDIA_RESUME_MODEL}' (images) first, falling back "
-              f"down to '{NVIDIA_MODEL}' if unavailable.")
+              f"'{NVIDIA_RESUME_MODEL}' first (110s timeout), falling back to '{NVIDIA_MODEL}' on any failure.")
     else:
         print("Ask Bridge AI is NOT configured — set the NVIDIA_API_KEY environment variable to enable it.")
     if IMPORT_TOKEN:
