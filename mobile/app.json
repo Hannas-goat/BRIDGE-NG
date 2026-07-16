@@ -24,7 +24,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -39,6 +40,11 @@
           "backgroundColor": "#FBF6EA"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "47b18bb3-a385-4208-94b1-3a42faa7e52b"
+      }
+    }
   }
 }
