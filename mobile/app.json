@@ -10,7 +10,12 @@
     "scheme": "bridgeng",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bridgeng.app"
+      "bundleIdentifier": "com.bridgeng.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Bridge NG lets you take a photo of your resume to upload it directly when tailoring your resume in Resume Studio.",
+        "NSPhotoLibraryUsageDescription": "Bridge NG lets you choose a photo of your resume from your library to upload it directly when tailoring your resume in Resume Studio."
+      }
     },
     "android": {
       "package": "com.bridgeng.app",
@@ -25,7 +30,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF6EA"
+        }
+      ]
     ]
   }
 }
