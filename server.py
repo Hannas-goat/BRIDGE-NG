@@ -121,6 +121,23 @@ def record_ai_error(source, model, status, detail):
         })
         del LAST_AI_ERRORS[:-15]
 
+# The mobile app's WebView can't turn a client-side Blob (jsPDF/docx output) into a real device
+# download — Android's WebView only hands a download off to the OS when it's a genuine HTTP
+# response with a Content-Disposition header, not an in-page blob: URL. So for the app, the
+# already-generated file is base64-posted here, held briefly in memory, and served back as a
+# real downloadable URL. Not popped on read (in case the WebView's own probe request and the
+# follow-up Linking.openURL both hit it) — a short TTL is enough since the token is unguessable.
+download_relay_lock = threading.Lock()
+DOWNLOAD_RELAY = {}
+DOWNLOAD_RELAY_TTL_SECONDS = 300
+MAX_DOWNLOAD_RELAY_BYTES = 15 * 1024 * 1024
+
+
+def _prune_download_relay():
+    now = time.time()
+    for token in [t for t, entry in DOWNLOAD_RELAY.items() if entry["expires"] < now]:
+        del DOWNLOAD_RELAY[token]
+
 _turso_client = None
 _turso_client_lock = threading.Lock()
 
@@ -942,6 +959,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_appointments()
         if parsed.path == "/api/applications":
             return self.handle_list_applications()
+        if parsed.path.startswith("/api/download-relay/"):
+            return self.handle_download_relay_fetch(parsed.path.rsplit("/", 1)[-1])
         if parsed.path.startswith("/api/"):
             return self.send_json(404, {"error": "Not found"})
         return self.serve_static(parsed.path)
@@ -982,6 +1001,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_resume_find_job()
         if parsed.path == "/api/resume/tailor":
             return self.handle_resume_generate()
+        if parsed.path == "/api/download-relay":
+            return self.handle_download_relay_create()
         return self.send_json(404, {"error": "Not found"})
 
     def do_PUT(self):
@@ -1130,6 +1151,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with ai_error_lock:
             errors = list(reversed(LAST_AI_ERRORS))
         self.send_json(200, {"errors": errors})
+
+    def handle_download_relay_create(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        filename = re.sub(r'[\r\n"]', "", (data.get("filename") or "download").strip())[:150] or "download"
+        mime = (data.get("mime") or "application/octet-stream").strip()
+        try:
+            file_bytes = base64.b64decode(data.get("base64") or "", validate=True)
+        except Exception:
+            return self.send_json(400, {"error": "Invalid file data."})
+        if not file_bytes or len(file_bytes) > MAX_DOWNLOAD_RELAY_BYTES:
+            return self.send_json(400, {"error": "File is empty or too large to download."})
+        token = secrets.token_urlsafe(24)
+        with download_relay_lock:
+            _prune_download_relay()
+            DOWNLOAD_RELAY[token] = {
+                "data": file_bytes, "mime": mime, "filename": filename,
+                "expires": time.time() + DOWNLOAD_RELAY_TTL_SECONDS,
+            }
+        self.send_json(200, {"url": f"/api/download-relay/{token}"})
+
+    def handle_download_relay_fetch(self, token):
+        with download_relay_lock:
+            _prune_download_relay()
+            entry = DOWNLOAD_RELAY.get(token)
+        if entry is None:
+            return self.send_json(404, {"error": "This download link has expired. Please try downloading again."})
+        self.send_response(200)
+        self.send_header("Content-Type", entry["mime"])
+        self.send_header("Content-Length", str(len(entry["data"])))
+        self.send_header("Content-Disposition", f'attachment; filename="{entry["filename"]}"')
+        self.end_headers()
+        self.wfile.write(entry["data"])
 
     def handle_save_profile(self):
         user_id = self.current_user_id()

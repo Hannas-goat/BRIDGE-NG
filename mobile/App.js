@@ -69,6 +69,9 @@ export default function App() {
           )}
           allowsBackForwardNavigationGestures
           applicationNameForUserAgent="BridgeNGMobileApp/1.0"
+          onFileDownload={({ nativeEvent }) => {
+            Linking.openURL(nativeEvent.downloadUrl).catch(() => {});
+          }}
         />
       )}
     </SafeAreaView>

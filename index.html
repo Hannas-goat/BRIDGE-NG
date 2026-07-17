@@ -1953,6 +1953,23 @@ function buildDocxParagraphs(blocks){
 // Opens a new tab titled "Tailored resume" with a real .docx built client-side (via the docx library)
 // from whatever's currently in the workbench output, and auto-triggers the download in that tab.
 function openTailoredResumeDoc(company){
+  const filename = `Tailored Resume - ${(company || 'Bridge NG').replace(/[^a-z0-9 -]/gi,'')}.docx`;
+  const { Document, Packer } = window.docx;
+  const paragraphs = buildDocxParagraphs(parseResumeBlocks(lastWorkbenchRawText));
+  const docxDoc = new Document({ sections: [{ properties: {}, children: paragraphs }] });
+  const mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+  // window.open('', '_blank') doesn't work inside the wrapped app's WebView (no real popup
+  // support), so skip the new-tab flow entirely there and go straight through the download relay.
+  if(isMobileApp()){
+    Packer.toBlob(docxDoc).then(blob=>{
+      deliverFileDownload(blob, filename, mime);
+    }).catch(()=>{
+      alert('Could not generate the Word document. Please try the PDF or .txt download instead.');
+    });
+    return;
+  }
+
   const win = window.open('', '_blank');
   if(!win){
     alert('Please allow pop-ups for this site so the Word document can open in a new tab.');
@@ -1961,11 +1978,8 @@ function openTailoredResumeDoc(company){
   win.document.title = 'Tailored resume';
   win.document.body.style.cssText = 'font-family:-apple-system,Segoe UI,sans-serif;';
   win.document.body.innerHTML = '<p style="padding:24px;color:#555;">Preparing your Word document…</p>';
-  const { Document, Packer } = window.docx;
-  const paragraphs = buildDocxParagraphs(parseResumeBlocks(lastWorkbenchRawText));
-  Packer.toBlob(new Document({ sections: [{ properties: {}, children: paragraphs }] })).then(blob=>{
+  Packer.toBlob(docxDoc).then(blob=>{
     const url = URL.createObjectURL(blob);
-    const filename = `Tailored Resume - ${(company || 'Bridge NG').replace(/[^a-z0-9 -]/gi,'')}.docx`;
     win.document.title = 'Tailored resume';
     win.document.body.innerHTML = `
       <div style="max-width:480px;margin:72px auto;text-align:center;">
@@ -1996,13 +2010,47 @@ function copyWorkbench(){
   navigator.clipboard.writeText(resumeBlocksToPlainText(parseResumeBlocks(lastWorkbenchRawText)));
 }
 
-function downloadWorkbenchTxt(filename){
-  const blob = new Blob([resumeBlocksToPlainText(parseResumeBlocks(lastWorkbenchRawText))], {type:'text/plain'});
+function blobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// A blob: URL click (the normal browser download path) is invisible to the wrapped Android
+// app's WebView — it has no network response to hand off to the OS, so nothing happens. Inside
+// the app, we instead post the file to a short-lived server relay and navigate to the real URL
+// it returns, which the WebView's download handling *can* see and hand to the OS.
+async function deliverFileDownload(blob, filename, mime){
+  if(isMobileApp()){
+    try{
+      const base64 = await blobToBase64(blob);
+      const resp = await fetch('/api/download-relay', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({filename, mime, base64})
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data.url) throw new Error(data.error || 'Could not prepare the download.');
+      window.location.href = data.url;
+    }catch(e){
+      alert('Could not download the file. Please try again.');
+    }
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadWorkbenchTxt(filename){
+  const blob = new Blob([resumeBlocksToPlainText(parseResumeBlocks(lastWorkbenchRawText))], {type:'text/plain'});
+  deliverFileDownload(blob, filename, 'text/plain');
 }
 
 function downloadWorkbenchPDF(filename, heading, subheading){
@@ -2066,7 +2114,7 @@ function downloadWorkbenchPDF(filename, heading, subheading){
     });
   });
 
-  doc.save(filename);
+  deliverFileDownload(doc.output('blob'), filename, 'application/pdf');
 }
 
 // Builds a jobInfo object (same shape the AI job-lookup returns) from a known, already-real
