@@ -17,7 +17,9 @@
   --radius:14px;
 }
 *{box-sizing:border-box;}
+html,body{overflow-x:hidden;max-width:100%;}
 body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;line-height:1.5;}
+img{max-width:100%;height:auto;}
 h1,h2,h3{font-family:'Fraunces',serif;font-weight:500;margin:0;}
 .wrap{padding:0 32px;}
 .nav{display:flex;flex-direction:column;gap:6px;padding:20px 0;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:100;background:var(--cream);transform-origin:center;animation:nav-zoom-pulse 4s ease-in-out infinite;}

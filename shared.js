@@ -101,8 +101,16 @@ function createChip(containerId, targetSet, label, startSelected){
 // (already there for every section that uses buildChips).
 const MOBILE_TOP_SKILLS = ["Data Analysis", "Customer Service", "Project Management"];
 
+// The packaged Android app's WebView doesn't always report window.innerWidth as the real
+// device width (it can fall back to a desktop-style default viewport), so window width alone
+// isn't reliable inside the wrapper. App.js tags its WebView's user agent with this marker as
+// a second, unambiguous signal that we're inside the native app.
+function isMobileApp(){
+  return /BridgeNGMobileApp/.test(navigator.userAgent);
+}
+
 function buildChips(containerId, targetSet){
-  const skillsToShow = window.innerWidth <= 720 ? MOBILE_TOP_SKILLS : SKILLS;
+  const skillsToShow = (isMobileApp() || window.innerWidth <= 720) ? MOBILE_TOP_SKILLS : SKILLS;
   skillsToShow.forEach(sk => createChip(containerId, targetSet, sk, false));
 }
 

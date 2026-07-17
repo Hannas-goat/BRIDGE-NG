@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Linking, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const SITE_URL = 'https://bridge-ng.onrender.com';
+
+// Core RN's SafeAreaView is a no-op on Android (it only insets on iOS), so without this the
+// WebView content sits flush against the status bar. StatusBar.currentHeight gives the exact
+// bar height; the extra 14px gives the same kind of clean top clearance apps like Facebook use
+// instead of a crowded edge-to-edge look.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 14 : 0;
 
 export default function App() {
   const webViewRef = useRef(null);
@@ -62,6 +68,7 @@ export default function App() {
             </View>
           )}
           allowsBackForwardNavigationGestures
+          applicationNameForUserAgent="BridgeNGMobileApp/1.0"
         />
       )}
     </SafeAreaView>
@@ -69,7 +76,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FBF6EA' },
+  safe: { flex: 1, backgroundColor: '#FBF6EA', paddingTop: ANDROID_TOP_INSET },
   webview: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   errorText: { fontSize: 15, color: '#4A4438', textAlign: 'center', marginBottom: 16 },
