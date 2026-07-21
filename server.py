@@ -68,6 +68,37 @@ IMPORT_TOKEN = os.environ.get("IMPORT_TOKEN")
 
 CHAT_FALLBACK_MESSAGE = "Bridge AI is having trouble answering right now. Please try again in a moment."
 
+CAREER_MATCH_SYSTEM_PROMPT = """You are "NaijaCareer AI," an intelligent, highly localized career and educational path matching engine designed specifically for Nigerian students, fresh graduates, and early-career professionals. Your objective is to behave like a global opportunity matching tool (similar to Jakpar) but optimized natively for the Nigerian educational and professional landscape.
+
+When a user submits their academic profile, skill list, and professional objectives, you must perform three main functions:
+1. International & Local Opportunity Matching (Scholarships, Admissions, Global Remote Jobs, Visas).
+2. Localized Educational Alignment (Accounting for Nigerian university systems, grading structures, and the NYSC cycle).
+3. Skill Gap Analysis & Upskilling Recommendations.
+
+CRITICAL LOCALIZATION RULES FOR NIGERIA:
+- GRADING SYSTEMS: Correctly interpret Nigerian university classification brackets. Translate a 5.0 CGPA scale or 4.0 CGPA scale accurately against global requirements (e.g., mapping a First Class, Second Class Upper [2:1], or Second Class Lower [2:2] to equivalent US/UK GPA standards or European grading requirements).
+- NYSC STATUS: Factor in the National Youth Service Corps (NYSC). If the user is currently a "corper" or a fresh graduate, prioritize entry-level roles, graduate trainee programs, or global master's scholarships that align with their completion timeline. Do not recommend local full-time executive tracks to active corpers.
+- FINANCIAL & TEST CONSTRAINTS: Proactively segment scholarship recommendations. Flag opportunities that do NOT require IELTS/TOEFL (leveraging English-taught background certificates from Nigerian universities) or those that offer full funding/stipends, as foreign exchange volatility is a significant factor for Nigerian applicants.
+- POPULAR FIELDS: Pay close attention to high-density Nigerian professional sectors like Tech (Software/Data), Finance/Fintech, Healthcare, and Engineering, matching them against remote-friendly global work or fully-funded migration pathways.
+
+OUTPUT STRUCTURE REQUIREMENT:
+For every user profile input, structure your response into the following clear segments, using "### " for each segment heading and "- " for each list item so it renders correctly:
+
+### 1. Recommended Pathways & Matches
+- Scholarships/Fellowships: List 2-3 specific global scholarships (e.g., Commonwealth, Mastercard Foundation, Chevening, DAAD) they qualify for based on their current degree classification.
+- Global Remote & Local Jobs: Identify 2-3 specific global entry-level tech/corporate job titles or specialized programs (like localized graduate trainee tracks) they should target.
+- Visa/Migration Trajectories: Suggest the most straightforward visa routes based on their skillset (e.g., UK Global Talent Visa, Canadian Express Entry tech streams, or student routes).
+
+### 2. Skill Gap & Profile Analysis
+- Identify what their target international profiles/jobs have that their current profile lacks.
+- Call out specific technical skills, professional certifications (e.g., ICAN for finance, AWS/Azure for tech), or portfolio necessities.
+
+### 3. Actionable Next Steps
+- Provide exactly 3 short, punchy, immediate actions they can take this week to make their profile competitive (e.g., "Draft your Statement of Purpose focusing on X project," "Enroll in a specific free AI/Tech certification route," "Optimize your CV format to bypass global ATS filters").
+
+TONE:
+Encouraging, professional, street-smart yet authoritative. Use universal, accessible English, avoiding hyper-complex jargon. Do not use "##" (only "###"), numbered-list markdown, tables, or code fences — plain "### " headings and "- " bullets only, so the output renders correctly."""
+
 # Public, unauthenticated job-board APIs — no account/API key needed for either.
 GREENHOUSE_JOBS_URL = "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
 LEVER_JOBS_URL = "https://api.lever.co/v0/postings/{slug}?mode=json"
@@ -503,7 +534,7 @@ def call_nvidia(messages, max_tokens=1400, model=None, timeout=45):
     return result["choices"][0]["message"]["content"]
 
 
-def call_nvidia_with_fallbacks(messages, models, max_tokens=1400, timeout=45):
+def call_nvidia_with_fallbacks(messages, models, max_tokens=1400, timeout=45, source="resume-generate"):
     """Tries each model in `models`, in order, falling back to the next on ANY failure — not just
     an HTTP error (account lacks catalog access, bad model name), but also a timeout or connection
     error, which bigger/slower models hit more often. Without catching those too, a timeout on a
@@ -517,12 +548,12 @@ def call_nvidia_with_fallbacks(messages, models, max_tokens=1400, timeout=45):
             detail = e.read().decode("utf-8", errors="replace")
             note = f"falling back to '{models[i + 1]}'" if i + 1 < len(models) else "no more fallbacks"
             print(f"NVIDIA model '{model}' unavailable ({e.code}: {detail}) — {note}.")
-            record_ai_error("resume-generate", model, e.code, detail)
+            record_ai_error(source, model, e.code, detail)
             last_error = e
         except Exception as e:
             note = f"falling back to '{models[i + 1]}'" if i + 1 < len(models) else "no more fallbacks"
             print(f"NVIDIA model '{model}' failed ({e}) — {note}.")
-            record_ai_error("resume-generate", model, "error", str(e))
+            record_ai_error(source, model, "error", str(e))
             last_error = e
     raise last_error
 
@@ -1001,6 +1032,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_resume_find_job()
         if parsed.path == "/api/resume/tailor":
             return self.handle_resume_generate()
+        if parsed.path == "/api/career-match":
+            return self.handle_career_match()
         if parsed.path == "/api/download-relay":
             return self.handle_download_relay_create()
         return self.send_json(404, {"error": "Not found"})
@@ -1766,6 +1799,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"text": reply})
+
+    def handle_career_match(self):
+        if not NVIDIA_API_KEY:
+            return self.send_json(
+                503,
+                {"error": "Career Match AI is still getting set up and isn't quite ready yet — please check back soon!"},
+            )
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": CHAT_FALLBACK_MESSAGE})
+
+        skills = data.get("skills") or []
+        objectives = (data.get("objectives") or "").strip()
+        if not skills or not objectives:
+            return self.send_json(400, {"error": "Add at least one skill and your career objectives first."})
+
+        profile_lines = [
+            f"University: {(data.get('university') or 'Not specified').strip()}",
+            f"Degree & field of study: {(data.get('degree') or 'Not specified').strip()}",
+            f"Degree classification: {data.get('classification') or 'Not specified'}",
+            f"CGPA (self-reported, if given): {(data.get('cgpa') or 'Not specified').strip()}",
+            f"NYSC status: {data.get('nyscStatus') or 'Not specified'}",
+            f"English test status (IELTS/TOEFL): {data.get('englishTestStatus') or 'Not specified'}",
+            f"Skills: {', '.join(skills)}",
+            f"Career objectives: {objectives}",
+        ]
+        user_content = "Here is the user's profile:\n\n" + "\n".join(profile_lines)
+
+        # Same bigger-model-first, slower-but-better tradeoff as resume tailoring.
+        models_to_try = [NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
+
+        try:
+            reply = call_nvidia_with_fallbacks(
+                [
+                    {"role": "system", "content": CAREER_MATCH_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                models_to_try, timeout=110, source="career-match",
+            )
+        except urllib.error.HTTPError as e:
+            print("NVIDIA career-match error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except (KeyError, IndexError) as e:
+            print("Unexpected NVIDIA career-match response shape:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except Exception as e:
+            print("NVIDIA career-match request failed:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+
+        self.send_json(200, {"result": reply})
 
 
 class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):

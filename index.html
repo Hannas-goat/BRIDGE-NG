@@ -57,6 +57,7 @@
       <button class="tab-btn" id="tab-interview" onclick="showPage('interview')">Interview Tips</button>
       <button class="tab-btn" id="tab-appointment" onclick="showPage('appointment')">Book Appointment</button>
       <button class="tab-btn" id="tab-explore" onclick="showPage('explore')">Explore Jobs</button>
+      <button class="tab-btn" id="tab-career" onclick="showPage('career')">Career Match AI</button>
     </div>
     <div class="nav-backdrop" id="nav-backdrop" onclick="closeMobileNav()"></div>
   </div>
@@ -105,6 +106,11 @@
     <div id="hero-left-explore" style="display:none;">
       <h1>Cross the bridge to your <em>next career</em>.</h1>
       <p>Browse opportunities, submit applications, and take the first step towards a rewarding future.</p>
+    </div>
+    <div id="hero-left-career" style="display:none;">
+      <h1>Your Degree, <em>Any Border</em>.</h1>
+      <p>Match your academic profile and skills against real scholarships, remote roles, and visa pathways — built for Nigerian CGPA scales, NYSC timing, and FX-conscious funding.</p>
+      <p class="hero-cta-line">Not a generic global tool — localized for the Nigerian graduate's actual constraints.</p>
     </div>
     <div class="hero-photo-single" id="hero-photo-single">
       <img id="hero-photo-img" src="images/Bridge NG - New Hire.png" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
@@ -555,6 +561,73 @@
     <div id="explore-results"></div>
   </div>
 
+  <!-- CAREER MATCH AI PAGE -->
+  <div class="panel" id="panel-career" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">Career Match AI</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 20px;">Get matched to real global scholarships, remote jobs, and visa pathways — localized for Nigerian CGPA scales, NYSC timing, and funding that doesn't require IELTS/TOEFL.</p>
+
+      <div class="field-row">
+        <div>
+          <label>University</label>
+          <input type="text" id="cm-university" placeholder="e.g. University of Lagos">
+        </div>
+        <div>
+          <label>Degree & field of study</label>
+          <input type="text" id="cm-degree" placeholder="e.g. B.Sc Computer Science">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Degree classification</label>
+          <select id="cm-classification">
+            <option>First Class</option>
+            <option selected>Second Class Upper (2:1)</option>
+            <option>Second Class Lower (2:2)</option>
+            <option>Third Class</option>
+            <option>Pass</option>
+            <option>Not yet graduated</option>
+          </select>
+        </div>
+        <div>
+          <label>CGPA (optional, for extra precision)</label>
+          <input type="text" id="cm-cgpa" placeholder="e.g. 4.32 out of 5.0">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>NYSC status</label>
+          <select id="cm-nysc">
+            <option>Not yet — still in school</option>
+            <option>Currently serving (corper)</option>
+            <option>Completed NYSC</option>
+            <option>Exempted from NYSC</option>
+          </select>
+        </div>
+        <div>
+          <label>IELTS / TOEFL status</label>
+          <select id="cm-english-test">
+            <option>No, prefer options that don't require it</option>
+            <option>Yes, already have it</option>
+            <option>Planning to take it</option>
+          </select>
+        </div>
+      </div>
+      <label>Your skills — tap to select, or type your own</label>
+      <div class="chip-field" id="cm-skills"></div>
+      <div class="skill-add-row">
+        <input type="text" id="cm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
+        <button class="upload-btn" onclick="addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input')">Add skill</button>
+      </div>
+
+      <label style="margin-top:16px;">Career objectives — what are you aiming for?</label>
+      <textarea id="cm-objectives" class="form-textarea" style="min-height:90px;" placeholder="e.g. I want to move into data analytics abroad, or find a fully-funded Master's in the UK..."></textarea>
+
+      <button class="go-btn" style="margin-top:18px;" onclick="runCareerMatch()">Find my pathways →</button>
+    </div>
+    <div class="workbench" id="career-workbench"></div>
+  </div>
+
   <!-- EMPLOYER PANEL -->
   <div class="panel" id="panel-employer" style="display:none;">
     <div class="card">
@@ -692,9 +765,11 @@ INTL_JOBS.forEach((j,i)=>{ j.id = i; });
 let seekerSkills = new Set();
 let employerSkills = new Set();
 let abroadSkills = new Set();
+let careerMatchSkills = new Set();
 buildChips('s-skills', seekerSkills);
 buildChips('e-skills', employerSkills);
 buildChips('ab-skills', abroadSkills);
+buildChips('cm-skills', careerMatchSkills);
 
 populateLocationSelect('s-loc', true);
 populateLocationSelect('e-loc', false);
@@ -1497,7 +1572,8 @@ const HERO_PHOTOS = {
   train: { src: 'images/Train Yourself Photo.png', alt: 'Learn Today. Lead Tomorrow. Self-paced learning for Nigerian professionals who want to grow, upskill, and stay ahead.', noMask: true },
   employer: { src: 'images/Employer Photo.png', alt: 'Find the Right Hire. Faster. Smarter. Bridge NG matches employers with pre-vetted candidates based on real skills and role fit.', noMask: true },
   abroad: { src: 'images/Remote Worker.png', alt: 'Your Skills. Global Opportunities. Work remotely for top companies abroad while living in Nigeria.', noMask: true },
-  explore: { src: 'images/explore jobs.png', alt: 'A newly hired candidate celebrating a job offer with a handshake, next to a "Congratulations! You\'re hired!" sign' }
+  explore: { src: 'images/explore jobs.png', alt: 'A newly hired candidate celebrating a job offer with a handshake, next to a "Congratulations! You\'re hired!" sign' },
+  career: { src: 'images/Bridge NG - New Hire2.png', alt: 'A Nigerian graduate reviewing global scholarship, remote job, and visa pathway matches on a laptop' }
 };
 
 function playFadeIn(el){
@@ -1526,7 +1602,7 @@ function updateHeroPhoto(page){
   playFadeIn(container);
 }
 
-const HERO_LEFT_PANELS = ['default', 'resume', 'employer', 'train', 'abroad', 'interview', 'appointment', 'explore'];
+const HERO_LEFT_PANELS = ['default', 'resume', 'employer', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career'];
 
 function updateHeroLeft(page){
   const activeKey = HERO_LEFT_PANELS.includes(page) ? page : 'default';
@@ -1537,7 +1613,7 @@ function updateHeroLeft(page){
   });
 }
 
-const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore'];
+const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career'];
 
 function showPage(page){
   TAB_PANELS.forEach(key=>{
@@ -2115,6 +2191,98 @@ function downloadWorkbenchPDF(filename, heading, subheading){
   });
 
   deliverFileDownload(doc.output('blob'), filename, 'application/pdf');
+}
+
+let lastCareerMatchRawText = '';
+let careerMatchLoadingTimer = null;
+
+function stopCareerMatchLoadingTimer(){
+  if(careerMatchLoadingTimer){ clearInterval(careerMatchLoadingTimer); careerMatchLoadingTimer = null; }
+}
+
+function renderCareerMatchLoading(){
+  stopCareerMatchLoadingTimer();
+  document.getElementById('career-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>Career Match AI</h3><span>Matching your profile…</span></div>
+      <p class="loading-line">Generating — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="career-match-loading-timer">0s</span> elapsed</p>
+    </div>`;
+  document.getElementById('career-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
+  const start = Date.now();
+  careerMatchLoadingTimer = setInterval(()=>{
+    const el = document.getElementById('career-match-loading-timer');
+    if(!el){ stopCareerMatchLoadingTimer(); return; }
+    el.textContent = Math.round((Date.now() - start) / 1000) + 's';
+  }, 1000);
+}
+
+function renderCareerMatchResult(text){
+  stopCareerMatchLoadingTimer();
+  lastCareerMatchRawText = text;
+  const bodyHtml = resumeBlocksToHtml(parseResumeBlocks(text));
+  document.getElementById('career-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>Your pathways</h3><span>Based on your profile</span></div>
+      <div class="workbench-output" id="career-match-text">${bodyHtml}</div>
+      <div class="output-actions">
+        <button class="upload-btn" onclick="copyCareerMatch()">Copy text</button>
+        <button class="upload-btn" onclick="downloadCareerMatchTxt()">Download .txt</button>
+      </div>
+    </div>`;
+  document.getElementById('career-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function renderCareerMatchError(err){
+  stopCareerMatchLoadingTimer();
+  const message = (err && err.message) || 'Bridge AI is having trouble answering right now. Please try again in a moment.';
+  document.getElementById('career-workbench').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>Career Match AI</h3><span>Something went wrong</span></div>
+      <p class="loading-line">${message}</p>
+    </div>`;
+}
+
+function copyCareerMatch(){
+  navigator.clipboard.writeText(resumeBlocksToPlainText(parseResumeBlocks(lastCareerMatchRawText)));
+}
+
+function downloadCareerMatchTxt(){
+  const blob = new Blob([resumeBlocksToPlainText(parseResumeBlocks(lastCareerMatchRawText))], {type:'text/plain'});
+  deliverFileDownload(blob, 'career-match-pathways.txt', 'text/plain');
+}
+
+async function runCareerMatch(){
+  const skills = [...careerMatchSkills];
+  const objectives = document.getElementById('cm-objectives').value.trim();
+  if(skills.length === 0){
+    alert('Select at least one skill so Bridge AI can match you properly.');
+    return;
+  }
+  if(!objectives){
+    alert("Tell us what you're aiming for — even a short sentence helps.");
+    return;
+  }
+  const payload = {
+    university: document.getElementById('cm-university').value.trim(),
+    degree: document.getElementById('cm-degree').value.trim(),
+    classification: document.getElementById('cm-classification').value,
+    cgpa: document.getElementById('cm-cgpa').value.trim(),
+    nyscStatus: document.getElementById('cm-nysc').value,
+    englishTestStatus: document.getElementById('cm-english-test').value,
+    skills, objectives
+  };
+  renderCareerMatchLoading();
+  try{
+    const resp = await fetch('/api/career-match', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Something went wrong.');
+    renderCareerMatchResult(data.result);
+  }catch(e){
+    renderCareerMatchError(e);
+  }
 }
 
 // Builds a jobInfo object (same shape the AI job-lookup returns) from a known, already-real
