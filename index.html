@@ -900,6 +900,7 @@ async function applyToJob(title, company, applicationLink, btn){
       btn.textContent = '✓ Applied';
       btn.classList.add('applied');
     }
+    celebrate();
     if(applicationLink){
       window.open(applicationLink, '_blank', 'noopener');
     }else{
@@ -1433,6 +1434,23 @@ async function initAccount(){
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
 initAccount();
+initScrollReveal();
+
+// Subtle cursor-follow tilt on the hero photo — desktop pointer only, since a touch "hover"
+// has no real cursor position and would just leave the tilt stuck wherever it was last tapped.
+if(window.matchMedia('(pointer: fine)').matches){
+  const heroPhoto = document.getElementById('hero-photo-single');
+  heroPhoto.style.transition = 'transform .15s ease-out';
+  heroPhoto.addEventListener('mousemove', (e)=>{
+    const rect = heroPhoto.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    heroPhoto.style.transform = `perspective(800px) rotateY(${px * 8}deg) rotateX(${-py * 8}deg)`;
+  });
+  heroPhoto.addEventListener('mouseleave', ()=>{
+    heroPhoto.style.transform = 'perspective(800px) rotateY(0) rotateX(0)';
+  });
+}
 
 async function signOut(){
   try{ await apiLogout(); }catch(e){}
@@ -1645,7 +1663,7 @@ function showPage(page){
   TAB_PANELS.forEach(key=>{
     const panel = document.getElementById('panel-' + key);
     panel.style.display = key === page ? '' : 'none';
-    if(key === page) playFadeIn(panel);
+    if(key === page){ playFadeIn(panel); initScrollReveal(panel); }
     document.getElementById('tab-' + key).classList.toggle('active', key === page);
   });
   updateHeroPhoto(page);
@@ -1971,7 +1989,7 @@ function renderWorkbenchLoading(title, subtitle){
   document.getElementById('ai-workbench').innerHTML = `
     <div class="workbench-card">
       <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
-      <p class="loading-line">Generating — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="workbench-loading-timer">0s</span> elapsed</p>
+      <p class="loading-line">Generating<span class="thinking-dots"><i></i><i></i><i></i></span> — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="workbench-loading-timer">0s</span> elapsed</p>
     </div>`;
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
   const start = Date.now();
@@ -2232,7 +2250,7 @@ function renderCareerMatchLoading(){
   document.getElementById('career-workbench').innerHTML = `
     <div class="workbench-card">
       <div class="workbench-head"><h3>Career Match AI</h3><span>Matching your profile…</span></div>
-      <p class="loading-line">Generating — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="career-match-loading-timer">0s</span> elapsed</p>
+      <p class="loading-line">Generating<span class="thinking-dots"><i></i><i></i><i></i></span> — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="career-match-loading-timer">0s</span> elapsed</p>
     </div>`;
   document.getElementById('career-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
   const start = Date.now();
@@ -2331,7 +2349,7 @@ function renderJobMatchLoading(){
   document.getElementById('job-match-results').innerHTML = `
     <div class="workbench-card">
       <div class="workbench-head"><h3>AI Job Match</h3><span>Reading your resume and checking it against open roles…</span></div>
-      <p class="loading-line">Generating — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="job-match-loading-timer">0s</span> elapsed</p>
+      <p class="loading-line">Generating<span class="thinking-dots"><i></i><i></i><i></i></span> — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="job-match-loading-timer">0s</span> elapsed</p>
     </div>`;
   document.getElementById('job-match-results').scrollIntoView({behavior:'smooth', block:'nearest'});
   const start = Date.now();

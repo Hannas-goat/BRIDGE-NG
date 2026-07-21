@@ -277,7 +277,9 @@ async function doSignUp(){
 
   try{
     await apiSignup(payload);
-    location.href = 'index.html';
+    celebrate();
+    setMsg('signup-msg', 'Welcome to Bridge NG! Taking you to your dashboard…', 'success');
+    setTimeout(()=>{ location.href = 'index.html'; }, 900);
   }catch(err){
     setMsg('signup-msg', err.message, 'error');
   }

@@ -255,6 +255,58 @@ function showToast(message){
   }, 4000);
 }
 
+// --- Scroll-reveal — fades/slides static sections in as they enter the viewport. Elements start
+// fully visible in CSS; only JS (via inline style) hides them right before observing, so a page
+// with JS disabled or IntersectionObserver unsupported just stays visible with no motion at all,
+// rather than risking permanently-hidden content. Re-running on an already-revealed element is a
+// no-op (tracked via dataset.revealed) so switching tabs back and forth doesn't re-hide content. ---
+
+function initScrollReveal(root){
+  if(!('IntersectionObserver' in window)) return;
+  const targets = (root || document).querySelectorAll('.card, .tip-card, .results-head');
+  const toObserve = [];
+  targets.forEach(el=>{
+    if(el.dataset.revealed) return;
+    el.dataset.revealed = 'pending';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(24px)';
+    el.style.transition = 'opacity .6s cubic-bezier(.16,.84,.44,1), transform .6s cubic-bezier(.16,.84,.44,1)';
+    toObserve.push(el);
+  });
+  if(!toObserve.length) return;
+  const observer = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting) return;
+      entry.target.style.opacity = '1';
+      entry.target.style.transform = 'translateY(0)';
+      entry.target.dataset.revealed = 'done';
+      observer.unobserve(entry.target);
+    });
+  }, {threshold:0.08});
+  toObserve.forEach(el=> observer.observe(el));
+}
+
+// --- Confetti — a small celebratory burst for genuine "moment" actions (signup, first
+// application), not overused on every routine success. Plain DOM + CSS animation, no canvas or
+// external library, so it costs nothing when it isn't called. ---
+
+function celebrate(){
+  const colors = ['#1B2A4A', '#DB9A3C', '#2F6E4F', '#9C6A1F'];
+  const container = document.createElement('div');
+  container.className = 'confetti-container';
+  for(let i = 0; i < 36; i++){
+    const piece = document.createElement('i');
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = colors[i % colors.length];
+    piece.style.animationDelay = (Math.random() * 0.3) + 's';
+    piece.style.animationDuration = (2.2 + Math.random() * 1.2) + 's';
+    piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+    container.appendChild(piece);
+  }
+  document.body.appendChild(container);
+  setTimeout(()=> container.remove(), 3800);
+}
+
 // --- Friendly fallback copy for AI-related failures — never surface raw codes/stack traces. ---
 
 function friendlyErrorMessage(context){
