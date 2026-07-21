@@ -58,6 +58,7 @@
       <button class="tab-btn" id="tab-appointment" onclick="showPage('appointment')">Book Appointment</button>
       <button class="tab-btn" id="tab-explore" onclick="showPage('explore')">Explore Jobs</button>
       <button class="tab-btn" id="tab-career" onclick="showPage('career')">Career Match AI</button>
+      <button class="tab-btn" id="tab-jobmatch" onclick="showPage('jobmatch')">AI Job Match</button>
     </div>
     <div class="nav-backdrop" id="nav-backdrop" onclick="closeMobileNav()"></div>
   </div>
@@ -111,6 +112,11 @@
       <h1>Your Degree, <em>Any Border</em>.</h1>
       <p>Match your academic profile and skills against real scholarships, remote roles, and visa pathways — built for Nigerian CGPA scales, NYSC timing, and FX-conscious funding.</p>
       <p class="hero-cta-line">Not a generic global tool — localized for the Nigerian graduate's actual constraints.</p>
+    </div>
+    <div id="hero-left-jobmatch" style="display:none;">
+      <h1>Let AI Find <em>Your Fit</em>.</h1>
+      <p>Bridge AI reads your resume and skills, then picks the best-fitting currently open role from real Bridge NG listings — never a made-up posting.</p>
+      <p class="hero-cta-line">One click away from a tailored resume for that exact role.</p>
     </div>
     <div class="hero-photo-single" id="hero-photo-single">
       <img id="hero-photo-img" src="images/Bridge NG - New Hire.png" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
@@ -628,6 +634,23 @@
     <div class="workbench" id="career-workbench"></div>
   </div>
 
+  <!-- AI JOB MATCH PAGE -->
+  <div class="panel" id="panel-jobmatch" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">AI Job Match</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">Bridge AI reads your resume and skills, then picks the best-fitting currently open role(s) from real Bridge NG listings — never a made-up posting.</p>
+      <p style="font-size:12px;margin:0 0 18px;" id="jm-resume-note"></p>
+      <label>Your skills — tap to select, or type your own</label>
+      <div class="chip-field" id="jm-skills"></div>
+      <div class="skill-add-row">
+        <input type="text" id="jm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input');}">
+        <button class="upload-btn" onclick="addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input')">Add skill</button>
+      </div>
+      <button class="go-btn" onclick="runJobMatch()">Find my best-fit job →</button>
+    </div>
+    <div id="job-match-results"></div>
+  </div>
+
   <!-- EMPLOYER PANEL -->
   <div class="panel" id="panel-employer" style="display:none;">
     <div class="card">
@@ -766,10 +789,12 @@ let seekerSkills = new Set();
 let employerSkills = new Set();
 let abroadSkills = new Set();
 let careerMatchSkills = new Set();
+let jobMatchSkills = new Set();
 buildChips('s-skills', seekerSkills);
 buildChips('e-skills', employerSkills);
 buildChips('ab-skills', abroadSkills);
 buildChips('cm-skills', careerMatchSkills);
+buildChips('jm-skills', jobMatchSkills);
 
 populateLocationSelect('s-loc', true);
 populateLocationSelect('e-loc', false);
@@ -1573,7 +1598,8 @@ const HERO_PHOTOS = {
   employer: { src: 'images/Employer Photo.png', alt: 'Find the Right Hire. Faster. Smarter. Bridge NG matches employers with pre-vetted candidates based on real skills and role fit.', noMask: true },
   abroad: { src: 'images/Remote Worker.png', alt: 'Your Skills. Global Opportunities. Work remotely for top companies abroad while living in Nigeria.', noMask: true },
   explore: { src: 'images/explore jobs.png', alt: 'A newly hired candidate celebrating a job offer with a handshake, next to a "Congratulations! You\'re hired!" sign' },
-  career: { src: 'images/Bridge NG - New Hire2.png', alt: 'A Nigerian graduate reviewing global scholarship, remote job, and visa pathway matches on a laptop' }
+  career: { src: 'images/Bridge NG - New Hire2.png', alt: 'A Nigerian graduate reviewing global scholarship, remote job, and visa pathway matches on a laptop' },
+  jobmatch: { src: 'images/CV-Resume Photo.png', alt: 'A tailored resume matched to an open job listing, ready to submit' }
 };
 
 function playFadeIn(el){
@@ -1602,7 +1628,7 @@ function updateHeroPhoto(page){
   playFadeIn(container);
 }
 
-const HERO_LEFT_PANELS = ['default', 'resume', 'employer', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career'];
+const HERO_LEFT_PANELS = ['default', 'resume', 'employer', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch'];
 
 function updateHeroLeft(page){
   const activeKey = HERO_LEFT_PANELS.includes(page) ? page : 'default';
@@ -1613,7 +1639,7 @@ function updateHeroLeft(page){
   });
 }
 
-const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career'];
+const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch'];
 
 function showPage(page){
   TAB_PANELS.forEach(key=>{
@@ -1625,6 +1651,7 @@ function showPage(page){
   updateHeroPhoto(page);
   updateHeroLeft(page);
   if(page === 'explore') renderExploreResults();
+  if(page === 'jobmatch') updateJobMatchResumeNote();
   closeMobileNav();
   window.scrollTo({top:0, behavior:'smooth'});
 }
@@ -2282,6 +2309,104 @@ async function runCareerMatch(){
     renderCareerMatchResult(data.result);
   }catch(e){
     renderCareerMatchError(e);
+  }
+}
+
+function updateJobMatchResumeNote(){
+  const el = document.getElementById('jm-resume-note');
+  if(!el) return;
+  el.innerHTML = haveResume()
+    ? '<span style="color:var(--green-deep);">✓ Using the resume already in <a onclick="showPage(\'resume\')" style="cursor:pointer;color:var(--indigo);font-weight:600;">Resume Studio</a>.</span>'
+    : '<span style="color:var(--ink-soft);">No resume yet — <a onclick="showPage(\'resume\')" style="cursor:pointer;color:var(--indigo);font-weight:600;">add one in Resume Studio</a> first, then come back here.</span>';
+}
+
+let jobMatchLoadingTimer = null;
+
+function stopJobMatchLoadingTimer(){
+  if(jobMatchLoadingTimer){ clearInterval(jobMatchLoadingTimer); jobMatchLoadingTimer = null; }
+}
+
+function renderJobMatchLoading(){
+  stopJobMatchLoadingTimer();
+  document.getElementById('job-match-results').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>AI Job Match</h3><span>Reading your resume and checking it against open roles…</span></div>
+      <p class="loading-line">Generating — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="job-match-loading-timer">0s</span> elapsed</p>
+    </div>`;
+  document.getElementById('job-match-results').scrollIntoView({behavior:'smooth', block:'nearest'});
+  const start = Date.now();
+  jobMatchLoadingTimer = setInterval(()=>{
+    const el = document.getElementById('job-match-loading-timer');
+    if(!el){ stopJobMatchLoadingTimer(); return; }
+    el.textContent = Math.round((Date.now() - start) / 1000) + 's';
+  }, 1000);
+}
+
+function renderJobMatchError(err){
+  stopJobMatchLoadingTimer();
+  const message = (err && err.message) || 'Bridge AI is having trouble answering right now. Please try again in a moment.';
+  document.getElementById('job-match-results').innerHTML = `
+    <div class="workbench-card">
+      <div class="workbench-head"><h3>AI Job Match</h3><span>Something went wrong</span></div>
+      <p class="loading-line">${message}</p>
+    </div>`;
+}
+
+function renderJobMatchResults(resolved){
+  stopJobMatchLoadingTimer();
+  const results = document.getElementById('job-match-results');
+  if(!resolved.length){
+    results.innerHTML = '<div class="empty">Bridge AI couldn\'t find a genuinely good fit among the roles open right now — try adding more skills, or check back as new roles sync in.</div>';
+    return;
+  }
+  results.innerHTML = `
+    <div class="results-head"><h2>Your best-fit roles</h2><span>${resolved.length} match${resolved.length > 1 ? 'es' : ''}, picked by Bridge AI from real open roles</span></div>
+    <div class="grid">
+      ${resolved.map(({job, reason})=>`
+        <div class="res-card">
+          <div class="res-body">
+            <p class="res-title">${job.title}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-sub">${job.company} · ${job.loc} · ${job.level}</p>
+            <span class="pay-pill">${payLabel(job)}</span>
+            <p class="fit-skill-label" style="margin-top:10px;">Why this fits</p>
+            <p style="font-size:13px;color:var(--ink-soft);margin:2px 0 10px;">${escapeHtml(reason)}</p>
+            <div class="skill-row">${skillPills(job.skills, jobMatchSkills)}</div>
+            <div class="btn-row">
+              ${applyButtonHtml(job)}
+              ${followButtonHtml(job.company)}
+              <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  results.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+async function runJobMatch(){
+  if(!haveResume()){
+    alert('Add your resume in Resume Studio first, then come back here.');
+    showPage('resume');
+    return;
+  }
+  if(JOBS.length === 0){
+    alert('No open roles to match against yet — check back in a few minutes while we sync the latest postings.');
+    return;
+  }
+  const skills = [...jobMatchSkills];
+  renderJobMatchLoading();
+  try{
+    const payload = {
+      skills,
+      ...currentResumePayload(),
+      jobs: JOBS.map(j => ({ id: j.id, title: j.title, company: j.company, loc: j.loc, level: j.level, skills: j.skills, desc: j.desc }))
+    };
+    const { matches } = await apiFindJobMatches(payload);
+    const resolved = matches
+      .map(m => ({ job: JOBS.find(j => j.id === m.id), reason: m.reason }))
+      .filter(m => m.job);
+    renderJobMatchResults(resolved);
+  }catch(err){
+    renderJobMatchError(err);
   }
 }
 

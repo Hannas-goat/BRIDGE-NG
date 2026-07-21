@@ -231,6 +231,7 @@ function apiListApplications(){ return apiRequest('/api/applications', 'GET'); }
 function apiPostEmployerJob(payload){ return apiRequest('/api/employer-jobs', 'POST', payload); }
 function apiFindJob(jobText){ return apiRequest('/api/resume/find-job', 'POST', {jobText}); }
 function apiGenerateResumeDoc(payload){ return apiRequest('/api/resume/tailor', 'POST', payload); }
+function apiFindJobMatches(payload){ return apiRequest('/api/job-match', 'POST', payload); }
 
 // --- Friendly fallback copy for AI-related failures — never surface raw codes/stack traces. ---
 

@@ -584,6 +584,32 @@ def parse_job_info_json(reply, fallback_text):
     }
 
 
+def parse_job_match_json(reply, valid_ids):
+    """Parses the AI job-match reply, tolerating markdown fences, and strictly drops any id the
+    model didn't actually see in the provided job list — a hallucinated id must never reach the
+    client as if it were a real, currently-open role."""
+    cleaned = reply.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        data = {}
+    raw_matches = data.get("matches") if isinstance(data, dict) else None
+    if not isinstance(raw_matches, list):
+        return []
+    matches = []
+    for m in raw_matches:
+        if not isinstance(m, dict):
+            continue
+        job_id = m.get("id")
+        if job_id not in valid_ids:
+            continue
+        matches.append({"id": job_id, "reason": str(m.get("reason") or "")[:400]})
+    return matches[:3]
+
+
 def level_distance(a, b):
     """Python port of index.html's levelDistance() — kept in sync deliberately so a
     real candidate match score means the same thing as the sample-data match score."""
@@ -1030,6 +1056,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_post_employer_job()
         if parsed.path == "/api/resume/find-job":
             return self.handle_resume_find_job()
+        if parsed.path == "/api/job-match":
+            return self.handle_job_match()
         if parsed.path == "/api/resume/tailor":
             return self.handle_resume_generate()
         if parsed.path == "/api/career-match":
@@ -1679,6 +1707,116 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, parse_job_info_json(reply, job_text))
+
+    def handle_job_match(self):
+        if not NVIDIA_API_KEY:
+            return self.send_json(
+                503,
+                {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
+            )
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": CHAT_FALLBACK_MESSAGE})
+
+        skills = data.get("skills") or []
+        resume_text = (data.get("resumeText") or "").strip()
+        resume_file = data.get("resumeFile") or None
+        jobs = data.get("jobs") or []
+
+        image_part = None
+        if resume_file:
+            kind = resume_file.get("kind")
+            b64 = resume_file.get("base64") or ""
+            if kind == "pdf":
+                if PdfReader is None:
+                    return self.send_json(
+                        500,
+                        {"error": "PDF resume support isn't installed on the server yet — try a JPG/PNG, or paste your resume text instead."},
+                    )
+                try:
+                    pdf_bytes = base64.b64decode(b64)
+                    reader = PdfReader(io.BytesIO(pdf_bytes))
+                    resume_text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+                except Exception as e:
+                    print("PDF extraction failed:", e)
+                    return self.send_json(400, {"error": "Couldn't read that PDF. Try a JPG/PNG instead, or paste your resume text directly."})
+                if len(resume_text) < 50:
+                    return self.send_json(
+                        400,
+                        {"error": "Couldn't find readable text in that PDF (it may be a scanned image). Try a JPG/PNG instead, or paste your resume text directly."},
+                    )
+            elif kind == "image":
+                media_type = resume_file.get("mediaType") or "image/jpeg"
+                image_part = {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}}
+
+        if not resume_text and not image_part:
+            return self.send_json(400, {"error": "Upload or paste your CV/resume first, in Resume Studio."})
+
+        # Capped so the prompt stays a reasonable size no matter how large the synced jobs
+        # list grows — this is a match against currently-open roles, not an archive search.
+        trimmed_jobs = [
+            {
+                "id": j.get("id"),
+                "title": j.get("title", ""),
+                "company": j.get("company", ""),
+                "location": j.get("loc", ""),
+                "level": j.get("level", ""),
+                "skills": j.get("skills") or [],
+                "summary": (j.get("desc") or "")[:200],
+            }
+            for j in jobs[:60] if isinstance(j, dict) and j.get("id") is not None
+        ]
+        if not trimmed_jobs:
+            return self.send_json(400, {"error": "No open roles available to match against right now."})
+
+        system_prompt = (
+            "You are Bridge AI, matching a Nigerian job seeker to the best-fitting currently-open "
+            "role(s) from a FIXED list of real listings provided below. Only recommend jobs from "
+            "this list — never invent a company, title, or role that isn't in it. If nothing in "
+            "the list is a reasonable fit, say so honestly by returning an empty matches list "
+            "rather than forcing a bad match.\n\n"
+            "Return ONLY a JSON object (no markdown fences, no commentary) matching exactly this "
+            'shape:\n{"matches": [{"id": <integer id from the list>, "reason": "one or two '
+            'sentence explanation referencing specific skills/experience"}, ...]}\n\n'
+            "Return at most 3 matches, best fit first. Only include a job if it's a genuinely "
+            "reasonable fit given the skills/resume — do not pad the list to reach 3."
+        )
+
+        user_text = (
+            f"Candidate's selected skills: {', '.join(skills) if skills else '(none selected)'}\n\n"
+            f'Open roles (JSON — use the "id" field to refer to a role):\n{json.dumps(trimmed_jobs)}'
+        )
+        if resume_text:
+            user_text += f'\n\nCandidate\'s resume:\n"""\n{resume_text}\n"""'
+        else:
+            user_text += "\n\nThe candidate's resume is attached as an image — read it directly."
+
+        if image_part:
+            user_content = [{"type": "text", "text": user_text}, image_part]
+        else:
+            user_content = user_text
+
+        models_to_try = [NVIDIA_RESUME_MODEL, NVIDIA_MODEL]
+        try:
+            reply = call_nvidia_with_fallbacks(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                models_to_try, timeout=110, source="job-match",
+            )
+        except urllib.error.HTTPError as e:
+            print("NVIDIA job-match error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except (KeyError, IndexError) as e:
+            print("Unexpected NVIDIA job-match response shape:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except Exception as e:
+            print("NVIDIA job-match request failed:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+
+        valid_ids = {j["id"] for j in trimmed_jobs}
+        self.send_json(200, {"matches": parse_job_match_json(reply, valid_ids)})
 
     def handle_resume_generate(self):
         if not NVIDIA_API_KEY:
