@@ -233,6 +233,28 @@ function apiFindJob(jobText){ return apiRequest('/api/resume/find-job', 'POST', 
 function apiGenerateResumeDoc(payload){ return apiRequest('/api/resume/tailor', 'POST', payload); }
 function apiFindJobMatches(payload){ return apiRequest('/api/job-match', 'POST', payload); }
 
+// --- Toast notifications — replaces blocking alert() popups with a non-blocking, on-brand
+// message that fades in/out. Created lazily so no HTML file needs a container element added. ---
+
+function showToast(message){
+  let container = document.getElementById('toast-container');
+  if(!container){
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(()=> toast.classList.add('show'));
+  setTimeout(()=>{
+    toast.classList.remove('show');
+    setTimeout(()=> toast.remove(), 250);
+  }, 4000);
+}
+
 // --- Friendly fallback copy for AI-related failures — never surface raw codes/stack traces. ---
 
 function friendlyErrorMessage(context){

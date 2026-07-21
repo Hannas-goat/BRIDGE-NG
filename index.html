@@ -885,7 +885,7 @@ function renderMyApplications(){
 
 async function applyToJob(title, company, applicationLink, btn){
   if(!currentAccount){
-    alert('Sign in to apply — this keeps track of the roles you\'ve applied to.');
+    showToast('Sign in to apply — this keeps track of the roles you\'ve applied to.');
     return;
   }
   const key = applicationKey(company, title);
@@ -903,10 +903,10 @@ async function applyToJob(title, company, applicationLink, btn){
     if(applicationLink){
       window.open(applicationLink, '_blank', 'noopener');
     }else{
-      alert(`Application recorded for ${title} at ${company}. This is a sample listing, so there's no real employer inbox behind it yet — but it's saved to your account and you can find it again anytime.`);
+      showToast(`Application recorded for ${title} at ${company}. This is a sample listing, so there's no real employer inbox behind it yet — but it's saved to your account and you can find it again anytime.`);
     }
   }catch(err){
-    alert(friendlyErrorMessage('generic'));
+    showToast(friendlyErrorMessage('generic'));
   }
 }
 
@@ -990,7 +990,7 @@ let exploreMatchActive = false;
 
 function toggleExploreMatch(){
   if(!exploreMatchActive && !currentAccount){
-    alert('Sign in to enable profile matching — this uses your real saved skills, field of study, and career stage, not a placeholder profile.');
+    showToast('Sign in to enable profile matching — this uses your real saved skills, field of study, and career stage, not a placeholder profile.');
     return;
   }
   exploreMatchActive = !exploreMatchActive;
@@ -1108,7 +1108,7 @@ function isFollowingCompany(company){
 
 async function toggleFollowCompany(company, btn){
   if(!currentAccount){
-    alert('Sign in to follow companies and get notified when they post new roles.');
+    showToast('Sign in to follow companies and get notified when they post new roles.');
     return;
   }
   try{
@@ -1125,7 +1125,7 @@ async function toggleFollowCompany(company, btn){
       btn.classList.toggle('following', following);
     }
   }catch(err){
-    alert(friendlyErrorMessage('generic'));
+    showToast(friendlyErrorMessage('generic'));
   }
 }
 
@@ -1155,11 +1155,11 @@ function renderSavedSearches(){
 
 async function saveCurrentSearch(){
   if(!currentAccount){
-    alert('Sign in to save searches and get alerts when a new job matches.');
+    showToast('Sign in to save searches and get alerts when a new job matches.');
     return;
   }
   if(seekerSkills.size === 0){
-    alert('Select at least one skill before saving this search.');
+    showToast('Select at least one skill before saving this search.');
     return;
   }
   const level = document.getElementById('s-level').value;
@@ -1167,9 +1167,9 @@ async function saveCurrentSearch(){
   try{
     await apiCreateSavedSearch({skills: [...seekerSkills], level, location: loc, label: [...seekerSkills].slice(0, 3).join(', ')});
     await loadSavedSearches();
-    alert("Search saved — you'll get an alert here when a new job matches it.");
+    showToast("Search saved — you'll get an alert here when a new job matches it.");
   }catch(err){
-    alert(friendlyErrorMessage('generic'));
+    showToast(friendlyErrorMessage('generic'));
   }
 }
 
@@ -1203,7 +1203,7 @@ function formatApptDate(dateStr){
 async function requestAppointment(){
   const msg = document.getElementById('appt-msg');
   if(!currentAccount){
-    alert('Sign in to request an appointment — this keeps your requests saved to your account.');
+    showToast('Sign in to request an appointment — this keeps your requests saved to your account.');
     return;
   }
   const company = document.getElementById('appt-company').value.trim();
@@ -1543,7 +1543,7 @@ function selectTrainSkill(skill){
 function searchTrainTopic(){
   const query = document.getElementById('train-search').value.trim();
   if(!query){
-    alert('Type a subject to search for, e.g. Blockchain, French, Public Speaking...');
+    showToast('Type a subject to search for, e.g. Blockchain, French, Public Speaking...');
     return;
   }
   selectTrainSkill(query);
@@ -1717,7 +1717,7 @@ function findJobs(){
   const level = document.getElementById('s-level').value;
   const loc = document.getElementById('s-loc').value;
   if(seekerSkills.size === 0){
-    alert('Select at least one skill to find matches.');
+    showToast('Select at least one skill to find matches.');
     return;
   }
   const results = document.getElementById('seeker-results');
@@ -1768,7 +1768,7 @@ function findAbroadJobs(){
   const level = document.getElementById('ab-level').value;
   const region = document.getElementById('ab-region').value;
   if(abroadSkills.size === 0){
-    alert('Select at least one skill to find remote roles.');
+    showToast('Select at least one skill to find remote roles.');
     return;
   }
   const scored = INTL_JOBS.map(j=>({
@@ -1839,7 +1839,7 @@ function handleResumeUpload(event){
   const isPdf = nameLower.endsWith('.pdf');
   const isImage = nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png');
   if(!isPdf && !isImage){
-    alert('Please upload a .txt, .md, .pdf, .jpg, or .png file.');
+    showToast('Please upload a .txt, .md, .pdf, .jpg, or .png file.');
     return;
   }
 
@@ -2068,14 +2068,14 @@ function openTailoredResumeDoc(company){
     Packer.toBlob(docxDoc).then(blob=>{
       deliverFileDownload(blob, filename, mime);
     }).catch(()=>{
-      alert('Could not generate the Word document. Please try the PDF or .txt download instead.');
+      showToast('Could not generate the Word document. Please try the PDF or .txt download instead.');
     });
     return;
   }
 
   const win = window.open('', '_blank');
   if(!win){
-    alert('Please allow pop-ups for this site so the Word document can open in a new tab.');
+    showToast('Please allow pop-ups for this site so the Word document can open in a new tab.');
     return;
   }
   win.document.title = 'Tailored resume';
@@ -2138,7 +2138,7 @@ async function deliverFileDownload(blob, filename, mime){
       if(!resp.ok || !data.url) throw new Error(data.error || 'Could not prepare the download.');
       window.location.href = data.url;
     }catch(e){
-      alert('Could not download the file. Please try again.');
+      showToast('Could not download the file. Please try again.');
     }
     return;
   }
@@ -2282,11 +2282,11 @@ async function runCareerMatch(){
   const skills = [...careerMatchSkills];
   const objectives = document.getElementById('cm-objectives').value.trim();
   if(skills.length === 0){
-    alert('Select at least one skill so Bridge AI can match you properly.');
+    showToast('Select at least one skill so Bridge AI can match you properly.');
     return;
   }
   if(!objectives){
-    alert("Tell us what you're aiming for — even a short sentence helps.");
+    showToast("Tell us what you're aiming for — even a short sentence helps.");
     return;
   }
   const payload = {
@@ -2384,12 +2384,12 @@ function renderJobMatchResults(resolved){
 
 async function runJobMatch(){
   if(!haveResume()){
-    alert('Add your resume in Resume Studio first, then come back here.');
+    showToast('Add your resume in Resume Studio first, then come back here.');
     showPage('resume');
     return;
   }
   if(JOBS.length === 0){
-    alert('No open roles to match against yet — check back in a few minutes while we sync the latest postings.');
+    showToast('No open roles to match against yet — check back in a few minutes while we sync the latest postings.');
     return;
   }
   const skills = [...jobMatchSkills];
@@ -2444,7 +2444,7 @@ function currentResumePayload(){
 
 async function tailorResumeFor(knownJob){
   if(!haveResume()){
-    alert('Upload or paste your CV/resume first, in the box above.');
+    showToast('Upload or paste your CV/resume first, in the box above.');
     return;
   }
   let jobInfo;
@@ -2452,7 +2452,7 @@ async function tailorResumeFor(knownJob){
     renderWorkbenchLoading('Tailored resume', 'Looking up this role…');
     jobInfo = await resolveJobInfo(knownJob);
   }catch(err){
-    if(err.message === 'MISSING_JOB') alert("Paste the job you're applying for first, in the box above.");
+    if(err.message === 'MISSING_JOB') showToast("Paste the job you're applying for first, in the box above.");
     else renderWorkbenchError('Tailored resume', err, 'resume');
     return;
   }
@@ -2467,7 +2467,7 @@ async function tailorResumeFor(knownJob){
 
 async function writeCoverLetterFor(knownJob){
   if(!haveResume()){
-    alert('Upload or paste your CV/resume first, in the box above.');
+    showToast('Upload or paste your CV/resume first, in the box above.');
     return;
   }
   let jobInfo;
@@ -2475,7 +2475,7 @@ async function writeCoverLetterFor(knownJob){
     renderWorkbenchLoading('Cover letter', 'Looking up this role…');
     jobInfo = await resolveJobInfo(knownJob);
   }catch(err){
-    if(err.message === 'MISSING_JOB') alert("Paste the job you're applying for first, in the box above.");
+    if(err.message === 'MISSING_JOB') showToast("Paste the job you're applying for first, in the box above.");
     else renderWorkbenchError('Cover letter', err, 'coverletter');
     return;
   }
@@ -2510,15 +2510,15 @@ function computeResumeFit(resumeText, job){
 async function checkResumeFit(knownJob){
   const text = getResumeText();
   if(!text){
-    alert("Paste your resume text above for a fit check. (PDF/image uploads aren't supported for this feature yet — paste the text version instead.)");
+    showToast("Paste your resume text above for a fit check. (PDF/image uploads aren't supported for this feature yet — paste the text version instead.)");
     return;
   }
   let jobInfo;
   try{
     jobInfo = await resolveJobInfo(knownJob);
   }catch(err){
-    if(err.message === 'MISSING_JOB') alert("Paste the job you're applying for first, in the box above.");
-    else alert(friendlyErrorMessage('generic'));
+    if(err.message === 'MISSING_JOB') showToast("Paste the job you're applying for first, in the box above.");
+    else showToast(friendlyErrorMessage('generic'));
     return;
   }
   const fit = computeResumeFit(text, { skills: jobInfo.skills || [] });
@@ -2562,7 +2562,7 @@ async function findCandidates(){
   const payMin = document.getElementById('e-pay-min').value;
   const payMax = document.getElementById('e-pay-max').value;
   if(employerSkills.size === 0){
-    alert('Select at least one required skill to find candidates.');
+    showToast('Select at least one required skill to find candidates.');
     return;
   }
 
