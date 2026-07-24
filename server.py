@@ -986,11 +986,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _drain_request_body(self):
+        """Reads (and caches) the full request body exactly once, regardless of whether any
+        route handler actually asks for it. This connection stays alive between requests
+        (protocol_version = HTTP/1.1), so a request that 404s without ever reading its body —
+        e.g. a POST/PUT to an unmatched path — would otherwise leave those bytes sitting
+        unread in the socket, corrupting the start of the next request read on that same
+        connection. do_POST/do_PUT call this unconditionally before routing so that can't
+        happen; read_json_body() below just reuses the cached bytes."""
+        if not hasattr(self, "_raw_body"):
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            self._raw_body = self.rfile.read(length) if length else b""
+        return self._raw_body
+
     def read_json_body(self):
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        if length == 0:
+        raw = self._drain_request_body()
+        if not raw:
             return {}
-        raw = self.rfile.read(length)
         try:
             return json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -1016,6 +1028,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # ---------- routing ----------
 
     def do_GET(self):
+        self._drain_request_body()
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/me":
             return self.handle_me()
@@ -1042,6 +1055,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self.serve_static(parsed.path)
 
     def do_POST(self):
+        self._drain_request_body()
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/signup":
             return self.handle_signup()
@@ -1086,6 +1100,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self.send_json(404, {"error": "Not found"})
 
     def do_PUT(self):
+        self._drain_request_body()
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/profile":
             return self.handle_save_profile()
