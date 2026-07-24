@@ -967,7 +967,16 @@ def run_auto_sync_loop():
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
+    # HTTP/1.0 (no keep-alive): each request gets its own fresh connection, closed immediately
+    # after the response. HTTP/1.1 keep-alive reuses one connection for many requests, and in
+    # production — behind Render's own reverse proxy, which pools its own connections to this
+    # origin independently of anything this app does — that reuse was intermittently corrupting
+    # unrelated requests (observed as the chat widget failing with garbled "Bad request syntax"
+    # errors). A per-app body-drain fix closed one source of this, but a further layer appears to
+    # sit outside this code's control, so the surer fix is removing persistent connections
+    # entirely rather than continuing to chase corruption across infrastructure boundaries. The
+    # extra per-request TCP handshake cost is negligible for this app's traffic level.
+    protocol_version = "HTTP/1.0"
 
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.address_string(), fmt % args))
