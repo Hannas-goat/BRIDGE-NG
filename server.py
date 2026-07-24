@@ -972,6 +972,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.address_string(), fmt % args))
 
+    def handle_one_request(self):
+        # BaseHTTPRequestHandler reuses this same instance across every request on a persistent
+        # (HTTP/1.1 keep-alive) connection — handle_one_request() runs once per request, but
+        # `self` itself lives for the whole connection. _drain_request_body()'s cache must reset
+        # here, at the start of each new request cycle: without this, request #2 on a reused
+        # connection would see the flag already set from request #1, skip reading its own body
+        # from the socket entirely, and leave those bytes unread to corrupt request #3's parse.
+        self._raw_body_read = False
+        self._raw_body = b""
+        super().handle_one_request()
+
     def send_error(self, code, message=None, explain=None):
         # Covers every path that leads to an error response, including ones with no do_X method
         # at all (a bot/scanner sending OPTIONS, HEAD, DELETE, etc. — common on a public site —
@@ -999,16 +1010,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _drain_request_body(self):
-        """Reads (and caches) the full request body exactly once, regardless of whether any
-        route handler actually asks for it. This connection stays alive between requests
-        (protocol_version = HTTP/1.1), so a request that 404s without ever reading its body —
-        e.g. a POST/PUT to an unmatched path — would otherwise leave those bytes sitting
-        unread in the socket, corrupting the start of the next request read on that same
-        connection. do_POST/do_PUT call this unconditionally before routing so that can't
-        happen; read_json_body() below just reuses the cached bytes."""
-        if not hasattr(self, "_raw_body"):
+        """Reads (and caches, for *this* request only — see handle_one_request's reset above)
+        the full request body exactly once, regardless of whether any route handler actually
+        asks for it. This connection stays alive between requests (protocol_version = HTTP/1.1),
+        so a request that 404s without ever reading its body — e.g. a POST/PUT to an unmatched
+        path — would otherwise leave those bytes sitting unread in the socket, corrupting the
+        start of the next request read on that same connection. do_POST/do_PUT call this
+        unconditionally before routing so that can't happen; read_json_body() below just reuses
+        the cached bytes."""
+        if not self._raw_body_read:
             length = int(self.headers.get("Content-Length", 0) or 0)
             self._raw_body = self.rfile.read(length) if length else b""
+            self._raw_body_read = True
         return self._raw_body
 
     def read_json_body(self):
