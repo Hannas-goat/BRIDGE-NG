@@ -972,6 +972,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.address_string(), fmt % args))
 
+    def send_error(self, code, message=None, explain=None):
+        # Covers every path that leads to an error response, including ones with no do_X method
+        # at all (a bot/scanner sending OPTIONS, HEAD, DELETE, etc. — common on a public site —
+        # falls through to Python's own "Unsupported method" 501 here, which otherwise never
+        # reads the body). This connection stays alive between requests (HTTP/1.1), so any
+        # undrained body would sit in the socket and corrupt the next request read on it.
+        try:
+            self._drain_request_body()
+        except Exception:
+            pass
+        super().send_error(code, message, explain)
+
     # ---------- helpers ----------
 
     def send_json(self, status, obj, set_cookie=None, clear_cookie=False):
