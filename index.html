@@ -247,7 +247,7 @@
           <span class="file-name" id="s-resume-filename">No file uploaded — you can also paste your CV text below</span>
           <button class="upload-btn" id="s-resume-remove" style="display:none;" onclick="clearResumeFile()">Remove file</button>
         </div>
-        <textarea id="s-resume" placeholder="Paste your current CV / resume text here (or upload a PDF/image above instead)..."></textarea>
+        <textarea id="s-resume" placeholder="Paste your current CV / resume text here (or upload a PDF/image above instead)..." onblur="saveResumeToAccount()"></textarea>
       </div>
 
       <div class="btn-row" style="margin-top:18px;">
@@ -1420,6 +1420,7 @@ async function initAccount(){
     if(me.loggedIn){
       currentAccount = {email: me.email, profile: me.profile};
       fillSeekerFormFromProfile(me.profile);
+      loadSavedResume(me.profile);
     }
   }catch(e){
     // API not reachable (e.g. page opened directly from disk instead of via server.py) — stay signed out.
@@ -1455,6 +1456,7 @@ if(window.matchMedia('(pointer: fine)').matches){
 async function signOut(){
   try{ await apiLogout(); }catch(e){}
   currentAccount = null;
+  clearResumeFile(); // no-op save (no account), but resets the box so the next sign-in on this browser doesn't inherit it
   clearInterval(notifTimer);
   notifTimer = null;
   renderAuthArea();
@@ -1836,6 +1838,7 @@ function clearResumeFile(){
   document.getElementById('s-resume-remove').style.display = 'none';
   document.getElementById('s-resume').disabled = false;
   document.getElementById('s-resume').placeholder = 'Paste your current CV / resume text here (or upload a PDF/image above instead)...';
+  saveResumeToAccount();
 }
 
 function handleResumeUpload(event){
@@ -1849,7 +1852,10 @@ function handleResumeUpload(event){
     document.getElementById('s-resume-remove').style.display = '';
     document.getElementById('s-resume').disabled = false;
     const reader = new FileReader();
-    reader.onload = e => { document.getElementById('s-resume').value = e.target.result; };
+    reader.onload = e => {
+      document.getElementById('s-resume').value = e.target.result;
+      saveResumeToAccount();
+    };
     reader.readAsText(file);
     return;
   }
@@ -1870,6 +1876,7 @@ function handleResumeUpload(event){
     document.getElementById('s-resume').value = '';
     document.getElementById('s-resume').disabled = true;
     document.getElementById('s-resume').placeholder = 'Using uploaded file above — remove it to paste text instead.';
+    saveResumeToAccount(file.name);
   };
   reader.readAsDataURL(file);
 }
@@ -1880,6 +1887,40 @@ function haveResume(){
 
 function getResumeText(){
   return document.getElementById('s-resume').value.trim();
+}
+
+// Best-effort background save — a signed-in-only convenience so Resume Studio remembers what's
+// already there instead of asking for it again on every visit. Silent on failure/no-account:
+// this should never interrupt the resume-editing flow the user is actually trying to do.
+async function saveResumeToAccount(filename){
+  if(!currentAccount) return;
+  try{
+    await apiSaveResume({
+      resumeText: resumeFile ? '' : getResumeText(),
+      resumeFile: resumeFile || null,
+      resumeFilename: filename || (resumeFile ? document.getElementById('s-resume-filename').textContent : '')
+    });
+  }catch(e){
+    console.error('Saving resume to account failed:', e);
+  }
+}
+
+// Auto-loads whatever resume is already saved on the account, so Resume Studio doesn't start
+// blank every visit — same UI states handleResumeUpload/clearResumeFile already set, just driven
+// from the saved profile instead of a fresh upload.
+function loadSavedResume(profile){
+  if(profile.resumeFile){
+    resumeFile = profile.resumeFile;
+    document.getElementById('s-resume-filename').textContent = (profile.resumeFilename || 'Saved resume') + ' (from your account — remove it to upload a different one)';
+    document.getElementById('s-resume-remove').style.display = '';
+    document.getElementById('s-resume').value = '';
+    document.getElementById('s-resume').disabled = true;
+    document.getElementById('s-resume').placeholder = 'Using your saved resume above — remove it to paste text instead.';
+  }else if(profile.resumeText){
+    document.getElementById('s-resume').value = profile.resumeText;
+    document.getElementById('s-resume-filename').textContent = 'Loaded from your account — edit below or upload a new file to replace it';
+    document.getElementById('s-resume-remove').style.display = '';
+  }
 }
 
 // --- Lightweight markdown-lite parsing for AI-generated resume/cover-letter text ---

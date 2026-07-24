@@ -162,6 +162,7 @@ download_relay_lock = threading.Lock()
 DOWNLOAD_RELAY = {}
 DOWNLOAD_RELAY_TTL_SECONDS = 300
 MAX_DOWNLOAD_RELAY_BYTES = 15 * 1024 * 1024
+MAX_SAVED_RESUME_BYTES = 8 * 1024 * 1024
 
 
 def _prune_download_relay():
@@ -368,6 +369,13 @@ def init_db():
     # an earlier version of this schema, so new columns need an explicit, safe migration.
     ensure_column(conn, "profiles", "open_to_remote", "open_to_remote INTEGER DEFAULT 0")
     ensure_column(conn, "imported_jobs", "remote_friendly", "remote_friendly INTEGER DEFAULT 0")
+    # Saved resume — lets Resume Studio auto-load the candidate's existing resume instead of
+    # asking them to re-upload/re-paste it on every single visit.
+    ensure_column(conn, "profiles", "resume_text", "resume_text TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "resume_file_kind", "resume_file_kind TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "resume_file_media_type", "resume_file_media_type TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "resume_file_base64", "resume_file_base64 TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "resume_filename", "resume_filename TEXT DEFAULT ''")
     conn.commit()
     conn.close()
 
@@ -405,7 +413,15 @@ def profile_row_to_json(row):
         return {
             "fullName": "", "dob": "", "sex": "", "phone": "", "address": "", "education": "",
             "careerLevel": "", "fieldOfStudy": "", "preferredLocation": "", "skills": [],
-            "openToRemote": False,
+            "openToRemote": False, "resumeText": "", "resumeFile": None, "resumeFilename": "",
+        }
+    resume_file_kind = row["resume_file_kind"] or ""
+    resume_file = None
+    if resume_file_kind:
+        resume_file = {
+            "kind": resume_file_kind,
+            "mediaType": row["resume_file_media_type"] or "",
+            "base64": row["resume_file_base64"] or "",
         }
     return {
         "fullName": row["full_name"],
@@ -419,6 +435,9 @@ def profile_row_to_json(row):
         "preferredLocation": row["preferred_location"],
         "skills": json.loads(row["skills"] or "[]"),
         "openToRemote": bool(row["open_to_remote"]),
+        "resumeText": row["resume_text"] or "",
+        "resumeFile": resume_file,
+        "resumeFilename": row["resume_filename"] or "",
     }
 
 
@@ -1070,6 +1089,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/profile":
             return self.handle_save_profile()
+        if parsed.path == "/api/profile/resume":
+            return self.handle_save_resume()
         return self.send_json(404, {"error": "Not found"})
 
     # ---------- static files ----------
@@ -1267,6 +1288,45 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
                  data.get("preferredLocation", ""), json.dumps(skills),
                  1 if data.get("openToRemote") else 0, user_id),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_save_resume(self):
+        """Persists whatever resume (pasted text or uploaded file) the candidate currently has in
+        Resume Studio, so it auto-loads on their next visit instead of asking them to re-supply it
+        every time. A blank/empty payload (e.g. after "Remove file") clears the saved resume too."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        resume_text = (data.get("resumeText") or "").strip()
+        resume_file = data.get("resumeFile") or None
+        resume_filename = (data.get("resumeFilename") or "").strip()
+
+        file_kind, file_media_type, file_base64 = "", "", ""
+        if resume_file:
+            file_kind = resume_file.get("kind") or ""
+            file_media_type = resume_file.get("mediaType") or ""
+            file_base64 = resume_file.get("base64") or ""
+            try:
+                decoded_len = len(base64.b64decode(file_base64, validate=True)) if file_base64 else 0
+            except Exception:
+                return self.send_json(400, {"error": "Invalid resume file data."})
+            if decoded_len > MAX_SAVED_RESUME_BYTES:
+                return self.send_json(400, {"error": "That resume file is too large to save (max 8MB)."})
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                """UPDATE profiles SET resume_text=?, resume_file_kind=?, resume_file_media_type=?,
+                   resume_file_base64=?, resume_filename=?, updated_at=datetime('now') WHERE user_id=?""",
+                (resume_text, file_kind, file_media_type, file_base64, resume_filename, user_id),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()

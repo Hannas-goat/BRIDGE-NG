@@ -212,6 +212,7 @@ function apiLogin(email, password){ return apiRequest('/api/login', 'POST', {ema
 function apiLogout(){ return apiRequest('/api/logout', 'POST', {}); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
+function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }
 function apiChat(messages, context){ return apiRequest('/api/chat', 'POST', {messages, context}); }
 
 function apiListJobs(){ return apiRequest('/api/jobs', 'GET'); }
