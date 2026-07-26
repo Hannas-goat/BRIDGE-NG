@@ -25,7 +25,12 @@
   --shadow-lg:0 26px 56px rgba(0,0,0,0.65), 0 0 46px rgba(34,211,238,0.16);
 }
 *{box-sizing:border-box;}
-html,body{overflow-x:hidden;max-width:100%;}
+/* overflow-x:hidden here would force overflow-y to compute as 'auto' (per the CSS overflow
+   cross-axis rule), turning body into its own independent scroll container decoupled from the
+   real page scroll — which silently breaks position:sticky on any descendant (e.g. #site-header),
+   since sticky is computed relative to body's own scrollport, which never moves.
+   overflow-x:clip avoids the auto side effect while still preventing horizontal scroll. */
+html,body{overflow-x:clip;max-width:100%;}
 ::selection{background:var(--indigo);color:#fff;}
 ::-webkit-scrollbar{width:10px;height:10px;}
 ::-webkit-scrollbar-track{background:transparent;}
