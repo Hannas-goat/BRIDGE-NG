@@ -91,6 +91,7 @@ function createChip(containerId, targetSet, label, startSelected){
   c.onclick = ()=>{
     if(targetSet.has(label)){ targetSet.delete(label); c.classList.remove('selected'); }
     else { targetSet.add(label); c.classList.add('selected'); }
+    onSkillChipToggle(containerId);
   };
   el.appendChild(c);
   return c;
@@ -130,6 +131,13 @@ function addCustomSkill(containerId, targetSet, inputId){
   }
   input.value = '';
   input.focus();
+  onSkillChipToggle(containerId);
+}
+
+// Page-specific pages (e.g. index.html's skill radar chart) can define handleSkillChipToggle()
+// to react to skill changes; shared.js itself has no opinion on what a skill selection affects.
+function onSkillChipToggle(containerId){
+  if(typeof handleSkillChipToggle === 'function') handleSkillChipToggle(containerId);
 }
 
 // Selects chips already in targetSet (adding any custom ones not in the base SKILLS list).
@@ -144,6 +152,7 @@ function applySelectedSkills(containerId, targetSet, skills){
       createChip(containerId, targetSet, label, true);
     }
   });
+  onSkillChipToggle(containerId);
 }
 
 function populateLocationSelect(selectId, includeAny){
@@ -224,11 +233,15 @@ function apiUnfollowCompany(company){ return apiRequest('/api/unfollow-company',
 function apiListFollowedCompanies(){ return apiRequest('/api/followed-companies', 'GET'); }
 function apiListNotifications(){ return apiRequest('/api/notifications', 'GET'); }
 function apiMarkNotificationsRead(){ return apiRequest('/api/notifications/read', 'POST', {}); }
+function apiCheckinStatus(){ return apiRequest('/api/checkin', 'GET'); }
+function apiCheckin(){ return apiRequest('/api/checkin', 'POST', {}); }
 function apiCreateAppointment(payload){ return apiRequest('/api/appointments', 'POST', payload); }
 function apiListAppointments(){ return apiRequest('/api/appointments', 'GET'); }
 function apiCancelAppointment(id){ return apiRequest('/api/appointments/cancel', 'POST', {id}); }
+function apiUpdateAppointmentStatus(id, status){ return apiRequest('/api/appointments/status', 'PUT', {id, status}); }
 function apiCreateApplication(payload){ return apiRequest('/api/applications', 'POST', payload); }
 function apiListApplications(){ return apiRequest('/api/applications', 'GET'); }
+function apiUpdateApplicationStatus(id, status){ return apiRequest('/api/applications/status', 'PUT', {id, status}); }
 function apiPostEmployerJob(payload){ return apiRequest('/api/employer-jobs', 'POST', payload); }
 function apiFindJob(jobText){ return apiRequest('/api/resume/find-job', 'POST', {jobText}); }
 function apiGenerateResumeDoc(payload){ return apiRequest('/api/resume/tailor', 'POST', payload); }

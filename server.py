@@ -18,6 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from cryptography.fernet import Fernet, InvalidToken
+
 # On hosts like Render, stdout isn't a real terminal, so Python block-buffers print() output
 # instead of flushing per line — logs can end up delayed indefinitely or never show up at all.
 sys.stdout.reconfigure(line_buffering=True)
@@ -33,6 +35,99 @@ STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
 SESSION_COOKIE = "bridge_session"
+SESSION_TTL_SECONDS = 7 * 24 * 3600  # a stolen/leaked cookie shouldn't work forever
+
+# Field-level encryption for PII at rest (profile name/DOB/sex/phone/address/resume), so a raw
+# database file leak doesn't hand over readable personal data — only password verification
+# (already PBKDF2-hashed, separately) needs no key at all. Fernet is AES-128-CBC + HMAC, which is
+# fine for this: values are looked up by user_id (never searched/filtered on), so there's no need
+# for a searchable/deterministic scheme, just confidentiality + tamper-evidence.
+#
+# ENCRYPTION_KEY MUST be set (and persisted) in any real deployment. Without it, this generates a
+# fresh key for this process only — anything encrypted under it becomes unreadable the moment the
+# process restarts, which is only acceptable for local/throwaway dev.
+ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY")
+if not ENCRYPTION_KEY:
+    ENCRYPTION_KEY = Fernet.generate_key().decode("ascii")
+    print("WARNING: ENCRYPTION_KEY is not set. Generated a temporary key for THIS PROCESS ONLY — "
+          "set ENCRYPTION_KEY to a persisted value (e.g. Fernet.generate_key()) in your environment, "
+          "or previously-encrypted profile data will become unreadable on the next restart.")
+_fernet = Fernet(ENCRYPTION_KEY.encode("ascii") if isinstance(ENCRYPTION_KEY, str) else ENCRYPTION_KEY)
+
+ENCRYPTED_PROFILE_COLUMNS = (
+    "full_name", "dob", "sex", "phone", "address",
+    "resume_text", "resume_filename", "resume_file_base64",
+)
+
+
+def encrypt_field(value):
+    if not value:
+        return value or ""
+    return _fernet.encrypt(value.encode("utf-8")).decode("ascii")
+
+
+def is_encrypted_field(value):
+    if not value:
+        return True  # nothing to decrypt, so it's not "still plaintext" either
+    try:
+        _fernet.decrypt(value.encode("ascii"))
+        return True
+    except (InvalidToken, ValueError, UnicodeEncodeError):
+        return False
+
+
+def decrypt_field(value):
+    if not value:
+        return value or ""
+    try:
+        return _fernet.decrypt(value.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, UnicodeEncodeError, UnicodeDecodeError):
+        # Not a valid Fernet token — either pre-migration plaintext, or (if ENCRYPTION_KEY changed)
+        # data this process can no longer read. Either way, don't crash the request over it.
+        return value
+
+
+# ---------- brute-force lockout ----------
+# Repeated failed logins against one account lock it out AND kill every currently-active session
+# for that account — someone guessing a password is treated the same as someone who already has a
+# stolen-but-valid session cookie; both lose access immediately rather than just being slowed down.
+LOGIN_ATTEMPT_LIMIT = 5
+LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60
+LOGIN_LOCKOUT_SECONDS = 15 * 60
+
+login_attempts_lock = threading.Lock()
+failed_login_attempts = {}  # email -> [failure timestamps within the current window]
+account_lockouts = {}  # email -> unix time the lockout lifts
+
+
+def is_account_locked(email):
+    with login_attempts_lock:
+        unlock_time = account_lockouts.get(email)
+        if unlock_time and time.time() < unlock_time:
+            return True
+        if unlock_time:
+            del account_lockouts[email]
+            failed_login_attempts.pop(email, None)
+        return False
+
+
+def record_failed_login(email):
+    """Returns True the moment this failure is the one that trips the lockout threshold."""
+    now = time.time()
+    with login_attempts_lock:
+        attempts = [t for t in failed_login_attempts.get(email, []) if now - t < LOGIN_ATTEMPT_WINDOW_SECONDS]
+        attempts.append(now)
+        failed_login_attempts[email] = attempts
+        if len(attempts) >= LOGIN_ATTEMPT_LIMIT:
+            account_lockouts[email] = now + LOGIN_LOCKOUT_SECONDS
+            return True
+    return False
+
+
+def clear_failed_logins(email):
+    with login_attempts_lock:
+        failed_login_attempts.pop(email, None)
+        account_lockouts.pop(email, None)
 
 # NVIDIA's build.nvidia.com API catalog is OpenAI-compatible and grants free trial credits on
 # signup — no live web search available, so job lookups are best-effort from pasted text only.
@@ -135,7 +230,22 @@ PY_SKILLS = ["JavaScript", "Python", "SQL", "Data Analysis", "Excel", "Software 
              "Insurance Underwriting", "Banking Operations", "Journalism", "Video Editing"]
 
 db_lock = threading.Lock()
-sessions = {}  # token -> user_id
+sessions = {}  # token -> (user_id, expires_at)
+
+
+def create_session(user_id):
+    token = secrets.token_hex(24)
+    sessions[token] = (user_id, time.time() + SESSION_TTL_SECONDS)
+    return token
+
+
+def revoke_sessions_for_user(user_id):
+    """'Disconnects' an account's data from the site — every currently-active session tied to
+    that user_id is killed, so a session cookie that was already valid (stolen or otherwise)
+    stops working immediately. Used when repeated failed logins suggest someone other than the
+    account owner is trying to get in."""
+    for token in [t for t, (uid, _) in sessions.items() if uid == user_id]:
+        sessions.pop(token, None)
 
 # Recent AI-call failures (capped), for the /api/debug/ai-errors endpoint — a direct way to see
 # why a resume-tailoring/job-lookup call failed without having to find the right line in Render's
@@ -342,6 +452,15 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS checkins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            checkin_date TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, checkin_date)
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS applications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL REFERENCES users(id),
@@ -352,6 +471,7 @@ def init_db():
             UNIQUE(user_id, job_title, company)
         )
     """)
+    ensure_column(conn, "applications", "status", "status TEXT NOT NULL DEFAULT 'applied'")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS employer_posted_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,7 +497,51 @@ def init_db():
     ensure_column(conn, "profiles", "resume_file_base64", "resume_file_base64 TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "resume_filename", "resume_filename TEXT DEFAULT ''")
     conn.commit()
+    migrate_encrypt_existing_profiles(conn)
     conn.close()
+
+
+def migrate_encrypt_existing_profiles(conn):
+    """One-time-per-row upgrade: any profile column that predates field-level encryption is still
+    sitting on disk as plaintext. Re-checked (cheaply) on every startup rather than gated behind a
+    one-shot flag, since that's simpler and idempotent — a column already encrypted is detected via
+    is_encrypted_field() and left untouched."""
+    rows = conn.execute(
+        f"SELECT user_id, {', '.join(ENCRYPTED_PROFILE_COLUMNS)} FROM profiles"
+    ).fetchall()
+    migrated = 0
+    for row in rows:
+        updates = {}
+        for col in ENCRYPTED_PROFILE_COLUMNS:
+            value = row[col] or ""
+            if value and not is_encrypted_field(value):
+                updates[col] = encrypt_field(value)
+        if updates:
+            set_clause = ", ".join(f"{c}=?" for c in updates)
+            conn.execute(f"UPDATE profiles SET {set_clause} WHERE user_id=?",
+                         (*updates.values(), row["user_id"]))
+            migrated += 1
+    if migrated:
+        conn.commit()
+        print(f"[security] Encrypted previously-plaintext profile PII for {migrated} account(s).")
+
+
+def compute_streak(checkin_dates):
+    """checkin_dates: a set of datetime.date. A streak isn't broken until a full day is
+    skipped — checking in every day up to and including yesterday still counts as 'alive'
+    even before today's check-in happens."""
+    if not checkin_dates:
+        return 0
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+    if today not in checkin_dates and yesterday not in checkin_dates:
+        return 0
+    streak = 0
+    cursor = today if today in checkin_dates else yesterday
+    while cursor in checkin_dates:
+        streak += 1
+        cursor -= datetime.timedelta(days=1)
+    return streak
 
 
 def ensure_column(conn, table, column, add_column_ddl):
@@ -421,23 +585,23 @@ def profile_row_to_json(row):
         resume_file = {
             "kind": resume_file_kind,
             "mediaType": row["resume_file_media_type"] or "",
-            "base64": row["resume_file_base64"] or "",
+            "base64": decrypt_field(row["resume_file_base64"] or ""),
         }
     return {
-        "fullName": row["full_name"],
-        "dob": row["dob"],
-        "sex": row["sex"],
-        "phone": row["phone"],
-        "address": row["address"],
+        "fullName": decrypt_field(row["full_name"]),
+        "dob": decrypt_field(row["dob"]),
+        "sex": decrypt_field(row["sex"]),
+        "phone": decrypt_field(row["phone"]),
+        "address": decrypt_field(row["address"]),
         "education": row["education"],
         "careerLevel": row["career_level"],
         "fieldOfStudy": row["field_of_study"],
         "preferredLocation": row["preferred_location"],
         "skills": json.loads(row["skills"] or "[]"),
         "openToRemote": bool(row["open_to_remote"]),
-        "resumeText": row["resume_text"] or "",
+        "resumeText": decrypt_field(row["resume_text"] or ""),
         "resumeFile": resume_file,
-        "resumeFilename": row["resume_filename"] or "",
+        "resumeFilename": decrypt_field(row["resume_filename"] or ""),
     }
 
 
@@ -483,6 +647,9 @@ def notification_row_to_json(row):
     }
 
 
+APPOINTMENT_STATUSES = ("requested", "confirmed", "reminder_set", "completed")
+
+
 def appointment_row_to_json(row):
     return {
         "id": row["id"],
@@ -496,6 +663,9 @@ def appointment_row_to_json(row):
     }
 
 
+APPLICATION_STATUSES = ("applied", "interviewing", "offer", "archived")
+
+
 def application_row_to_json(row):
     return {
         "id": row["id"],
@@ -503,6 +673,7 @@ def application_row_to_json(row):
         "company": row["company"],
         "applicationLink": row["application_link"],
         "createdAt": row["created_at"],
+        "status": row["status"] if row["status"] in APPLICATION_STATUSES else "applied",
     }
 
 
@@ -1057,7 +1228,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         token = self.get_cookie(SESSION_COOKIE)
         if not token:
             return None
-        return sessions.get(token)
+        entry = sessions.get(token)
+        if entry is None:
+            return None
+        user_id, expires_at = entry
+        if time.time() > expires_at:
+            sessions.pop(token, None)
+            return None
+        return user_id
 
     # ---------- routing ----------
 
@@ -1067,7 +1245,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if parsed.path == "/api/me":
             return self.handle_me()
         if parsed.path == "/api/debug/db":
-            return self.handle_debug_db()
+            return self.handle_debug_db(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/debug/ai-errors":
             return self.handle_debug_ai_errors()
         if parsed.path == "/api/jobs":
@@ -1078,6 +1256,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_followed_companies()
         if parsed.path == "/api/notifications":
             return self.handle_list_notifications()
+        if parsed.path == "/api/checkin":
+            return self.handle_checkin_status()
         if parsed.path == "/api/appointments":
             return self.handle_list_appointments()
         if parsed.path == "/api/applications":
@@ -1113,6 +1293,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_unfollow_company()
         if parsed.path == "/api/notifications/read":
             return self.handle_mark_notifications_read()
+        if parsed.path == "/api/checkin":
+            return self.handle_checkin()
         if parsed.path == "/api/appointments":
             return self.handle_create_appointment()
         if parsed.path == "/api/appointments/cancel":
@@ -1140,6 +1322,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_save_profile()
         if parsed.path == "/api/profile/resume":
             return self.handle_save_resume()
+        if parsed.path == "/api/applications/status":
+            return self.handle_update_application_status()
+        if parsed.path == "/api/appointments/status":
+            return self.handle_update_appointment_status()
         return self.send_json(404, {"error": "Not found"})
 
     # ---------- static files ----------
@@ -1200,8 +1386,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     """INSERT INTO profiles (user_id, full_name, dob, sex, phone, address,
                        education, career_level, field_of_study, preferred_location, skills, open_to_remote)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (user_id, data.get("fullName", ""), data.get("dob", ""), data.get("sex", ""),
-                     data.get("phone", ""), data.get("address", ""), data.get("education", ""),
+                    (user_id, encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
+                     encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
+                     encrypt_field(data.get("address", "")), data.get("education", ""),
                      data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
                      data.get("preferredLocation", ""), json.dumps(skills),
                      1 if data.get("openToRemote") else 0),
@@ -1215,8 +1402,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
 
-        token = secrets.token_hex(24)
-        sessions[token] = user_id
+        token = create_session(user_id)
         self.send_json(200, {"ok": True, "email": email, "profile": profile_row_to_json(row)}, set_cookie=token)
 
     def handle_login(self):
@@ -1227,17 +1413,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         email = (data.get("email") or "").strip().lower()
         password = data.get("password") or ""
 
+        if is_account_locked(email):
+            return self.send_json(423, {"error": "Too many failed sign-in attempts. This account is temporarily locked — try again in a few minutes."})
+
         with db_lock:
             conn = get_db()
             user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
             if user is None or not verify_password(password, user["salt"], user["password_hash"]):
                 conn.close()
+                just_locked = record_failed_login(email)
+                if just_locked and user is not None:
+                    revoke_sessions_for_user(user["id"])
+                    print(f"[security] {email}: locked out after repeated failed logins — active sessions revoked.")
                 return self.send_json(401, {"error": "Incorrect email or password."})
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user["id"],)).fetchone()
             conn.close()
 
-        token = secrets.token_hex(24)
-        sessions[token] = user["id"]
+        clear_failed_logins(email)
+        token = create_session(user["id"])
         self.send_json(200, {"ok": True, "email": email, "profile": profile_row_to_json(row)}, set_cookie=token)
 
     def handle_logout(self):
@@ -1260,10 +1453,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         self.send_json(200, {"loggedIn": True, "email": user["email"], "profile": profile_row_to_json(row)})
 
-    def handle_debug_db(self):
-        """Unauthenticated, read-only: reports which DB backend is actually live and how many
-        accounts exist there. Exists purely to make "is Turso really active?" answerable with one
-        request instead of cross-referencing dashboards and deploy logs by hand."""
+    def handle_debug_db(self, query):
+        """Operator-only (same shared-secret pattern as /api/jobs/import): reports which DB backend
+        is actually live and how many accounts exist there. Exists purely to make "is Turso really
+        active?" answerable with one request instead of cross-referencing dashboards and deploy
+        logs by hand — but account counts and the DB path shouldn't be handed to anyone who asks,
+        so it requires the same IMPORT_TOKEN as the other operator-only endpoints."""
+        if not IMPORT_TOKEN or query.get("token", [None])[0] != IMPORT_TOKEN:
+            return self.send_json(401, {"error": "Invalid or missing import token."})
         info = {"backend": "turso" if USE_TURSO else "sqlite", "dbPath": DB_PATH if not USE_TURSO else None}
         try:
             with db_lock:
@@ -1332,8 +1529,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 """UPDATE profiles SET full_name=?, dob=?, sex=?, phone=?, address=?,
                    education=?, career_level=?, field_of_study=?, preferred_location=?,
                    skills=?, open_to_remote=?, updated_at=datetime('now') WHERE user_id=?""",
-                (data.get("fullName", ""), data.get("dob", ""), data.get("sex", ""),
-                 data.get("phone", ""), data.get("address", ""), data.get("education", ""),
+                (encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
+                 encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
+                 encrypt_field(data.get("address", "")), data.get("education", ""),
                  data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
                  data.get("preferredLocation", ""), json.dumps(skills),
                  1 if data.get("openToRemote") else 0, user_id),
@@ -1375,7 +1573,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.execute(
                 """UPDATE profiles SET resume_text=?, resume_file_kind=?, resume_file_media_type=?,
                    resume_file_base64=?, resume_filename=?, updated_at=datetime('now') WHERE user_id=?""",
-                (resume_text, file_kind, file_media_type, file_base64, resume_filename, user_id),
+                (encrypt_field(resume_text), file_kind, file_media_type,
+                 encrypt_field(file_base64), encrypt_field(resume_filename), user_id),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
@@ -1565,6 +1764,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         self.send_json(200, {"ok": True})
 
+    # ---------- daily check-in streak ----------
+
+    def handle_checkin_status(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(200, {"streak": 0, "checkedInToday": False})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT checkin_date FROM checkins WHERE user_id = ? ORDER BY checkin_date DESC LIMIT 400",
+                (user_id,),
+            ).fetchall()
+            conn.close()
+        dates = {datetime.date.fromisoformat(r["checkin_date"]) for r in rows}
+        today = datetime.date.today()
+        self.send_json(200, {"streak": compute_streak(dates), "checkedInToday": today in dates})
+
+    def handle_checkin(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        today_str = datetime.date.today().isoformat()
+        with db_lock:
+            conn = get_db()
+            try:
+                conn.execute(
+                    "INSERT INTO checkins (user_id, checkin_date) VALUES (?, ?)", (user_id, today_str)
+                )
+                conn.commit()
+            except Exception as e:
+                if not is_duplicate_key_error(e):
+                    conn.close()
+                    raise
+                # already checked in today — not an error, just a no-op
+            rows = conn.execute(
+                "SELECT checkin_date FROM checkins WHERE user_id = ? ORDER BY checkin_date DESC LIMIT 400",
+                (user_id,),
+            ).fetchall()
+            conn.close()
+        dates = {datetime.date.fromisoformat(r["checkin_date"]) for r in rows}
+        self.send_json(200, {"ok": True, "streak": compute_streak(dates), "checkedInToday": True})
+
     # ---------- appointments ----------
 
     def handle_create_appointment(self):
@@ -1602,6 +1843,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchall()
             conn.close()
         self.send_json(200, {"appointments": [appointment_row_to_json(r) for r in rows]})
+
+    def handle_update_appointment_status(self):
+        """Backs the appointment status timeline. There's no employer portal yet to drive this
+        automatically, so the seeker-side UI exposes an explicit 'advance' control that walks
+        through APPOINTMENT_STATUSES in order — a stand-in until a real employer-facing update
+        exists."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        appt_id = data.get("id")
+        status = (data.get("status") or "").strip().lower()
+        if not appt_id or status not in APPOINTMENT_STATUSES:
+            return self.send_json(400, {"error": "Missing or invalid appointment id/status."})
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                "UPDATE appointments SET status = ? WHERE id = ? AND user_id = ?",
+                (status, appt_id, user_id),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT * FROM appointments WHERE id = ? AND user_id = ?", (appt_id, user_id)
+            ).fetchone()
+            conn.close()
+        if row is None:
+            return self.send_json(404, {"error": "Appointment not found."})
+        self.send_json(200, {"ok": True, "appointment": appointment_row_to_json(row)})
 
     def handle_cancel_appointment(self):
         user_id = self.current_user_id()
@@ -1662,6 +1934,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchall()
             conn.close()
         self.send_json(200, {"applications": [application_row_to_json(r) for r in rows]})
+
+    def handle_update_application_status(self):
+        """Backs the Kanban board's drag-and-drop — moves one application to a new stage."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        app_id = data.get("id")
+        status = (data.get("status") or "").strip().lower()
+        if not app_id or status not in APPLICATION_STATUSES:
+            return self.send_json(400, {"error": "Missing or invalid application id/status."})
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                "UPDATE applications SET status = ? WHERE id = ? AND user_id = ?",
+                (status, app_id, user_id),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT * FROM applications WHERE id = ? AND user_id = ?", (app_id, user_id)
+            ).fetchone()
+            conn.close()
+        if row is None:
+            return self.send_json(404, {"error": "Application not found."})
+        self.send_json(200, {"ok": True, "application": application_row_to_json(row)})
 
     # ---------- employer job posting + real candidate matching ----------
 

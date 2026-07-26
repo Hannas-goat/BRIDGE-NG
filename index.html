@@ -128,6 +128,9 @@
     <div id="perfect-match-banner"></div>
     <div id="remote-jobs-feed"></div>
     <div id="recent-jobs-feed"></div>
+    <div id="streak-widget"></div>
+    <div class="milestone-badges" id="milestone-badges"></div>
+    <div id="profile-completion"></div>
     <div class="card">
       <h3 style="margin-bottom:4px;color:var(--indigo);">Build your profile</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Personal details</p>
@@ -218,6 +221,7 @@
         <input type="text" id="s-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-skills', seekerSkills, 's-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('s-skills', seekerSkills, 's-skill-input')">Add skill</button>
       </div>
+      <div id="skill-radar"></div>
       <div class="btn-row">
         <button class="go-btn" style="margin-top:0;" onclick="findJobs()">Find matching jobs →</button>
         <button class="ai-btn" onclick="saveCurrentSearch()">🔔 Save this search &amp; get alerts</button>
@@ -257,6 +261,32 @@
       </div>
     </div>
     <div class="workbench" id="ai-workbench"></div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">ATS Score Check</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">A transparent check against things applicant-tracking systems and recruiters commonly look for — not a guarantee of how any specific employer's actual software will score you.</p>
+      <div class="ats-dropzone" id="ats-dropzone" onclick="document.getElementById('s-resume-file').click()">
+        <span class="ats-dropzone-icon">📄</span>
+        <p class="ats-dropzone-text">Drag &amp; drop your resume here, or click to upload<br><span style="opacity:.7;">(or just use the paste/edit box above — either way works)</span></p>
+      </div>
+      <button class="go-btn" style="margin-top:14px;" onclick="runAtsAnalysis()">Analyze my resume →</button>
+      <div id="ats-results"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Build a resume from scratch</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Type using headings (<code>#</code>) and bullets (<code>-</code>) on the left — the preview on the right updates as you type.</p>
+      <div class="resume-split">
+        <textarea id="rb-source" class="resume-split-editor" oninput="renderResumeBuilderPreview()"></textarea>
+        <div class="resume-split-preview workbench-output" id="rb-preview"></div>
+      </div>
+      <div class="output-actions">
+        <button class="upload-btn" onclick="copyResumeBuilder()">Copy text</button>
+        <button class="upload-btn" onclick="downloadResumeBuilderTxt()">Download .txt</button>
+        <button class="ai-btn" onclick="downloadResumeBuilderPDF()">Download PDF</button>
+        <button class="ai-btn" onclick="downloadResumeBuilderDoc()">Download Word doc ↗</button>
+      </div>
+    </div>
   </div>
 
   <!-- TRAIN YOURSELF PAGE -->
@@ -312,6 +342,34 @@
     <div class="card">
       <h3 style="margin-bottom:4px;color:var(--indigo);">Interview tips</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0;">Feeling nervous is normal — preparation is what turns nerves into confidence. Work through this guide at your own pace, from the night before to the thank-you note after. You've already done the hard part by showing up to prepare. You've got this.</p>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Mock interview simulator</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Practice out loud against a timer, with your own webcam as a self-view mirror — nothing is recorded, uploaded, or saved anywhere; it only runs locally in your browser while this page is open.</p>
+      <div class="mock-interview-layout">
+        <div class="mock-interview-video-wrap">
+          <video id="mock-interview-video" autoplay playsinline muted class="mock-interview-video"></video>
+          <div class="mock-interview-video-placeholder" id="mock-interview-placeholder">
+            <span>📷</span>
+            <p>Camera off</p>
+          </div>
+          <div class="mock-interview-timer" id="mock-interview-timer" style="display:none;">1:30</div>
+        </div>
+        <div class="mock-interview-panel">
+          <p class="mock-interview-question" id="mock-interview-question">Click "Start" to begin a mock interview session.</p>
+          <div class="btn-row">
+            <button class="go-btn" style="margin-top:0;" id="mock-interview-start-btn" onclick="startMockInterview()">Start →</button>
+            <button class="upload-btn" id="mock-interview-camera-btn" onclick="toggleMockInterviewCamera()" style="display:none;">Turn camera on</button>
+            <button class="ai-btn" id="mock-interview-speak-btn" onclick="speakCurrentMockQuestion()" style="display:none;">🔊 Read question aloud</button>
+          </div>
+          <div class="btn-row" id="mock-interview-nav-row" style="display:none;">
+            <button class="upload-btn" onclick="nextMockInterviewQuestion()">Next question →</button>
+            <button class="upload-btn" onclick="stopMockInterview()">End session</button>
+          </div>
+          <p class="mock-interview-progress" id="mock-interview-progress"></p>
+        </div>
+      </div>
     </div>
 
     <div class="results-head"><h2>Before the Interview</h2><span>Get ready with confidence</span></div>
@@ -528,16 +586,11 @@
           <input type="text" id="appt-role" placeholder="e.g. Junior Data Analyst">
         </div>
       </div>
-      <div class="field-row">
-        <div>
-          <label>Preferred date</label>
-          <input type="date" id="appt-date">
-        </div>
-        <div>
-          <label>Preferred time</label>
-          <input type="time" id="appt-time">
-        </div>
-      </div>
+      <label>Preferred date &amp; time</label>
+      <div class="booking-calendar" id="booking-calendar"></div>
+      <p class="booking-tz-note" id="booking-tz-note"></p>
+      <input type="date" id="appt-date" style="display:none;">
+      <input type="time" id="appt-time" style="display:none;">
       <label>Notes for the employer (optional)</label>
       <textarea id="appt-notes" class="form-textarea" placeholder="e.g. I'm available any weekday after 2pm..."></textarea>
       <button class="go-btn" onclick="requestAppointment()">Request appointment →</button>
@@ -561,10 +614,27 @@
           <input type="text" id="explore-location" placeholder="e.g. Lagos, Remote, Berlin..." oninput="renderExploreResults()">
         </div>
       </div>
-      <button class="follow-btn" id="explore-match-toggle" onclick="toggleExploreMatch()">Match my profile: OFF</button>
+      <div class="btn-row">
+        <button class="follow-btn" id="explore-match-toggle" onclick="toggleExploreMatch()">Match my profile: OFF</button>
+        <button class="ai-btn" id="quick-match-toggle" onclick="toggleQuickMatchMode()">🔀 Quick Match mode: OFF</button>
+      </div>
       <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0;">Matching uses your real saved skills, field of study, and career stage — sign in first to turn it on.</p>
+      <div class="salary-filter">
+        <label>Salary range (₦/month) — roles with no listed pay are always shown</label>
+        <div class="salary-slider-wrap">
+          <input type="range" id="salary-min" min="0" max="2000000" step="50000" value="0" oninput="onSalarySliderChange()">
+          <input type="range" id="salary-max" min="0" max="2000000" step="50000" value="2000000" oninput="onSalarySliderChange()">
+          <div class="salary-slider-track"></div>
+          <div class="salary-slider-range" id="salary-slider-range"></div>
+        </div>
+        <div class="salary-slider-labels">
+          <span id="salary-range-label">₦0 – ₦2,000,000+/mo</span>
+          <span class="salary-benchmark" id="salary-benchmark-label"></span>
+        </div>
+      </div>
     </div>
     <div id="explore-results"></div>
+    <div id="quick-match-stack" style="display:none;"></div>
   </div>
 
   <!-- CAREER MATCH AI PAGE -->
@@ -853,6 +923,7 @@ async function loadImportedJobs(){
     renderRecentJobsFeed();
     renderRemoteJobsFeed();
     populateAppointmentCompanies();
+    renderSalaryBenchmark();
   }catch(e){
     // Imported jobs are an enhancement — the rest of the app works fine without them.
   }
@@ -882,24 +953,121 @@ async function loadApplications(){
   renderMyApplications();
 }
 
+const KANBAN_STAGES = ['applied', 'interviewing', 'offer', 'archived'];
+const KANBAN_LABELS = {applied: 'Applied', interviewing: 'Interviewing', offer: 'Offer Received', archived: 'Archived'};
+
 function renderMyApplications(){
   const el = document.getElementById('my-applications-list');
   if(!el) return;
+  renderMilestoneBadges();
   if(myApplications.length === 0){ el.innerHTML = ''; return; }
+  const byStage = {applied: [], interviewing: [], offer: [], archived: []};
+  myApplications.forEach(a => (byStage[a.status] || byStage.applied).push(a));
+
   el.innerHTML = `
-    <div class="results-head"><h2>Your applications</h2><span>${myApplications.length} applied</span></div>
-    <div class="grid">
-      ${myApplications.map(a => `
-        <div class="res-card">
-          <div class="res-body">
-            <p class="res-title">${a.jobTitle}</p>
-            <p class="res-sub">${a.company} · applied ${(a.createdAt || '').slice(0, 10)}</p>
-            ${a.applicationLink ? `<a class="apply-btn" href="${a.applicationLink}" target="_blank" rel="noopener noreferrer">View posting ↗</a>` : '<span class="fit-none">Sample listing — no real posting link</span>'}
+    <div class="results-head"><h2>Your applications</h2><span>${myApplications.length} tracked</span></div>
+    <div class="kanban-board" id="kanban-board">
+      ${KANBAN_STAGES.map(stage => `
+        <div class="kanban-col" data-stage="${stage}">
+          <div class="kanban-col-head"><span>${KANBAN_LABELS[stage]}</span><span class="kanban-count">${byStage[stage].length}</span></div>
+          <div class="kanban-col-body" data-stage="${stage}">
+            ${byStage[stage].map(a => `
+              <div class="kanban-card" data-id="${a.id}" data-stage="${stage}">
+                <p class="kanban-card-title">${a.jobTitle}</p>
+                <p class="kanban-card-sub">${a.company}</p>
+                <p class="kanban-card-date">Applied ${(a.createdAt || '').slice(0, 10)}</p>
+                ${a.applicationLink ? `<a class="kanban-card-link" href="${a.applicationLink}" target="_blank" rel="noopener noreferrer" onpointerdown="event.stopPropagation()">View posting ↗</a>` : ''}
+                <select class="kanban-move-select" onpointerdown="event.stopPropagation()" onchange="moveApplication(${a.id}, this.value)">
+                  ${KANBAN_STAGES.map(s => `<option value="${s}" ${s === stage ? 'selected' : ''}>${KANBAN_LABELS[s]}</option>`).join('')}
+                </select>
+              </div>
+            `).join('') || '<div class="kanban-empty">Drop applications here</div>'}
           </div>
         </div>
       `).join('')}
     </div>
   `;
+  setupKanbanDrag();
+}
+
+async function moveApplication(id, status){
+  const app = myApplications.find(a => a.id === id);
+  if(!app || app.status === status) return;
+  const prevStatus = app.status;
+  app.status = status; // optimistic
+  renderMyApplications();
+  try{
+    await apiUpdateApplicationStatus(id, status);
+    if(status === 'offer') celebrate();
+  }catch(e){
+    app.status = prevStatus; // roll back on failure
+    renderMyApplications();
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+// Pointer Events (not the HTML5 drag-and-drop API) so this actually works via touch — the
+// Bridge NG mobile app wraps this same page in a touch-only WebView with no mouse, and native
+// HTML5 drag relies on mouse events that never fire there.
+function setupKanbanDrag(){
+  const board = document.getElementById('kanban-board');
+  if(!board) return;
+  let dragCard = null, ghost = null, startStage = null, dragId = null;
+  const DRAG_THRESHOLD = 8;
+  let startX = 0, startY = 0, dragging = false;
+
+  board.querySelectorAll('.kanban-card').forEach(card => {
+    card.addEventListener('pointerdown', (e) => {
+      if(e.target.closest('select, a')) return;
+      dragCard = card;
+      dragId = Number(card.dataset.id);
+      startStage = card.dataset.stage;
+      startX = e.clientX; startY = e.clientY;
+      dragging = false;
+      card.setPointerCapture(e.pointerId);
+    });
+
+    card.addEventListener('pointermove', (e) => {
+      if(!dragCard || dragCard !== card) return;
+      if(!dragging){
+        if(Math.abs(e.clientX - startX) < DRAG_THRESHOLD && Math.abs(e.clientY - startY) < DRAG_THRESHOLD) return;
+        dragging = true;
+        card.classList.add('dragging');
+        ghost = card.cloneNode(true);
+        ghost.classList.add('kanban-card-ghost');
+        ghost.style.width = card.getBoundingClientRect().width + 'px';
+        document.body.appendChild(ghost);
+      }
+      if(ghost){
+        ghost.style.left = (e.clientX + 12) + 'px';
+        ghost.style.top = (e.clientY + 12) + 'px';
+      }
+      board.querySelectorAll('.kanban-col').forEach(col => {
+        const rect = col.getBoundingClientRect();
+        col.classList.toggle('drag-over',
+          e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom);
+      });
+    });
+
+    const finishDrag = (e) => {
+      if(!dragCard || dragCard !== card) return;
+      if(dragging){
+        const targetCol = [...board.querySelectorAll('.kanban-col')].find(col => {
+          const rect = col.getBoundingClientRect();
+          return e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+        });
+        if(ghost){ ghost.remove(); ghost = null; }
+        board.querySelectorAll('.kanban-col').forEach(col => col.classList.remove('drag-over'));
+        card.classList.remove('dragging');
+        if(targetCol && targetCol.dataset.stage !== startStage){
+          moveApplication(dragId, targetCol.dataset.stage);
+        }
+      }
+      dragCard = null; dragging = false;
+    };
+    card.addEventListener('pointerup', finishDrag);
+    card.addEventListener('pointercancel', finishDrag);
+  });
 }
 
 async function applyToJob(title, company, applicationLink, btn){
@@ -960,7 +1128,7 @@ function renderRecentJobsFeed(){
         <div class="res-card">
           <div class="res-body">
             <p class="res-title">${j.title} <span class="new-badge">New</span></p>
-            <p class="res-sub">${j.company} · ${j.loc} · ${j.level}</p>
+            <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${j.skills.map(s => `<span class="skill-pill">${s}</span>`).join('')}</div>
             <div class="btn-row">
@@ -990,7 +1158,7 @@ function renderRemoteJobsFeed(){
         <div class="res-card">
           <div class="res-body">
             <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}</p>
-            <p class="res-sub">${j.company} · ${j.loc} · ${j.level}</p>
+            <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, seekerSkills)}</div>
             <div class="btn-row">
@@ -1074,7 +1242,7 @@ function renderExploreResults(){
       (j.skills || []).some(s=>s.toLowerCase().includes(t))
     );
     const matchesLocation = !location || (j.loc || '').toLowerCase().includes(location);
-    return matchesKeyword && matchesLocation;
+    return matchesKeyword && matchesLocation && jobPassesSalaryFilter(j);
   });
 
   if(exploreMatchActive){
@@ -1098,7 +1266,7 @@ function renderExploreResults(){
         <div class="res-card">
           <div class="res-body">
             <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''}</p>
-            <p class="res-sub">${j.company} · ${j.loc} · ${j.level}</p>
+            <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, mySkills)}</div>
             <div class="btn-row">
@@ -1247,6 +1415,9 @@ async function requestAppointment(){
     document.getElementById('appt-date').value = '';
     document.getElementById('appt-time').value = '';
     document.getElementById('appt-notes').value = '';
+    bookingSelectedDate = null;
+    bookingSelectedTime = null;
+    renderBookingCalendar();
     msg.textContent = 'Appointment request saved.';
     msg.className = 'form-msg success';
     await loadAppointments();
@@ -1265,6 +1436,23 @@ async function loadAppointments(){
     myAppointments = [];
   }
   renderAppointments();
+}
+
+const APPT_STAGES = ['requested', 'confirmed', 'reminder_set', 'completed'];
+const APPT_LABELS = {requested: 'Requested', confirmed: 'Confirmed by Employer', reminder_set: 'Reminder Set', completed: 'Interview Completed'};
+
+function apptTimelineHtml(status){
+  const idx = Math.max(0, APPT_STAGES.indexOf(status));
+  return `
+    <div class="appt-timeline">
+      ${APPT_STAGES.map((s, i) => `
+        <div class="appt-timeline-step ${i < idx ? 'done' : ''} ${i === idx ? 'current' : ''}">
+          <div class="appt-timeline-dot">${i < idx ? '✓' : i + 1}</div>
+          <div class="appt-timeline-label">${APPT_LABELS[s]}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderAppointments(){
@@ -1286,12 +1474,29 @@ function renderAppointments(){
           <p class="res-title">${a.company}</p>
           <p class="res-sub">${a.role || 'Role not specified'}</p>
           <p class="appt-datetime">${formatApptDate(a.date)}${a.time ? ' · ' + a.time : ''}</p>
+          ${apptTimelineHtml(a.status)}
           ${a.notes ? `<p class="appt-notes">${a.notes.replace(/</g,'&lt;')}</p>` : ''}
-          <button class="follow-btn" onclick="cancelAppointment(${a.id})">Cancel request</button>
+          <div class="appt-actions">
+            ${a.status !== 'completed' ? `<button class="ai-btn appt-advance-btn" onclick="advanceAppointment(${a.id}, '${a.status}')" title="There's no employer portal driving this automatically yet — this simulates the next update.">Simulate next update →</button>` : ''}
+            <button class="follow-btn" onclick="cancelAppointment(${a.id})">Cancel request</button>
+          </div>
         </div>
       `).join('')}
     </div>
   `;
+}
+
+async function advanceAppointment(id, currentStatus){
+  const idx = APPT_STAGES.indexOf(currentStatus);
+  const next = APPT_STAGES[idx + 1];
+  if(!next) return;
+  try{
+    await apiUpdateAppointmentStatus(id, next);
+    await loadAppointments();
+    if(next === 'completed') celebrate();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
 }
 
 async function cancelAppointment(id){
@@ -1403,6 +1608,749 @@ document.addEventListener('click', (e)=>{
 
 let currentAccount = null; // {email, profile} when signed in, else null
 
+// Mock interview simulator — real webcam self-view (getUserMedia, never recorded/uploaded/
+// saved — the stream stays local and is torn down on End Session or on leaving this tab) plus
+// a real countdown timer and the browser's own SpeechSynthesis API to read questions aloud
+// (not a fake/pre-recorded audio clip we don't actually have).
+const MOCK_INTERVIEW_QUESTIONS = [
+  'Tell me about yourself.',
+  'Why do you want to work here?',
+  'What are your greatest strengths?',
+  "What's a weakness you're actively working on?",
+  'Tell me about a time you faced a conflict at work or school and how you handled it.',
+  'Describe a time you showed leadership.',
+  'Describe a time you worked as part of a team to achieve something.',
+  'Where do you see yourself in five years?',
+  'Why should we hire you?',
+  'Tell me about a challenge you overcame.',
+  'How do you handle pressure or tight deadlines?',
+  'What questions do you have for us?',
+];
+const MOCK_INTERVIEW_SECONDS_PER_Q = 90;
+
+let mockInterviewStream = null;
+let mockInterviewOrder = [];
+let mockInterviewIndex = 0;
+let mockInterviewTimerInterval = null;
+let mockInterviewSecondsLeft = 0;
+
+function shuffledMockQuestions(){
+  const arr = [...MOCK_INTERVIEW_QUESTIONS];
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function startMockInterview(){
+  mockInterviewOrder = shuffledMockQuestions();
+  mockInterviewIndex = 0;
+  document.getElementById('mock-interview-start-btn').style.display = 'none';
+  document.getElementById('mock-interview-camera-btn').style.display = '';
+  document.getElementById('mock-interview-speak-btn').style.display = '';
+  document.getElementById('mock-interview-nav-row').style.display = '';
+  showMockInterviewQuestion();
+}
+
+function showMockInterviewQuestion(){
+  document.getElementById('mock-interview-question').textContent = mockInterviewOrder[mockInterviewIndex];
+  document.getElementById('mock-interview-progress').textContent = `Question ${mockInterviewIndex + 1} of ${mockInterviewOrder.length}`;
+  restartMockInterviewTimer();
+}
+
+function nextMockInterviewQuestion(){
+  mockInterviewIndex++;
+  if(mockInterviewIndex >= mockInterviewOrder.length){
+    clearInterval(mockInterviewTimerInterval);
+    document.getElementById('mock-interview-question').textContent = 'That’s the last question — nice work. Click "Start again" to go through a freshly shuffled set.';
+    document.getElementById('mock-interview-progress').textContent = '';
+    document.getElementById('mock-interview-nav-row').style.display = 'none';
+    document.getElementById('mock-interview-timer').style.display = 'none';
+    document.getElementById('mock-interview-start-btn').style.display = '';
+    document.getElementById('mock-interview-start-btn').textContent = 'Start again →';
+    return;
+  }
+  showMockInterviewQuestion();
+}
+
+function restartMockInterviewTimer(){
+  clearInterval(mockInterviewTimerInterval);
+  mockInterviewSecondsLeft = MOCK_INTERVIEW_SECONDS_PER_Q;
+  const timerEl = document.getElementById('mock-interview-timer');
+  timerEl.style.display = '';
+  timerEl.classList.remove('warning');
+  updateMockInterviewTimerDisplay();
+  mockInterviewTimerInterval = setInterval(() => {
+    mockInterviewSecondsLeft--;
+    updateMockInterviewTimerDisplay();
+    if(mockInterviewSecondsLeft <= 15) timerEl.classList.add('warning');
+    if(mockInterviewSecondsLeft <= 0) clearInterval(mockInterviewTimerInterval);
+  }, 1000);
+}
+
+function updateMockInterviewTimerDisplay(){
+  const secs = Math.max(0, mockInterviewSecondsLeft);
+  document.getElementById('mock-interview-timer').textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+}
+
+async function toggleMockInterviewCamera(){
+  const btn = document.getElementById('mock-interview-camera-btn');
+  const video = document.getElementById('mock-interview-video');
+  const placeholder = document.getElementById('mock-interview-placeholder');
+  if(mockInterviewStream){
+    mockInterviewStream.getTracks().forEach(t => t.stop());
+    mockInterviewStream = null;
+    video.srcObject = null;
+    placeholder.style.display = '';
+    btn.textContent = 'Turn camera on';
+    return;
+  }
+  try{
+    mockInterviewStream = await navigator.mediaDevices.getUserMedia({video: true, audio: false});
+    video.srcObject = mockInterviewStream;
+    placeholder.style.display = 'none';
+    btn.textContent = 'Turn camera off';
+  }catch(e){
+    showToast('Could not access your camera — check your browser/site camera permission and try again.');
+  }
+}
+
+function speakCurrentMockQuestion(){
+  if(!('speechSynthesis' in window)){
+    showToast("Text-to-speech isn't supported in this browser.");
+    return;
+  }
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(mockInterviewOrder[mockInterviewIndex]));
+}
+
+function stopMockInterviewCamera(){
+  if(mockInterviewStream){
+    mockInterviewStream.getTracks().forEach(t => t.stop());
+    mockInterviewStream = null;
+  }
+  const video = document.getElementById('mock-interview-video');
+  const placeholder = document.getElementById('mock-interview-placeholder');
+  const camBtn = document.getElementById('mock-interview-camera-btn');
+  if(video) video.srcObject = null;
+  if(placeholder) placeholder.style.display = '';
+  if(camBtn) camBtn.textContent = 'Turn camera on';
+}
+
+function stopMockInterview(){
+  clearInterval(mockInterviewTimerInterval);
+  stopMockInterviewCamera();
+  document.getElementById('mock-interview-timer').style.display = 'none';
+  document.getElementById('mock-interview-nav-row').style.display = 'none';
+  document.getElementById('mock-interview-camera-btn').style.display = 'none';
+  document.getElementById('mock-interview-speak-btn').style.display = 'none';
+  document.getElementById('mock-interview-question').textContent = 'Click "Start" to begin a mock interview session.';
+  document.getElementById('mock-interview-progress').textContent = '';
+  document.getElementById('mock-interview-start-btn').style.display = '';
+  document.getElementById('mock-interview-start-btn').textContent = 'Start →';
+}
+
+// Swipe / quick-match job feed — a real (if simple) preference loop: each Interested/Skip
+// decision nudges a per-session skill-affinity score, which re-sorts the remaining queue so
+// roles sharing skills with what you liked surface sooner. "Interested" is deliberately kept
+// separate from "Applied" (a different, already-existing concept) so it never misleadingly
+// implies you applied when you only shortlisted.
+let quickMatchActive = false;
+let quickMatchQueue = [];
+let quickMatchInterested = [];
+let quickMatchSkipped = [];
+let skillAffinity = {};
+
+function getExploreFilteredJobs(){
+  const keyword = (document.getElementById('explore-keyword').value || '').trim().toLowerCase();
+  const location = (document.getElementById('explore-location').value || '').trim().toLowerCase();
+  const searchTerms = keyword ? expandSearchTerms(keyword) : [];
+  let jobs = JOBS.filter(j => {
+    const matchesKeyword = !keyword || searchTerms.some(t =>
+      j.title.toLowerCase().includes(t) || j.company.toLowerCase().includes(t) ||
+      (j.sector || '').toLowerCase().includes(t) || (j.skills || []).some(s => s.toLowerCase().includes(t))
+    );
+    const matchesLocation = !location || (j.loc || '').toLowerCase().includes(location);
+    return matchesKeyword && matchesLocation && jobPassesSalaryFilter(j);
+  });
+  if(exploreMatchActive) jobs = jobs.filter(jobMatchesMyProfile);
+  return jobs;
+}
+
+function toggleQuickMatchMode(){
+  quickMatchActive = !quickMatchActive;
+  const btn = document.getElementById('quick-match-toggle');
+  btn.textContent = `🔀 Quick Match mode: ${quickMatchActive ? 'ON' : 'OFF'}`;
+  btn.classList.toggle('following', quickMatchActive);
+  document.getElementById('quick-match-stack').style.display = quickMatchActive ? '' : 'none';
+  document.getElementById('explore-results').style.display = quickMatchActive ? 'none' : '';
+  if(quickMatchActive){
+    quickMatchQueue = getExploreFilteredJobs();
+    quickMatchInterested = [];
+    quickMatchSkipped = [];
+    skillAffinity = {};
+    renderQuickMatchCard();
+  }
+}
+
+function renderQuickMatchCard(){
+  const el = document.getElementById('quick-match-stack');
+  if(!el) return;
+  if(quickMatchQueue.length === 0){
+    const reviewed = quickMatchInterested.length + quickMatchSkipped.length;
+    el.innerHTML = `
+      <div class="empty">${reviewed ? `You've reviewed all ${reviewed} roles.` : 'No roles match your current search/filters.'}</div>
+      ${quickMatchInterested.length ? `
+        <div class="results-head"><h2>Your Interested picks</h2><span>${quickMatchInterested.length}</span></div>
+        <div class="grid">
+          ${quickMatchInterested.map(j => `
+            <div class="res-card">
+              <div class="res-body">
+                <p class="res-title">${j.title}</p>
+                <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
+                <div class="btn-row">${applyButtonHtml(j)}</div>
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+    `;
+    return;
+  }
+  const job = quickMatchQueue[0];
+  const mySkills = currentAccount ? new Set(currentAccount.profile.skills || []) : new Set();
+  el.innerHTML = `
+    <div class="quick-match-card-wrap">
+      <div class="quick-match-card" id="qm-card">
+        <div class="quick-match-stamp quick-match-stamp-like" id="qm-stamp-like">INTERESTED</div>
+        <div class="quick-match-stamp quick-match-stamp-skip" id="qm-stamp-skip">SKIP</div>
+        <p class="res-title">${job.title}</p>
+        <p class="res-sub">${job.company} · ${job.loc} · ${job.level}</p>
+        <span class="pay-pill">${payLabel(job)}</span>
+        <div class="skill-row">${skillPills(job.skills, mySkills)}</div>
+        <p class="quick-match-desc">${(job.desc || 'No description provided.').slice(0, 220)}${(job.desc || '').length > 220 ? '…' : ''}</p>
+      </div>
+      <p class="quick-match-remaining">${quickMatchQueue.length} left · ${quickMatchInterested.length} interested</p>
+      <div class="quick-match-actions">
+        <button class="quick-match-btn skip" onclick="quickMatchDecide(false)">✕</button>
+        <button class="quick-match-btn like" onclick="quickMatchDecide(true)">♥</button>
+      </div>
+    </div>
+  `;
+  setupQuickMatchSwipe();
+}
+
+function setupQuickMatchSwipe(){
+  const card = document.getElementById('qm-card');
+  if(!card) return;
+  let startX = 0, dragging = false, currentX = 0;
+  const THRESHOLD = 100;
+
+  card.addEventListener('pointerdown', (e) => {
+    startX = e.clientX; dragging = true; currentX = 0;
+    card.setPointerCapture(e.pointerId);
+    card.style.transition = 'none';
+  });
+  card.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    currentX = e.clientX - startX;
+    card.style.transform = `translateX(${currentX}px) rotate(${currentX / 20}deg)`;
+    document.getElementById('qm-stamp-like').style.opacity = Math.max(0, Math.min(1, currentX / THRESHOLD));
+    document.getElementById('qm-stamp-skip').style.opacity = Math.max(0, Math.min(1, -currentX / THRESHOLD));
+  });
+  const finish = () => {
+    if(!dragging) return;
+    dragging = false;
+    card.style.transition = 'transform .3s ease';
+    if(Math.abs(currentX) > THRESHOLD){
+      const goingRight = currentX > 0;
+      card.style.transform = `translateX(${goingRight ? 600 : -600}px) rotate(${goingRight ? 25 : -25}deg)`;
+      setTimeout(() => quickMatchDecide(goingRight), 200);
+    }else{
+      card.style.transform = 'translateX(0) rotate(0)';
+      document.getElementById('qm-stamp-like').style.opacity = 0;
+      document.getElementById('qm-stamp-skip').style.opacity = 0;
+    }
+  };
+  card.addEventListener('pointerup', finish);
+  card.addEventListener('pointercancel', finish);
+}
+
+function quickMatchDecide(interested){
+  const job = quickMatchQueue.shift();
+  if(!job) return;
+  const delta = interested ? 1 : -0.5;
+  (job.skills || []).forEach(s => { skillAffinity[s] = (skillAffinity[s] || 0) + delta; });
+  if(interested) quickMatchInterested.push(job); else quickMatchSkipped.push(job);
+
+  quickMatchQueue.sort((a, b) => {
+    const scoreA = (a.skills || []).reduce((sum, s) => sum + (skillAffinity[s] || 0), 0);
+    const scoreB = (b.skills || []).reduce((sum, s) => sum + (skillAffinity[s] || 0), 0);
+    return scoreB - scoreA;
+  });
+  renderQuickMatchCard();
+}
+
+// Interactive booking calendar — replaces the plain date/time inputs with a visual month
+// grid + time-slot picker. Times are shown in the candidate's own detected local time zone
+// (a real value from Intl, not a guessed per-company time zone we have no real data for),
+// alongside a fixed Nigeria-time reference since Bridge NG is Nigeria-focused.
+let bookingCalendarMonth = new Date();
+let bookingSelectedDate = null;
+let bookingSelectedTime = null;
+
+const BOOKING_SLOT_TIMES = [];
+for(let h = 9; h <= 17; h++){
+  for(const m of [0, 30]){
+    if(h === 17 && m === 30) continue;
+    BOOKING_SLOT_TIMES.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  }
+}
+
+function formatSlotTime(t){
+  const [h, m] = t.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function renderBookingCalendar(){
+  const el = document.getElementById('booking-calendar');
+  if(!el) return;
+  const year = bookingCalendarMonth.getFullYear();
+  const month = bookingCalendarMonth.getMonth();
+  const monthLabel = bookingCalendarMonth.toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+  const startWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let cells = '';
+  for(let i = 0; i < startWeekday; i++) cells += '<div class="booking-day empty"></div>';
+  for(let d = 1; d <= daysInMonth; d++){
+    const cellDate = new Date(year, month, d);
+    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const isPast = cellDate < today;
+    const isSelected = iso === bookingSelectedDate;
+    cells += isPast
+      ? `<button type="button" class="booking-day disabled" disabled>${d}</button>`
+      : `<button type="button" class="booking-day ${isSelected ? 'selected' : ''}" onclick="selectBookingDate('${iso}')">${d}</button>`;
+  }
+
+  const slotsHtml = bookingSelectedDate ? `
+    <div class="booking-slots">
+      <p class="booking-slots-label">Available times on ${new Date(bookingSelectedDate + 'T00:00:00').toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric'})}</p>
+      <div class="booking-slot-grid">
+        ${BOOKING_SLOT_TIMES.map(t => `<button type="button" class="booking-slot ${t === bookingSelectedTime ? 'selected' : ''}" onclick="selectBookingTime('${t}')">${formatSlotTime(t)}</button>`).join('')}
+      </div>
+    </div>
+  ` : '<p class="booking-slots-label">Pick a date above to see available times.</p>';
+
+  el.innerHTML = `
+    <div class="booking-cal-head">
+      <button type="button" class="booking-nav-btn" onclick="shiftBookingMonth(-1)">‹</button>
+      <span>${monthLabel}</span>
+      <button type="button" class="booking-nav-btn" onclick="shiftBookingMonth(1)">›</button>
+    </div>
+    <div class="booking-weekdays">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<span>${d}</span>`).join('')}</div>
+    <div class="booking-days-grid">${cells}</div>
+    ${slotsHtml}
+  `;
+
+  const tzNote = document.getElementById('booking-tz-note');
+  if(tzNote){
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    tzNote.textContent = `Times shown in your local time zone (${tz}). Nigeria time is UTC+1 (WAT).`;
+  }
+}
+
+function shiftBookingMonth(delta){
+  bookingCalendarMonth = new Date(bookingCalendarMonth.getFullYear(), bookingCalendarMonth.getMonth() + delta, 1);
+  renderBookingCalendar();
+}
+
+function selectBookingDate(iso){
+  bookingSelectedDate = iso;
+  bookingSelectedTime = null;
+  document.getElementById('appt-date').value = iso;
+  document.getElementById('appt-time').value = '';
+  renderBookingCalendar();
+}
+
+function selectBookingTime(t){
+  bookingSelectedTime = t;
+  document.getElementById('appt-time').value = t;
+  renderBookingCalendar();
+}
+
+// ATS Score Check — real, computed heuristics (action verbs, quantifiable results, standard
+// section headings, length, skill overlap with a pasted job) rather than fabricated numbers.
+// It's explicitly framed as illustrative, not a claim about any specific employer's real ATS.
+function initAtsDropzone(){
+  const zone = document.getElementById('ats-dropzone');
+  if(!zone || zone.dataset.wired) return;
+  zone.dataset.wired = '1';
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if(!files || !files.length) return;
+    const input = document.getElementById('s-resume-file');
+    input.files = files;
+    handleResumeUpload({target: input});
+  });
+}
+
+const ATS_ACTION_VERBS = ['led', 'built', 'created', 'developed', 'managed', 'launched', 'designed',
+  'implemented', 'improved', 'increased', 'reduced', 'delivered', 'organized', 'analyzed',
+  'coordinated', 'achieved', 'optimized', 'automated', 'negotiated', 'trained', 'mentored'];
+
+function computeAtsSubScores(text, jobSkills){
+  const lower = text.toLowerCase();
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const verbHits = ATS_ACTION_VERBS.filter(v => lower.includes(v)).length;
+  const numberMatches = (text.match(/\b\d[\d,.]*%?\b/g) || []).length;
+  const keywordsScore = Math.round(Math.min(100, (verbHits / 8) * 60 + (Math.min(numberMatches, 5) / 5) * 40));
+
+  const hasExperienceHeading = /experience/i.test(text);
+  const hasEducationHeading = /education/i.test(text);
+  const hasSkillsHeading = /skills/i.test(text);
+  const bulletLines = (text.match(/^[ \t]*[-*•]\s+/gm) || []).length;
+  const lengthOk = wordCount >= 120 && wordCount <= 900;
+  let formatScore = (hasExperienceHeading ? 25 : 0) + (hasEducationHeading ? 20 : 0) + (hasSkillsHeading ? 15 : 0)
+    + (lengthOk ? 25 : 0) + Math.min(15, bulletLines * 3);
+  formatScore = Math.round(Math.min(100, formatScore));
+
+  let relevanceScore = null, matched = [], missing = [];
+  if(jobSkills && jobSkills.length){
+    matched = jobSkills.filter(s => lower.includes(s.toLowerCase()));
+    missing = jobSkills.filter(s => !matched.includes(s));
+    relevanceScore = Math.round(matched.length / jobSkills.length * 100);
+  }
+
+  return {keywordsScore, formatScore, relevanceScore, matched, missing, wordCount, verbHits, bulletLines};
+}
+
+function runAtsAnalysis(){
+  const text = getResumeText();
+  if(!text){
+    showToast('Paste or upload your resume text first — the ATS check needs something to analyze.');
+    return;
+  }
+  const jobPaste = (document.getElementById('rs-job-paste').value || '').trim();
+  const jobLower = jobPaste.toLowerCase();
+  const jobSkills = jobPaste ? SKILLS.filter(s => jobLower.includes(s.toLowerCase())) : [];
+  renderAtsResults(computeAtsSubScores(text, jobSkills));
+}
+
+function renderAtsResults(r){
+  const el = document.getElementById('ats-results');
+  if(!el) return;
+  const scores = [r.keywordsScore, r.formatScore];
+  if(r.relevanceScore !== null) scores.push(r.relevanceScore);
+  const overall = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const relevanceTip = r.relevanceScore !== null
+    ? 'How many of the skills mentioned in the job you pasted above also appear in your resume.'
+    : 'Paste a job posting above to get a relevance score against its specific skills.';
+
+  el.innerHTML = `
+    <div class="ats-score-row fade-up-in">
+      <div class="ats-overall">
+        <span class="pct">${overall}%</span>
+        <span class="lbl">Overall</span>
+      </div>
+      <div class="ats-subscores">
+        <div class="ats-subscore-row">
+          <div class="ats-subscore-head" title="Checks for action verbs (led, built, improved...) and quantifiable results (numbers, %) — both common ATS keyword and recruiter signals.">
+            <span>Keywords</span><span>${r.keywordsScore}%</span>
+          </div>
+          <div class="ats-subscore-track"><div class="ats-subscore-fill" data-target="${r.keywordsScore}"></div></div>
+        </div>
+        <div class="ats-subscore-row">
+          <div class="ats-subscore-head" title="Checks for standard section headings (Experience, Education, Skills), a reasonable length, and bullet-point usage.">
+            <span>Format</span><span>${r.formatScore}%</span>
+          </div>
+          <div class="ats-subscore-track"><div class="ats-subscore-fill" data-target="${r.formatScore}"></div></div>
+        </div>
+        <div class="ats-subscore-row">
+          <div class="ats-subscore-head" title="${relevanceTip}">
+            <span>Relevance</span><span>${r.relevanceScore !== null ? r.relevanceScore + '%' : '—'}</span>
+          </div>
+          <div class="ats-subscore-track"><div class="ats-subscore-fill" data-target="${r.relevanceScore || 0}"></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="ats-tip">${r.wordCount} words · ${r.verbHits} action verb${r.verbHits === 1 ? '' : 's'} found · ${r.bulletLines} bullet point${r.bulletLines === 1 ? '' : 's'}</p>
+  `;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.querySelectorAll('.ats-subscore-fill').forEach(bar => { bar.style.width = bar.dataset.target + '%'; });
+  }));
+}
+
+// Split-screen resume builder — reuses the same markdown-lite parser, HTML renderer, and
+// docx/PDF/txt export pipeline the AI-tailored resume already uses (both just operate on
+// whatever's in lastWorkbenchRawText), rather than duplicating that logic for a second format.
+function defaultResumeBuilderTemplate(){
+  const profile = currentAccount && currentAccount.profile;
+  const name = (profile && profile.fullName) || 'Your Name';
+  const contact = [profile && profile.phone, profile && profile.address, currentAccount && currentAccount.email]
+    .filter(Boolean).join(' · ');
+  const skills = (profile && profile.skills && profile.skills.length) ? profile.skills.join(', ') : 'Add skills in the Job Seeker tab first';
+  const education = (profile && profile.education) || 'Your degree / institution';
+  return `# ${name}
+${contact}
+
+**Professional Summary:**
+Write 2-3 sentences about your background and what you're looking for.
+
+**Experience**
+- Role @ Company (Month Year – Month Year)
+  - What you did and the impact it had
+  - Another accomplishment, ideally with a number
+
+**Education**
+- ${education}
+
+**Skills**
+- ${skills}`;
+}
+
+function renderResumeBuilderPreview(){
+  const source = document.getElementById('rb-source');
+  const preview = document.getElementById('rb-preview');
+  if(!source || !preview) return;
+  preview.innerHTML = resumeBlocksToHtml(parseResumeBlocks(source.value));
+}
+
+function initResumeBuilder(){
+  const source = document.getElementById('rb-source');
+  if(!source || source.dataset.seeded) return;
+  source.value = defaultResumeBuilderTemplate();
+  source.dataset.seeded = '1';
+  renderResumeBuilderPreview();
+}
+
+function copyResumeBuilder(){
+  lastWorkbenchRawText = document.getElementById('rb-source').value;
+  copyWorkbench();
+  showToast('Resume text copied.');
+}
+function downloadResumeBuilderTxt(){
+  lastWorkbenchRawText = document.getElementById('rb-source').value;
+  downloadWorkbenchTxt('My Resume.txt');
+}
+function downloadResumeBuilderPDF(){
+  lastWorkbenchRawText = document.getElementById('rb-source').value;
+  const name = (currentAccount && currentAccount.profile.fullName) || 'My Resume';
+  downloadWorkbenchPDF('My Resume.pdf', name, 'Built with Bridge NG Resume Studio');
+}
+function downloadResumeBuilderDoc(){
+  lastWorkbenchRawText = document.getElementById('rb-source').value;
+  const name = (currentAccount && currentAccount.profile.fullName) || 'My Resume';
+  openTailoredResumeDoc(name);
+}
+
+// Skill category coverage radar — an honest metric grounded in the candidate's own tagged
+// skills (how many of a category's known skills they've selected), not a fabricated
+// self/AI-assessed proficiency level we have no real basis to assign.
+const SKILL_CATEGORIES = {
+  'Tech & Data': ['JavaScript', 'Python', 'SQL', 'Data Analysis', 'Software Development', 'Cloud Computing', 'Cybersecurity', 'Networking', 'UI/UX Design'],
+  'Business': ['Accounting', 'Financial Modeling', 'Business Development', 'Banking Operations', 'Insurance Underwriting', 'Procurement', 'Supply Chain', 'Logistics'],
+  'Marketing': ['Digital Marketing', 'Content Writing', 'Social Media Management', 'Journalism', 'Video Editing', 'Graphic Design'],
+  'Engineering': ['Civil Engineering', 'Mechanical Engineering', 'Electrical Engineering', 'Petroleum Engineering', 'Renewable Energy', 'Quantity Surveying', 'Architecture'],
+  'People & Ops': ['Human Resources', 'Recruiting', 'Customer Service', 'Sales', 'Project Management', 'Teaching', 'Public Administration', 'Hospitality Management', 'Legal Practice'],
+  'Health': ['Nursing', 'Pharmacy', 'Medical Lab Science', 'Agronomy'],
+};
+
+function computeSkillCategoryCoverage(skills){
+  const skillSet = new Set(skills.map(s => s.toLowerCase()));
+  return Object.entries(SKILL_CATEGORIES).map(([category, list]) => {
+    const have = list.filter(s => skillSet.has(s.toLowerCase())).length;
+    return {category, have, total: list.length, pct: list.length ? have / list.length : 0};
+  });
+}
+
+function renderSkillRadar(){
+  const el = document.getElementById('skill-radar');
+  if(!el) return;
+  const skills = [...seekerSkills];
+  const data = computeSkillCategoryCoverage(skills);
+  const anySelected = skills.length > 0;
+
+  const size = 300, cx = size / 2, cy = size / 2, maxR = 100;
+  const n = data.length;
+  const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
+  const point = (pct, i) => {
+    const r = maxR * pct, a = angleFor(i);
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  };
+
+  const dataPoints = data.map((d, i) => point(d.pct, i));
+  const gridRings = [0.33, 0.66, 1].map(ringPct =>
+    `<polygon points="${data.map((d, i) => point(ringPct, i).join(',')).join(' ')}" class="radar-grid-ring"/>`
+  ).join('');
+  const axisLines = data.map((d, i) => {
+    const [x, y] = point(1, i);
+    return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="radar-axis-line"/>`;
+  }).join('');
+  const labels = data.map((d, i) => {
+    const [x, y] = point(1.22, i);
+    return `<text x="${x}" y="${y}" class="radar-label" text-anchor="middle" dominant-baseline="middle">${d.category}</text>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="radar-card fade-up-in">
+      <p class="radar-title">Your skill category coverage</p>
+      <p class="radar-sub">${anySelected ? "Based on the skills you've tagged above — how broadly you cover each area." : 'Tag some skills above to see your coverage across categories.'}</p>
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="radar-svg">
+        ${gridRings}
+        ${axisLines}
+        <polygon points="${dataPoints.map(p => p.join(',')).join(' ')}" class="radar-data-polygon"/>
+        ${dataPoints.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" class="radar-data-dot"/>`).join('')}
+        ${labels}
+      </svg>
+    </div>
+  `;
+}
+
+function handleSkillChipToggle(containerId){
+  if(containerId === 's-skills') renderSkillRadar();
+}
+
+let lastKnownStreak = 0;
+
+async function loadCheckinStatus(){
+  const el = document.getElementById('streak-widget');
+  if(!el) return;
+  if(!currentAccount){ el.innerHTML = ''; lastKnownStreak = 0; renderMilestoneBadges(); return; }
+  try{
+    const data = await apiCheckinStatus();
+    lastKnownStreak = data.streak;
+    renderStreakWidget(data.streak, data.checkedInToday);
+  }catch(e){
+    el.innerHTML = '';
+  }
+  renderMilestoneBadges();
+}
+
+// Gamified badges — each one is tied to a real, already-tracked milestone (profile
+// completeness, an actual recorded application, a real streak count), not arbitrary/fake
+// unlocks with no basis.
+function renderMilestoneBadges(){
+  const el = document.getElementById('milestone-badges');
+  if(!el) return;
+  if(!currentAccount){ el.innerHTML = ''; return; }
+  const profile = currentAccount.profile;
+  const filled = PROFILE_COMPLETION_FIELDS.filter(f => {
+    const v = profile[f.key];
+    return f.key === 'skills' ? !!(v && v.length) : !!(v && String(v).trim());
+  }).length;
+  const badges = [
+    {label: 'Profile complete', earned: filled === PROFILE_COMPLETION_FIELDS.length, icon: '🏅'},
+    {label: 'First application', earned: myApplications.length > 0, icon: '📮'},
+    {label: '7-day streak', earned: lastKnownStreak >= 7, icon: '🔥'},
+  ];
+  el.innerHTML = badges.map(b => `
+    <span class="milestone-badge ${b.earned ? 'earned' : 'locked'}" title="${b.earned ? 'Unlocked' : 'Locked'}: ${b.label}">
+      <span class="milestone-badge-icon">${b.earned ? b.icon : '🔒'}</span>${b.label}
+    </span>
+  `).join('');
+}
+
+function renderStreakWidget(streak, checkedInToday){
+  const el = document.getElementById('streak-widget');
+  if(!el) return;
+  el.innerHTML = `
+    <div class="streak-card fade-up-in">
+      <span class="streak-flame">🔥</span>
+      <div class="streak-body">
+        <p class="streak-count">${streak} day${streak === 1 ? '' : 's'} streak</p>
+        <p class="streak-sub">${checkedInToday ? "You've checked in today — come back tomorrow to keep it going." : 'Check in today to keep your streak alive.'}</p>
+      </div>
+      ${checkedInToday
+        ? '<span class="streak-done-badge">✓ Checked in</span>'
+        : '<button class="go-btn streak-checkin-btn" onclick="doCheckin()">Check in →</button>'}
+    </div>
+  `;
+}
+
+async function doCheckin(){
+  try{
+    const data = await apiCheckin();
+    renderStreakWidget(data.streak, true);
+    celebrate();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+const PROFILE_COMPLETION_FIELDS = [
+  {key: 'fullName', label: 'Full name', target: 's-name'},
+  {key: 'dob', label: 'Date of birth', target: 's-dob'},
+  {key: 'sex', label: 'Sex', target: 's-sex'},
+  {key: 'phone', label: 'Phone number', target: 's-phone'},
+  {key: 'address', label: 'Address', target: 's-address'},
+  {key: 'education', label: 'Education level', target: 's-education'},
+  {key: 'careerLevel', label: 'Career stage', target: 's-level'},
+  {key: 'fieldOfStudy', label: 'Field of study', target: 's-field'},
+  {key: 'preferredLocation', label: 'Preferred location', target: 's-loc'},
+  {key: 'skills', label: 'Skills', target: 's-skill-input'},
+];
+
+function renderProfileCompletion(){
+  const el = document.getElementById('profile-completion');
+  if(!el) return;
+  renderMilestoneBadges();
+  if(!currentAccount){ el.innerHTML = ''; return; }
+  const profile = currentAccount.profile;
+  const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
+    const v = profile[f.key];
+    return f.key === 'skills' ? !(v && v.length) : !(v && String(v).trim());
+  });
+  const filledCount = PROFILE_COMPLETION_FIELDS.length - missing.length;
+  const pct = Math.round(filledCount / PROFILE_COMPLETION_FIELDS.length * 100);
+  const r = 36, circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - pct / 100);
+
+  el.innerHTML = `
+    <div class="completion-card fade-up-in">
+      <div class="completion-ring-wrap">
+        <svg width="88" height="88" viewBox="0 0 88 88">
+          <defs>
+            <linearGradient id="completion-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8B5CF6"/>
+              <stop offset="100%" stop-color="#22D3EE"/>
+            </linearGradient>
+          </defs>
+          <circle class="completion-ring-track" cx="44" cy="44" r="${r}"/>
+          <circle class="completion-ring-fill" cx="44" cy="44" r="${r}"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"/>
+        </svg>
+        <div class="completion-ring-pct">${pct}%</div>
+      </div>
+      <div class="completion-body">
+        <p class="completion-title">Profile ${pct}% complete</p>
+        <p class="completion-sub">${missing.length ? 'Finish these to get better matches and stand out to employers:' : 'Nice — your profile is fully filled in.'}</p>
+        <div class="completion-badges">
+          ${missing.length
+            ? missing.map(f => `<button type="button" class="completion-badge" onclick="focusProfileField('${f.target}')">+ ${f.label}</button>`).join('')
+            : '<span class="completion-complete">✓ All set</span>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function focusProfileField(id){
+  const target = document.getElementById(id);
+  if(!target) return;
+  target.scrollIntoView({behavior: 'smooth', block: 'center'});
+  target.classList.add('field-flash');
+  setTimeout(() => target.classList.remove('field-flash'), 1200);
+  setTimeout(() => target.focus({preventScroll: true}), 300);
+}
+
 function fillSeekerFormFromProfile(profile){
   document.getElementById('s-name').value = profile.fullName || '';
   document.getElementById('s-dob').value = profile.dob || '';
@@ -1445,16 +2393,23 @@ async function initAccount(){
     // API not reachable (e.g. page opened directly from disk instead of via server.py) — stay signed out.
   }
   renderAuthArea();
+  renderProfileCompletion();
   await loadFollowedCompanies();
   await loadSavedSearches();
   await loadNotifications();
   await loadAppointments();
   await loadApplications();
+  await loadCheckinStatus();
   if(currentAccount) startNotifPolling();
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
 initAccount();
 initScrollReveal();
+onSalarySliderChange(); // initialize the slider fill bar + benchmark label on page load
+renderSkillRadar();
+initResumeBuilder();
+initAtsDropzone();
+renderBookingCalendar();
 
 // Subtle cursor-follow tilt on the hero photo — desktop pointer only, since a touch "hover"
 // has no real cursor position and would just leave the tilt stuck wherever it was last tapped.
@@ -1479,11 +2434,13 @@ async function signOut(){
   clearInterval(notifTimer);
   notifTimer = null;
   renderAuthArea();
+  renderProfileCompletion();
   await loadFollowedCompanies();
   await loadSavedSearches();
   await loadNotifications();
   await loadAppointments();
   await loadApplications();
+  await loadCheckinStatus();
   renderRecentJobsFeed();
   renderRemoteJobsFeed();
 }
@@ -1549,6 +2506,7 @@ async function saveProfile(){
     msg.textContent = 'Profile saved.';
     msg.className = 'form-msg success';
     renderRemoteJobsFeed();
+    renderProfileCompletion();
   }catch(err){
     msg.textContent = "Couldn't save profile (" + err.message + ").";
     msg.className = 'form-msg error';
@@ -1681,6 +2639,7 @@ function updateHeroLeft(page){
 const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch'];
 
 function showPage(page){
+  if(page !== 'interview' && mockInterviewStream) stopMockInterviewCamera();
   TAB_PANELS.forEach(key=>{
     const panel = document.getElementById('panel-' + key);
     panel.style.display = key === page ? '' : 'none';
@@ -1732,6 +2691,46 @@ function gaugeColor(pct){
 function payLabel(job){
   if(!job.payMin && !job.payMax) return 'Competitive salary';
   return '₦' + job.payMin.toLocaleString('en-NG') + ' – ₦' + job.payMax.toLocaleString('en-NG') + '/mo';
+}
+
+// Salary benchmark slider — filters against real listed pay data only; roles with no listed
+// pay are never excluded, since the slider has no way to know whether they'd match.
+function jobPassesSalaryFilter(job){
+  const minEl = document.getElementById('salary-min'), maxEl = document.getElementById('salary-max');
+  if(!minEl || !maxEl) return true;
+  if(!job.payMin && !job.payMax) return true;
+  const min = Number(minEl.value), max = Number(maxEl.value), trackMax = Number(minEl.max);
+  const jobLow = job.payMin || job.payMax, jobHigh = job.payMax || job.payMin;
+  return jobHigh >= min && (max >= trackMax || jobLow <= max);
+}
+
+function renderSalaryBenchmark(){
+  const label = document.getElementById('salary-benchmark-label');
+  if(!label) return;
+  const withPay = JOBS.filter(j => j.payMin || j.payMax);
+  if(withPay.length === 0){ label.textContent = ''; return; }
+  const inRange = withPay.filter(jobPassesSalaryFilter).length;
+  label.textContent = `${inRange} of ${withPay.length} listed-salary roles fall in this range`;
+}
+
+function onSalarySliderChange(){
+  const minEl = document.getElementById('salary-min');
+  const maxEl = document.getElementById('salary-max');
+  let min = Number(minEl.value), max = Number(maxEl.value);
+  if(min > max){
+    if(document.activeElement === minEl) maxEl.value = String(min); else minEl.value = String(max);
+    min = Number(minEl.value); max = Number(maxEl.value);
+  }
+  const trackMax = Number(minEl.max);
+  const rangeEl = document.getElementById('salary-slider-range');
+  rangeEl.style.left = (min / trackMax * 100) + '%';
+  rangeEl.style.right = (100 - max / trackMax * 100) + '%';
+
+  document.getElementById('salary-range-label').textContent =
+    `₦${min.toLocaleString('en-NG')} – ₦${max.toLocaleString('en-NG')}${max >= trackMax ? '+' : ''}/mo`;
+
+  renderSalaryBenchmark();
+  renderExploreResults();
 }
 
 // Defense-in-depth for the "remote roles" feed: don't trust job.remoteFriendly alone (a
@@ -1786,7 +2785,7 @@ function findJobs(){
           </div>
           <div class="res-body">
             <p class="res-title">${job.title}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
-            <p class="res-sub">${job.company} · ${job.loc} · ${job.level}</p>
+            <p class="res-sub">${companyHoverSpan(job.company)} · ${job.loc} · ${job.level}</p>
             <span class="pay-pill">${payLabel(job)}</span>
             <div class="skill-row">${skillPills(job.skills, seekerSkills)}</div>
             <div class="btn-row">
@@ -1833,7 +2832,7 @@ function findAbroadJobs(){
           </div>
           <div class="res-body">
             <p class="res-title">${job.title}</p>
-            <p class="res-sub">${job.company} · ${job.region} · ${job.level}</p>
+            <p class="res-sub">${companyHoverSpan(job.company)} · ${job.region} · ${job.level}</p>
             <span class="pay-pill">$${job.payMin.toLocaleString('en-US')} – $${job.payMax.toLocaleString('en-US')}/mo</span>
             <p style="font-size:12px;color:var(--ink-soft);margin:2px 0 10px;">${job.timezone}</p>
             <div class="skill-row">${skillPills(job.skills, abroadSkills)}</div>
@@ -2038,6 +3037,21 @@ function resumeBlocksToHtml(blocks){
   return html;
 }
 
+function skeletonBlockHtml(){
+  return `
+    <div class="skeleton-block">
+      <div class="skeleton-line" style="width:92%"></div>
+      <div class="skeleton-line" style="width:78%"></div>
+      <div class="skeleton-line" style="width:85%"></div>
+      <div class="skeleton-line" style="width:60%"></div>
+    </div>
+  `;
+}
+
+function skeletonCardsHtml(count){
+  return `<div class="skeleton-cards">${Array(count).fill('<div class="skeleton-card"></div>').join('')}</div>`;
+}
+
 let workbenchLoadingTimer = null;
 
 function stopWorkbenchLoadingTimer(){
@@ -2050,6 +3064,7 @@ function renderWorkbenchLoading(title, subtitle){
     <div class="workbench-card">
       <div class="workbench-head"><h3>${title}</h3><span>${subtitle}</span></div>
       <p class="loading-line">Generating<span class="thinking-dots"><i></i><i></i><i></i></span> — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="workbench-loading-timer">0s</span> elapsed</p>
+      ${skeletonBlockHtml()}
     </div>`;
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
   const start = Date.now();
@@ -2311,6 +3326,7 @@ function renderCareerMatchLoading(){
     <div class="workbench-card">
       <div class="workbench-head"><h3>Career Match AI</h3><span>Matching your profile…</span></div>
       <p class="loading-line">Generating<span class="thinking-dots"><i></i><i></i><i></i></span> — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="career-match-loading-timer">0s</span> elapsed</p>
+      ${skeletonBlockHtml()}
     </div>`;
   document.getElementById('career-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
   const start = Date.now();
@@ -2410,6 +3426,7 @@ function renderJobMatchLoading(){
     <div class="workbench-card">
       <div class="workbench-head"><h3>AI Job Match</h3><span>Reading your resume and checking it against open roles…</span></div>
       <p class="loading-line">Generating<span class="thinking-dots"><i></i><i></i><i></i></span> — usually 10–30 seconds, occasionally up to ~2 minutes for the best-quality model… <span id="job-match-loading-timer">0s</span> elapsed</p>
+      ${skeletonBlockHtml()}
     </div>`;
   document.getElementById('job-match-results').scrollIntoView({behavior:'smooth', block:'nearest'});
   const start = Date.now();
@@ -2444,7 +3461,7 @@ function renderJobMatchResults(resolved){
         <div class="res-card">
           <div class="res-body">
             <p class="res-title">${job.title}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
-            <p class="res-sub">${job.company} · ${job.loc} · ${job.level}</p>
+            <p class="res-sub">${companyHoverSpan(job.company)} · ${job.loc} · ${job.level}</p>
             <span class="pay-pill">${payLabel(job)}</span>
             <p class="fit-skill-label" style="margin-top:10px;">Why this fits</p>
             <p style="font-size:13px;color:var(--ink-soft);margin:2px 0 10px;">${escapeHtml(reason)}</p>
@@ -2706,7 +3723,7 @@ async function findCandidates(){
 
   const skills = [...employerSkills];
   const results = document.getElementById('employer-results');
-  results.innerHTML = '<p class="loading-line">Posting this role and checking it against real Bridge NG members…</p>';
+  results.innerHTML = `<p class="loading-line">Posting this role and checking it against real Bridge NG members…</p>${skeletonCardsHtml(4)}`;
 
   let realMatches = [];
   let notifiedCount = 0;
@@ -2756,6 +3773,91 @@ async function findCandidates(){
 
   results.innerHTML = realSection;
 }
+
+// Contextual company hover cards — shows only data we actually have (real open-role count,
+// locations, sectors from the currently-loaded JOBS list), never fabricated size/rating figures.
+function escapeAttr(s){
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function companyHoverSpan(name){
+  return `<span class="company-hover" data-company="${escapeAttr(name)}">${name}</span>`;
+}
+
+let companyCardHideTimer = null;
+let companyCardEl = null;
+
+function ensureCompanyCardEl(){
+  if(!companyCardEl){
+    companyCardEl = document.createElement('div');
+    companyCardEl.className = 'company-card-popup';
+    document.body.appendChild(companyCardEl);
+  }
+  return companyCardEl;
+}
+
+function showCompanyCard(anchorEl){
+  clearTimeout(companyCardHideTimer);
+  const name = anchorEl.dataset.company;
+  const matches = JOBS.filter(j => j.company === name);
+  const openRoles = matches.length;
+  const locations = [...new Set(matches.map(j => j.loc).filter(Boolean))].slice(0, 3);
+  const sectors = [...new Set(matches.map(j => j.sector).filter(Boolean))].slice(0, 3);
+
+  const card = ensureCompanyCardEl();
+  card.innerHTML = `
+    <p class="company-card-title">${name}</p>
+    <div class="company-card-row"><span>Open roles on Bridge NG</span><b>${openRoles}</b></div>
+    ${locations.length ? `<div class="company-card-row"><span>Locations</span><b>${locations.join(', ')}</b></div>` : ''}
+    ${sectors.length ? `<div class="company-card-tags">${sectors.map(s => `<span class="company-card-tag">${s}</span>`).join('')}</div>` : ''}
+  `;
+  const rect = anchorEl.getBoundingClientRect();
+  card.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 256)) + 'px';
+  card.style.top = (rect.bottom + 8) + 'px';
+  card.classList.add('show');
+}
+
+function hideCompanyCard(){
+  if(companyCardEl) companyCardEl.classList.remove('show');
+}
+
+document.addEventListener('mouseover', (e) => {
+  const el = e.target.closest('.company-hover');
+  if(!el) return;
+  showCompanyCard(el);
+});
+document.addEventListener('mouseout', (e) => {
+  const el = e.target.closest('.company-hover');
+  if(!el) return;
+  companyCardHideTimer = setTimeout(hideCompanyCard, 150);
+});
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('.company-hover');
+  if(el){ showCompanyCard(el); return; }
+  if(!e.target.closest('.company-card-popup')) hideCompanyCard();
+});
+
+// Cursor-follow glow highlight + subtle 3D tilt on job/candidate cards (Lagos Cyberpunk theme)
+// — a single delegated listener rather than one per card, since cards are re-rendered
+// constantly. Tilt is mouse-only (a touch "hover" has no real cursor position to tilt toward),
+// matching the same '(pointer: fine)' gating already used for the hero photo tilt.
+const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
+document.addEventListener('pointermove', (e) => {
+  const card = e.target.closest('.res-card');
+  if(!card) return;
+  const rect = card.getBoundingClientRect();
+  const px = (e.clientX - rect.left) / rect.width;
+  const py = (e.clientY - rect.top) / rect.height;
+  card.style.setProperty('--glow-x', `${(px * 100).toFixed(1)}%`);
+  card.style.setProperty('--glow-y', `${(py * 100).toFixed(1)}%`);
+  if(hasFinePointer){
+    const rotX = (0.5 - py) * 8, rotY = (px - 0.5) * 8;
+    card.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateY(-4px)`;
+  }
+});
+document.addEventListener('pointerleave', (e) => {
+  const card = e.target.closest && e.target.closest('.res-card');
+  if(card) card.style.transform = '';
+}, true);
 </script>
 </body>
 </html>
