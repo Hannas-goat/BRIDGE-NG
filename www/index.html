@@ -1160,6 +1160,29 @@
   <span class="pull-refresh-spinner">↻</span>
 </div>
 
+<!-- AI pitch generator modal — reuses the same real cover-letter AI plumbing as Resume Studio's
+     "Write cover letter" (apiGenerateResumeDoc mode:'cover'), surfaced directly from job cards. -->
+<div class="pitch-modal-overlay" id="pitch-modal-overlay" onclick="if(event.target === this) closePitchModal()">
+  <div class="pitch-modal">
+    <div class="pitch-modal-head">
+      <div>
+        <h3>Your application pitch</h3>
+        <p class="pitch-modal-sub" id="pitch-modal-sub"></p>
+      </div>
+      <button class="pitch-modal-close" onclick="closePitchModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="pitch-modal-loading" id="pitch-modal-loading">Writing a pitch based on your real resume and this role…</div>
+    <div class="pitch-modal-error" id="pitch-modal-error" style="display:none;"></div>
+    <textarea class="form-textarea pitch-modal-text" id="pitch-modal-text" style="display:none;"></textarea>
+    <div class="pitch-modal-actions" id="pitch-modal-actions" style="display:none;">
+      <button class="upload-btn" onclick="copyPitchModalText()">Copy to clipboard</button>
+      <button class="go-btn" onclick="closePitchModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottom-dock" id="bottom-dock">
   <button class="dock-btn" data-target="seeker" onclick="dockNavigate('seeker')">
     <span class="dock-icon">🏠</span><span class="dock-label">Home</span>
@@ -1482,6 +1505,111 @@ function followButtonHtml(company){
   return `<button class="follow-btn${following ? ' following' : ''}" title="You'll get alerts when this company posts new roles." onclick="toggleFollowCompany('${safe}', this)">${following ? '✓ Following' : '+ Follow ' + company}</button>`;
 }
 
+// Deterministic skill-overlap badge — same intersection math as matchScore()'s skill component,
+// but shown standalone (no level/location blending) since the popover needs a literal matched vs
+// missing skill breakdown, not a blended score. Omitted entirely when signed out (nothing real to compare).
+function skillOverlapBadgeHtml(job){
+  if(!currentAccount) return '';
+  const jobSkills = job.skills || [];
+  if(jobSkills.length === 0) return '';
+  const mySkills = new Set((currentAccount.profile.skills || []).map(s => s.toLowerCase()));
+  const matched = jobSkills.filter(s => mySkills.has(s.toLowerCase()));
+  const missing = jobSkills.filter(s => !mySkills.has(s.toLowerCase()));
+  const pct = Math.round(matched.length / jobSkills.length * 100);
+  // Every tag inside here must be inline-safe (span, never div/p): this badge itself sits inside
+  // a <p class="res-title">, and a nested <div> or <p> triggers HTML's auto-close-<p> parsing rule,
+  // silently hoisting the popover out as a sibling of res-title instead of a descendant of the
+  // badge — which breaks the CSS hover/.open descendant selectors and the click toggle entirely.
+  return `
+    <span class="overlap-badge" onclick="toggleOverlapPopover(event)">
+      ${pct}% skill match
+      <span class="overlap-popover">
+        <span class="overlap-popover-title">Why you match</span>
+        <span class="overlap-skill-group">
+          ${matched.length ? matched.map(s => `<span class="skill-pill match">${s}</span>`).join('') : '<span class="overlap-popover-empty">No overlapping skills yet.</span>'}
+        </span>
+        ${missing.length ? `<span class="overlap-popover-title">Missing</span><span class="overlap-skill-group">${missing.map(s => `<span class="skill-pill miss">${s}</span>`).join('')}</span>` : ''}
+      </span>
+    </span>`;
+}
+
+function toggleOverlapPopover(event){
+  event.stopPropagation();
+  const badge = event.currentTarget;
+  const isOpen = badge.classList.contains('open');
+  document.querySelectorAll('.overlap-badge.open').forEach(b => { if(b !== badge) b.classList.remove('open'); });
+  badge.classList.toggle('open', !isOpen);
+}
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.overlap-badge')) document.querySelectorAll('.overlap-badge.open').forEach(b => b.classList.remove('open'));
+});
+
+// Pitch button reuses the exact same real AI cover-letter plumbing as Resume Studio's "Write cover
+// letter" (apiGenerateResumeDoc mode:'cover' -> NVIDIA-backed handle_resume_generate on the server),
+// just surfaced as a modal directly from the job card instead of requiring a tab switch.
+function pitchButtonHtml(job){
+  return `<button class="pitch-btn" onclick="openPitchGenerator(${job.id})">✨ Generate pitch</button>`;
+}
+
+let pitchModalJob = null;
+
+function openPitchGenerator(jobId){
+  if(!currentAccount){
+    showToast('Sign in to generate a tailored pitch.');
+    return;
+  }
+  if(!haveResume()){
+    showToast('Add your resume in Resume Studio first — the pitch is written from your real experience, never invented.');
+    return;
+  }
+  const job = JOBS[jobId];
+  if(!job) return;
+  pitchModalJob = job;
+  document.getElementById('pitch-modal-sub').textContent = `${job.title} at ${job.company}`;
+  document.getElementById('pitch-modal-overlay').classList.add('open');
+  document.getElementById('pitch-modal-loading').style.display = '';
+  document.getElementById('pitch-modal-text').style.display = 'none';
+  document.getElementById('pitch-modal-error').style.display = 'none';
+  document.getElementById('pitch-modal-actions').style.display = 'none';
+  generatePitchForModal(job);
+}
+
+async function generatePitchForModal(job){
+  const jobInfo = jobInfoFromKnownJob(job);
+  const name = currentAccount.profile.fullName || 'the candidate';
+  try{
+    const { text } = await apiGenerateResumeDoc({ mode: 'cover', jobInfo, candidateName: name, ...currentResumePayload() });
+    if(pitchModalJob !== job) return; // modal was closed/reopened for a different job while this was in flight
+    document.getElementById('pitch-modal-loading').style.display = 'none';
+    document.getElementById('pitch-modal-text').value = text;
+    document.getElementById('pitch-modal-text').style.display = '';
+    document.getElementById('pitch-modal-actions').style.display = '';
+  }catch(err){
+    if(pitchModalJob !== job) return;
+    document.getElementById('pitch-modal-loading').style.display = 'none';
+    document.getElementById('pitch-modal-error').textContent = (err && err.message) || friendlyErrorMessage('generic');
+    document.getElementById('pitch-modal-error').style.display = '';
+  }
+}
+
+function closePitchModal(){
+  document.getElementById('pitch-modal-overlay').classList.remove('open');
+  pitchModalJob = null;
+}
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape') closePitchModal();
+});
+
+function copyPitchModalText(){
+  const ta = document.getElementById('pitch-modal-text');
+  ta.select();
+  (navigator.clipboard && navigator.clipboard.writeText
+    ? navigator.clipboard.writeText(ta.value)
+    : Promise.reject())
+    .then(() => showToast('Pitch copied to clipboard.'))
+    .catch(() => showToast('Select the text above and copy it manually — clipboard access was blocked.'));
+}
+
 function renderRecentJobsFeed(){
   const el = document.getElementById('recent-jobs-feed');
   if(!el) return;
@@ -1493,13 +1621,14 @@ function renderRecentJobsFeed(){
       ${recent.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title} <span class="new-badge">New</span></p>
+            <p class="res-title">${j.title} <span class="new-badge">New</span> ${skillOverlapBadgeHtml(j)}</p>
             <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${j.skills.map(s => `<span class="skill-pill">${s}</span>`).join('')}</div>
             <div class="btn-row">
               ${followButtonHtml(j.company)}
               ${applyButtonHtml(j)}
+              ${pitchButtonHtml(j)}
             </div>
           </div>
         </div>
@@ -1523,13 +1652,14 @@ function renderRemoteJobsFeed(){
       ${remoteJobs.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
             <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, seekerSkills)}</div>
             <div class="btn-row">
               ${applyButtonHtml(j)}
               ${followButtonHtml(j.company)}
+              ${pitchButtonHtml(j)}
             </div>
           </div>
         </div>
@@ -1631,7 +1761,7 @@ function renderExploreResults(){
       ${jobs.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''}</p>
+            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
             <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, mySkills)}</div>
@@ -1639,6 +1769,7 @@ function renderExploreResults(){
               ${applyButtonHtml(j)}
               ${followButtonHtml(j.company)}
               ${bridgeGapButtonHtml(j.skills, mySkills)}
+              ${pitchButtonHtml(j)}
             </div>
             <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
