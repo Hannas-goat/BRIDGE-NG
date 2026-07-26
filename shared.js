@@ -222,6 +222,8 @@ function apiLogout(){ return apiRequest('/api/logout', 'POST', {}); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }
+function apiSavePitch(payload){ return apiRequest('/api/profile/pitch', 'PUT', payload); }
+function apiGetCandidatePitch(userId){ return apiRequest('/api/candidate-pitch?userId=' + encodeURIComponent(userId), 'GET'); }
 function apiChat(messages, context){ return apiRequest('/api/chat', 'POST', {messages, context}); }
 
 function apiListJobs(){ return apiRequest('/api/jobs', 'GET'); }
@@ -235,6 +237,16 @@ function apiListNotifications(){ return apiRequest('/api/notifications', 'GET');
 function apiMarkNotificationsRead(){ return apiRequest('/api/notifications/read', 'POST', {}); }
 function apiCheckinStatus(){ return apiRequest('/api/checkin', 'GET'); }
 function apiCheckin(){ return apiRequest('/api/checkin', 'POST', {}); }
+function apiCampusCount(university){ return apiRequest('/api/campus-count?university=' + encodeURIComponent(university), 'GET'); }
+
+function apiMessageStart(payload){ return apiRequest('/api/messages/start', 'POST', payload); }
+function apiEmployerMessageThread(id, token){ return apiRequest(`/api/messages/employer-thread?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`, 'GET'); }
+function apiEmployerMessageReply(conversationId, token, body){ return apiRequest('/api/messages/employer-reply', 'POST', {conversationId, token, body}); }
+function apiListConversations(){ return apiRequest('/api/messages', 'GET'); }
+function apiReplyToConversation(conversationId, body){ return apiRequest('/api/messages/reply', 'POST', {conversationId, body}); }
+function apiMarkConversationRead(conversationId){ return apiRequest('/api/messages/read', 'POST', {conversationId}); }
+function apiCreateSalaryReview(payload){ return apiRequest('/api/salary-reviews', 'POST', payload); }
+function apiListSalaryReviews(company){ return apiRequest('/api/salary-reviews?company=' + encodeURIComponent(company), 'GET'); }
 function apiCreateAppointment(payload){ return apiRequest('/api/appointments', 'POST', payload); }
 function apiListAppointments(){ return apiRequest('/api/appointments', 'GET'); }
 function apiCancelAppointment(id){ return apiRequest('/api/appointments/cancel', 'POST', {id}); }

@@ -48,18 +48,124 @@
         </div>
       </div>
     </div>
-    <div class="tabs">
-      <button class="tab-btn active" id="tab-seeker" onclick="showPage('seeker')">Job seeker</button>
-      <button class="tab-btn" id="tab-employer" onclick="showPage('employer')">Employer</button>
-      <button class="tab-btn" id="tab-resume" onclick="showPage('resume')">Resume studio</button>
-      <button class="tab-btn" id="tab-train" onclick="showPage('train')">Train Yourself</button>
-      <button class="tab-btn" id="tab-abroad" onclick="showPage('abroad')">Work Abroad</button>
-      <button class="tab-btn" id="tab-interview" onclick="showPage('interview')">Interview Tips</button>
-      <button class="tab-btn" id="tab-appointment" onclick="showPage('appointment')">Book Appointment</button>
-      <button class="tab-btn" id="tab-explore" onclick="showPage('explore')">Explore Jobs</button>
-      <button class="tab-btn" id="tab-career" onclick="showPage('career')">Career Match AI</button>
-      <button class="tab-btn" id="tab-jobmatch" onclick="showPage('jobmatch')">AI Job Match</button>
-    </div>
+    <nav class="mega-nav" id="mega-nav">
+      <div class="mega-nav-item">
+        <button class="mega-nav-trigger" aria-expanded="false" aria-haspopup="true">Explore Jobs</button>
+        <div class="mega-dropdown">
+          <div class="mega-dropdown-inner">
+            <div class="mega-col">
+              <p class="mega-col-title">Browse by career stage</p>
+              <button class="tab-btn mega-link" id="tab-seeker" onclick="showPage('seeker')">
+                <span class="mega-link-title">Job Seeker Home</span>
+                <span class="mega-link-sub">Build your profile &amp; get matched</span>
+              </button>
+              <button class="tab-btn mega-link" id="tab-explore" onclick="showPage('explore')">
+                <span class="mega-link-title">Explore All Jobs</span>
+                <span class="mega-link-sub" id="mega-explore-count">Search every open role</span>
+              </button>
+            </div>
+            <div class="mega-col">
+              <p class="mega-col-title">Work format</p>
+              <button class="tab-btn mega-link" id="tab-abroad" onclick="showPage('abroad')">
+                <span class="mega-link-title">Work Abroad</span>
+                <span class="mega-link-sub" id="mega-abroad-count">Remote &amp; international roles</span>
+              </button>
+            </div>
+            <div class="mega-col mega-col-feature">
+              <p class="mega-col-title">Trending now</p>
+              <div class="mega-feature-card" id="mega-feature-card">
+                <p class="mega-feature-sub">Loading…</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mega-nav-item">
+        <button class="mega-nav-trigger" aria-expanded="false" aria-haspopup="true">Career Tools &amp; AI Studio</button>
+        <div class="mega-dropdown">
+          <div class="mega-dropdown-inner">
+            <div class="mega-col">
+              <p class="mega-col-title">Resume &amp; skills</p>
+              <button class="tab-btn mega-link" id="tab-resume" onclick="showPage('resume')">
+                <span class="mega-link-title">Resume Studio</span>
+                <span class="mega-link-sub">Live builder, AI tailoring, ATS check</span>
+              </button>
+              <button class="tab-btn mega-link" id="tab-train" onclick="showPage('train')">
+                <span class="mega-link-title">Train Yourself</span>
+                <span class="mega-link-sub">Skill-building resources</span>
+              </button>
+            </div>
+            <div class="mega-col">
+              <p class="mega-col-title">AI matching</p>
+              <button class="tab-btn mega-link" id="tab-career" onclick="showPage('career')">
+                <span class="mega-link-title">Career Match AI</span>
+                <span class="mega-link-sub">Scholarships, visas, remote pathways</span>
+              </button>
+              <button class="tab-btn mega-link" id="tab-jobmatch" onclick="showPage('jobmatch')">
+                <span class="mega-link-title">AI Job Match</span>
+                <span class="mega-link-sub">Your single best-fit open role</span>
+              </button>
+            </div>
+            <div class="mega-col mega-col-feature">
+              <p class="mega-col-title">Your readiness</p>
+              <div class="mega-feature-card" id="mega-profile-meter-card">
+                <p class="mega-feature-sub">Sign in to see your profile score</p>
+              </div>
+              <button class="tab-btn mega-link" id="tab-interview" onclick="showPage('interview')">
+                <span class="mega-link-title">Interview Tips &amp; Mock Simulator</span>
+                <span class="mega-link-sub">Practice with a real timer &amp; webcam</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mega-nav-item">
+        <button class="mega-nav-trigger" aria-expanded="false" aria-haspopup="true">Employers &amp; Hiring</button>
+        <div class="mega-dropdown">
+          <div class="mega-dropdown-inner">
+            <div class="mega-col">
+              <p class="mega-col-title">Hire real candidates</p>
+              <button class="tab-btn mega-link" id="tab-employer" onclick="showPage('employer')">
+                <span class="mega-link-title">Post a Job &amp; Find Candidates</span>
+                <span class="mega-link-sub">Real-time matching against real profiles</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mega-nav-item">
+        <button class="mega-nav-trigger" aria-expanded="false" aria-haspopup="true">Community &amp; Support</button>
+        <div class="mega-dropdown">
+          <div class="mega-dropdown-inner">
+            <div class="mega-col">
+              <p class="mega-col-title">Your account</p>
+              <button class="tab-btn mega-link" id="tab-appointment" onclick="showPage('appointment')">
+                <span class="mega-link-title">Book Appointment</span>
+                <span class="mega-link-sub">Request interview slots</span>
+              </button>
+              <button class="tab-btn mega-link" id="tab-messages" onclick="showPage('messages')">
+                <span class="mega-link-title">Messages<span class="tab-unread-badge" id="messages-unread-badge" style="display:none;"></span></span>
+                <span class="mega-link-sub">Employer conversations</span>
+              </button>
+            </div>
+            <div class="mega-col">
+              <p class="mega-col-title">Help &amp; transparency</p>
+              <a class="tab-btn mega-link" href="support.html">
+                <span class="mega-link-title">Support &amp; Contact</span>
+                <span class="mega-link-sub">Get help from the team</span>
+              </a>
+              <button class="tab-btn mega-link" id="tab-salary" onclick="showPage('salary')">
+                <span class="mega-link-title">Salary &amp; Culture Reviews</span>
+                <span class="mega-link-sub">Community-submitted pay &amp; culture data</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
     <div class="nav-backdrop" id="nav-backdrop" onclick="closeMobileNav()"></div>
   </div>
 
@@ -130,6 +236,7 @@
     <div id="recent-jobs-feed"></div>
     <div id="streak-widget"></div>
     <div class="milestone-badges" id="milestone-badges"></div>
+    <div class="milestone-badges" id="nysc-badge"></div>
     <div id="profile-completion"></div>
     <div class="card">
       <h3 style="margin-bottom:4px;color:var(--indigo);">Build your profile</h3>
@@ -215,6 +322,47 @@
         </div>
         <div></div>
       </div>
+      <div class="field-row">
+        <div>
+          <label>University / Institution</label>
+          <input type="text" id="s-university" placeholder="e.g. University of Lagos" oninput="onUniversityFieldChange()">
+        </div>
+        <div>
+          <label>NYSC status (self-declared — not verified)</label>
+          <select id="s-nysc" onchange="onNyscStatusChange()">
+            <option value="">Prefer not to say</option>
+            <option>Not yet — still in school</option>
+            <option>Currently serving (corper)</option>
+            <option>Completed NYSC</option>
+            <option>Exempted from NYSC</option>
+          </select>
+        </div>
+      </div>
+      <p class="campus-count-note" id="campus-count-note"></p>
+      <div class="field-row" id="ppa-field-row" style="display:none;">
+        <div>
+          <label>PPA state (self-declared)</label>
+          <select id="s-ppa-state"><option value="">Select state</option></select>
+        </div>
+        <div>
+          <label>PPA local government area (LGA)</label>
+          <input type="text" id="s-ppa-lga" placeholder="e.g. Ikeja">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>WhatsApp number for alerts (optional)</label>
+          <input type="text" id="s-whatsapp-number" placeholder="e.g. +2348031234567">
+        </div>
+        <div>
+          <label>Get high-match roles &amp; messages on WhatsApp</label>
+          <select id="s-whatsapp-enabled">
+            <option value="no">Off</option>
+            <option value="yes">On</option>
+          </select>
+        </div>
+      </div>
+      <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
       <div class="skill-add-row">
@@ -271,6 +419,25 @@
       </div>
       <button class="go-btn" style="margin-top:14px;" onclick="runAtsAnalysis()">Analyze my resume →</button>
       <div id="ats-results"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">30-second pitch</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Record a quick video or audio introduction employers can watch instead of skimming another CV. Nothing leaves your browser until you choose to save it.</p>
+      <div class="pitch-video-wrap">
+        <video id="pitch-preview-video" autoplay playsinline muted class="pitch-video"></video>
+        <audio id="pitch-preview-audio" controls style="display:none;width:100%;"></audio>
+        <div class="pitch-placeholder" id="pitch-placeholder"><span>🎬</span><p>No recording yet</p></div>
+        <div class="pitch-timer" id="pitch-timer" style="display:none;">0:30</div>
+      </div>
+      <div class="btn-row">
+        <button class="go-btn" style="margin-top:0;" id="pitch-record-video-btn" onclick="startPitchRecording('video')">🎥 Record video</button>
+        <button class="ai-btn" id="pitch-record-audio-btn" onclick="startPitchRecording('audio')">🎙️ Record audio only</button>
+        <button class="upload-btn" id="pitch-stop-btn" onclick="stopPitchRecording()" style="display:none;">⏹ Stop</button>
+        <button class="go-btn" style="margin-top:0;display:none;" id="pitch-save-btn" onclick="savePitchToProfile()">Save to profile</button>
+        <button class="upload-btn" id="pitch-discard-btn" onclick="discardPitchRecording(true)" style="display:none;">Discard</button>
+      </div>
+      <p class="form-msg" id="pitch-msg"></p>
     </div>
 
     <div class="card" style="margin-top:20px;">
@@ -575,26 +742,48 @@
     <div class="card">
       <h3 style="margin-bottom:4px;color:var(--indigo);">Book an appointment</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Request an interview or follow-up slot with a company you're applying to. Sign in first so your requests are saved to your account.</p>
-      <div class="field-row">
-        <div>
-          <label>Company</label>
-          <input type="text" id="appt-company" list="appt-company-list" placeholder="e.g. Paystack">
-          <datalist id="appt-company-list"></datalist>
+
+      <div class="wizard" id="appt-wizard">
+        <div class="wizard-progress">
+          <span class="wizard-dot"></span>
+          <span class="wizard-dot"></span>
+          <span class="wizard-dot"></span>
         </div>
-        <div>
-          <label>Role you're applying for</label>
-          <input type="text" id="appt-role" placeholder="e.g. Junior Data Analyst">
+
+        <div class="wizard-step" data-step="0">
+          <div class="field-row">
+            <div>
+              <label>Company</label>
+              <input type="text" id="appt-company" list="appt-company-list" placeholder="e.g. Paystack">
+              <datalist id="appt-company-list"></datalist>
+            </div>
+            <div>
+              <label>Role you're applying for</label>
+              <input type="text" id="appt-role" placeholder="e.g. Junior Data Analyst">
+            </div>
+          </div>
+        </div>
+
+        <div class="wizard-step" data-step="1">
+          <label>Preferred date &amp; time</label>
+          <div class="booking-calendar" id="booking-calendar"></div>
+          <p class="booking-tz-note" id="booking-tz-note"></p>
+          <input type="date" id="appt-date" style="display:none;">
+          <input type="time" id="appt-time" style="display:none;">
+        </div>
+
+        <div class="wizard-step" data-step="2">
+          <label>Notes for the employer (optional)</label>
+          <textarea id="appt-notes" class="form-textarea" placeholder="e.g. I'm available any weekday after 2pm..."></textarea>
+          <button class="go-btn" style="margin-top:16px;" onclick="requestAppointment()">Request appointment →</button>
+          <p class="form-msg" id="appt-msg"></p>
+        </div>
+
+        <div class="wizard-nav">
+          <button class="upload-btn wizard-back-btn" onclick="wizardBack('appt-wizard')">← Back</button>
+          <button class="go-btn wizard-next-btn" style="margin-top:0;" onclick="wizardNext('appt-wizard')">Next →</button>
         </div>
       </div>
-      <label>Preferred date &amp; time</label>
-      <div class="booking-calendar" id="booking-calendar"></div>
-      <p class="booking-tz-note" id="booking-tz-note"></p>
-      <input type="date" id="appt-date" style="display:none;">
-      <input type="time" id="appt-time" style="display:none;">
-      <label>Notes for the employer (optional)</label>
-      <textarea id="appt-notes" class="form-textarea" placeholder="e.g. I'm available any weekday after 2pm..."></textarea>
-      <button class="go-btn" onclick="requestAppointment()">Request appointment →</button>
-      <p class="form-msg" id="appt-msg"></p>
     </div>
     <div id="appointments-list"></div>
   </div>
@@ -643,63 +832,87 @@
       <h3 style="margin-bottom:6px;color:var(--indigo);">Career Match AI</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 20px;">Get matched to real global scholarships, remote jobs, and visa pathways — localized for Nigerian CGPA scales, NYSC timing, and funding that doesn't require IELTS/TOEFL.</p>
 
-      <div class="field-row">
-        <div>
-          <label>University</label>
-          <input type="text" id="cm-university" placeholder="e.g. University of Lagos">
+      <div class="wizard" id="career-wizard">
+        <div class="wizard-progress">
+          <span class="wizard-dot"></span>
+          <span class="wizard-dot"></span>
+          <span class="wizard-dot"></span>
         </div>
-        <div>
-          <label>Degree & field of study</label>
-          <input type="text" id="cm-degree" placeholder="e.g. B.Sc Computer Science">
-        </div>
-      </div>
-      <div class="field-row">
-        <div>
-          <label>Degree classification</label>
-          <select id="cm-classification">
-            <option>First Class</option>
-            <option selected>Second Class Upper (2:1)</option>
-            <option>Second Class Lower (2:2)</option>
-            <option>Third Class</option>
-            <option>Pass</option>
-            <option>Not yet graduated</option>
-          </select>
-        </div>
-        <div>
-          <label>CGPA (optional, for extra precision)</label>
-          <input type="text" id="cm-cgpa" placeholder="e.g. 4.32 out of 5.0">
-        </div>
-      </div>
-      <div class="field-row">
-        <div>
-          <label>NYSC status</label>
-          <select id="cm-nysc">
-            <option>Not yet — still in school</option>
-            <option>Currently serving (corper)</option>
-            <option>Completed NYSC</option>
-            <option>Exempted from NYSC</option>
-          </select>
-        </div>
-        <div>
-          <label>IELTS / TOEFL status</label>
-          <select id="cm-english-test">
-            <option>No, prefer options that don't require it</option>
-            <option>Yes, already have it</option>
-            <option>Planning to take it</option>
-          </select>
-        </div>
-      </div>
-      <label>Your skills — tap to select, or type your own</label>
-      <div class="chip-field" id="cm-skills"></div>
-      <div class="skill-add-row">
-        <input type="text" id="cm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
-        <button class="upload-btn" onclick="addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input')">Add skill</button>
-      </div>
 
-      <label style="margin-top:16px;">Career objectives — what are you aiming for?</label>
-      <textarea id="cm-objectives" class="form-textarea" style="min-height:90px;" placeholder="e.g. I want to move into data analytics abroad, or find a fully-funded Master's in the UK..."></textarea>
+        <div class="wizard-step" data-step="0">
+          <p class="wizard-step-label">Your degree &amp; school</p>
+          <div class="field-row">
+            <div>
+              <label>University</label>
+              <input type="text" id="cm-university" placeholder="e.g. University of Lagos">
+            </div>
+            <div>
+              <label>Degree & field of study</label>
+              <input type="text" id="cm-degree" placeholder="e.g. B.Sc Computer Science">
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label>Degree classification</label>
+              <select id="cm-classification">
+                <option>First Class</option>
+                <option selected>Second Class Upper (2:1)</option>
+                <option>Second Class Lower (2:2)</option>
+                <option>Third Class</option>
+                <option>Pass</option>
+                <option>Not yet graduated</option>
+              </select>
+            </div>
+            <div>
+              <label>CGPA (optional, for extra precision)</label>
+              <input type="text" id="cm-cgpa" placeholder="e.g. 4.32 out of 5.0">
+            </div>
+          </div>
+        </div>
 
-      <button class="go-btn" style="margin-top:18px;" onclick="runCareerMatch()">Find my pathways →</button>
+        <div class="wizard-step" data-step="1">
+          <p class="wizard-step-label">Your status</p>
+          <div class="field-row">
+            <div>
+              <label>NYSC status</label>
+              <select id="cm-nysc">
+                <option>Not yet — still in school</option>
+                <option>Currently serving (corper)</option>
+                <option>Completed NYSC</option>
+                <option>Exempted from NYSC</option>
+              </select>
+            </div>
+            <div>
+              <label>IELTS / TOEFL status</label>
+              <select id="cm-english-test">
+                <option>No, prefer options that don't require it</option>
+                <option>Yes, already have it</option>
+                <option>Planning to take it</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="wizard-step" data-step="2">
+          <p class="wizard-step-label">Skills &amp; objectives</p>
+          <label>Your skills — tap to select, or type your own</label>
+          <div class="chip-field" id="cm-skills"></div>
+          <div class="skill-add-row">
+            <input type="text" id="cm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
+            <button class="upload-btn" onclick="addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input')">Add skill</button>
+          </div>
+
+          <label style="margin-top:16px;">Career objectives — what are you aiming for?</label>
+          <textarea id="cm-objectives" class="form-textarea" style="min-height:90px;" placeholder="e.g. I want to move into data analytics abroad, or find a fully-funded Master's in the UK..."></textarea>
+
+          <button class="go-btn" style="margin-top:18px;" onclick="runCareerMatch()">Find my pathways →</button>
+        </div>
+
+        <div class="wizard-nav">
+          <button class="upload-btn wizard-back-btn" onclick="wizardBack('career-wizard')">← Back</button>
+          <button class="go-btn wizard-next-btn" style="margin-top:0;" onclick="wizardNext('career-wizard')">Next →</button>
+        </div>
+      </div>
     </div>
     <div class="workbench" id="career-workbench"></div>
   </div>
@@ -719,6 +932,76 @@
       <button class="go-btn" onclick="runJobMatch()">Find my best-fit job →</button>
     </div>
     <div id="job-match-results"></div>
+  </div>
+
+  <!-- SALARY & CULTURE REVIEWS PANEL -->
+  <div class="panel" id="panel-salary" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Salary &amp; Culture Reviews</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Community-submitted, not verified against any real payslip or employer record — anonymous by design (we don't even store which account submitted a review). Include housing/transport allowances so real take-home pay is clear.</p>
+      <div class="field-row">
+        <div>
+          <label>Company</label>
+          <input type="text" id="sr-company" list="appt-company-list" placeholder="e.g. Paystack">
+        </div>
+        <div>
+          <label>Role title</label>
+          <input type="text" id="sr-role" placeholder="e.g. Junior Backend Engineer">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Career stage</label>
+          <select id="sr-level">
+            <option>Student</option>
+            <option>Early career (0-3 yrs)</option>
+            <option>Mid career (4-8 yrs)</option>
+          </select>
+        </div>
+        <div>
+          <label>Monthly pay (₦, cash only)</label>
+          <input type="text" id="sr-pay" placeholder="e.g. 250000">
+        </div>
+      </div>
+      <div class="btn-row">
+        <label class="consent-row" style="margin:0;"><input type="checkbox" id="sr-housing"> Housing allowance included</label>
+        <label class="consent-row" style="margin:0;"><input type="checkbox" id="sr-transport"> Transport allowance included</label>
+      </div>
+      <label style="margin-top:16px;">Culture rating</label>
+      <div class="star-rating" id="sr-rating">
+        <span class="star" data-value="1" onclick="setSalaryRating(1)">★</span>
+        <span class="star" data-value="2" onclick="setSalaryRating(2)">★</span>
+        <span class="star" data-value="3" onclick="setSalaryRating(3)">★</span>
+        <span class="star" data-value="4" onclick="setSalaryRating(4)">★</span>
+        <span class="star" data-value="5" onclick="setSalaryRating(5)">★</span>
+      </div>
+      <label>Review (optional)</label>
+      <textarea id="sr-text" class="form-textarea" placeholder="What's it really like working there?"></textarea>
+      <button class="go-btn" onclick="submitSalaryReview()">Submit anonymous review →</button>
+      <p class="form-msg" id="sr-msg"></p>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Look up a company</h3>
+      <div class="field-row">
+        <div>
+          <label>Company name</label>
+          <input type="text" id="sr-lookup-company" list="appt-company-list" placeholder="e.g. Paystack">
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+          <button class="go-btn" style="margin-top:0;" onclick="lookupSalaryReviews()">Look up →</button>
+        </div>
+      </div>
+    </div>
+    <div id="salary-lookup-results"></div>
+  </div>
+
+  <!-- MESSAGES PANEL -->
+  <div class="panel" id="panel-messages" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Messages</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0;">Employers can message you directly when your profile matches a role they've posted. Sign in to see and reply to your conversations.</p>
+    </div>
+    <div id="conversations-list"></div>
   </div>
 
   <!-- EMPLOYER PANEL -->
@@ -765,9 +1048,17 @@
           <input type="text" id="e-pay-max" placeholder="e.g. 400000">
         </div>
       </div>
+      <div class="field-row">
+        <div>
+          <label>NYSC / PPA state (optional — only candidates who self-declared a matching PPA state)</label>
+          <select id="e-ppa-state"><option value="">Any PPA state / not NYSC-specific</option></select>
+        </div>
+        <div></div>
+      </div>
       <button class="go-btn" onclick="findCandidates()">Find matching candidates →</button>
     </div>
     <div id="employer-results"></div>
+    <div id="employer-sent-messages"></div>
   </div>
 
   <footer class="site-footer">
@@ -839,6 +1130,25 @@
     </button>
   </div>
 </div>
+<div class="pull-refresh-indicator" id="pull-refresh-indicator">
+  <span class="pull-refresh-spinner">↻</span>
+</div>
+
+<nav class="bottom-dock" id="bottom-dock">
+  <button class="dock-btn" data-target="seeker" onclick="dockNavigate('seeker')">
+    <span class="dock-icon">🏠</span><span class="dock-label">Home</span>
+  </button>
+  <button class="dock-btn" data-target="explore" onclick="dockNavigate('explore')">
+    <span class="dock-icon">🔍</span><span class="dock-label">Explore</span>
+  </button>
+  <button class="dock-btn" data-target="career" onclick="dockNavigate('career')">
+    <span class="dock-icon">✨</span><span class="dock-label">Career AI</span>
+  </button>
+  <button class="dock-btn" data-target="profile" onclick="dockNavigate('profile')">
+    <span class="dock-icon">👤</span><span class="dock-label">Profile</span>
+  </button>
+</nav>
+
 <button class="chat-fab" id="chat-fab" onclick="toggleChatWidget()" aria-label="Chat with Bridge AI">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
 </button>
@@ -887,6 +1197,8 @@ buildChips('jm-skills', jobMatchSkills);
 
 populateLocationSelect('s-loc', true);
 populateLocationSelect('e-loc', false);
+populatePpaStateSelect('s-ppa-state');
+populatePpaStateSelect('e-ppa-state', 'Any PPA state / not NYSC-specific');
 populatePhoneCountrySelect('s-phone-cc');
 
 const REGIONS = ["Any region", "Americas", "Europe", "Middle East", "Asia-Pacific", "Global"];
@@ -902,6 +1214,9 @@ let notifTimer = null;
 async function loadImportedJobs(){
   try{
     const data = await apiListJobs();
+    // Idempotent: clear out any previously-loaded imported jobs first, so calling this again
+    // (e.g. pull-to-refresh) replaces the batch instead of duplicating every job in JOBS.
+    JOBS.length = 0;
     (data.jobs || []).forEach(j=>{
       JOBS.push({
         id: JOBS.length,
@@ -924,6 +1239,7 @@ async function loadImportedJobs(){
     renderRemoteJobsFeed();
     populateAppointmentCompanies();
     renderSalaryBenchmark();
+    updateMegaJobCounts();
   }catch(e){
     // Imported jobs are an enhancement — the rest of the app works fine without them.
   }
@@ -1272,7 +1588,9 @@ function renderExploreResults(){
             <div class="btn-row">
               ${applyButtonHtml(j)}
               ${followButtonHtml(j.company)}
+              ${bridgeGapButtonHtml(j.skills, mySkills)}
             </div>
+            <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
         </div>
       `).join('')}
@@ -1418,6 +1736,7 @@ async function requestAppointment(){
     bookingSelectedDate = null;
     bookingSelectedTime = null;
     renderBookingCalendar();
+    wizardReset('appt-wizard');
     msg.textContent = 'Appointment request saved.';
     msg.className = 'form-msg success';
     await loadAppointments();
@@ -1476,6 +1795,12 @@ function renderAppointments(){
           <p class="appt-datetime">${formatApptDate(a.date)}${a.time ? ' · ' + a.time : ''}</p>
           ${apptTimelineHtml(a.status)}
           ${a.notes ? `<p class="appt-notes">${a.notes.replace(/</g,'&lt;')}</p>` : ''}
+          ${a.status !== 'requested' ? `
+            <div class="appt-actions">
+              <a class="upload-btn" href="/api/appointments/ics?id=${a.id}" download="interview-${a.id}.ics">📅 Add to calendar</a>
+              ${a.zoomJoinUrl ? `<a class="upload-btn" href="${a.zoomJoinUrl}" target="_blank" rel="noopener noreferrer">🎥 Join Zoom</a>` : ''}
+            </div>
+          ` : ''}
           <div class="appt-actions">
             ${a.status !== 'completed' ? `<button class="ai-btn appt-advance-btn" onclick="advanceAppointment(${a.id}, '${a.status}')" title="There's no employer portal driving this automatically yet — this simulates the next update.">Simulate next update →</button>` : ''}
             <button class="follow-btn" onclick="cancelAppointment(${a.id})">Cancel request</button>
@@ -1575,14 +1900,109 @@ function toggleNotifDropdown(){
   document.getElementById('notif-dropdown').classList.toggle('open');
 }
 
+// Mega menu — hover-with-delay on desktop (fine pointer + real hover support), click/tap
+// accordion toggle everywhere (also the desktop fallback for touch-with-mouse hybrid devices
+// and keyboard users). All the panel links inside reuse the exact same tab-btn ids and
+// showPage() calls the old flat nav used — this is purely a navigational re-skin.
+function openMegaDropdown(item){
+  document.querySelectorAll('.mega-nav-item.open').forEach(i => { if(i !== item) closeMegaDropdown(i); });
+  item.classList.add('open');
+  const trigger = item.querySelector('.mega-nav-trigger');
+  if(trigger) trigger.setAttribute('aria-expanded', 'true');
+}
+
+function closeMegaDropdown(item){
+  item.classList.remove('open');
+  const trigger = item.querySelector('.mega-nav-trigger');
+  if(trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function initMegaNav(){
+  const items = [...document.querySelectorAll('.mega-nav-item')];
+  const isFinePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const hoverTimers = new Map();
+
+  items.forEach(item => {
+    const trigger = item.querySelector('.mega-nav-trigger');
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if(item.classList.contains('open')) closeMegaDropdown(item);
+      else openMegaDropdown(item);
+    });
+
+    if(isFinePointer){
+      item.addEventListener('mouseenter', () => {
+        clearTimeout(hoverTimers.get(item));
+        hoverTimers.set(item, setTimeout(() => openMegaDropdown(item), 120));
+      });
+      item.addEventListener('mouseleave', () => {
+        clearTimeout(hoverTimers.get(item));
+        hoverTimers.set(item, setTimeout(() => closeMegaDropdown(item), 220));
+      });
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if(!e.target.closest('.mega-nav-item')) items.forEach(closeMegaDropdown);
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') items.forEach(closeMegaDropdown);
+  });
+}
+
+// Real, computed values only — never a fabricated "Moniepoint Top Roles" style static claim.
+function renderMegaFeatureCard(){
+  const el = document.getElementById('mega-feature-card');
+  if(!el) return;
+  if(JOBS.length === 0){
+    el.innerHTML = '<p class="mega-feature-sub">Check back soon for new roles.</p>';
+    return;
+  }
+  const counts = {};
+  JOBS.forEach(j => { counts[j.company] = (counts[j.company] || 0) + 1; });
+  const [topCompany, topCount] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  el.innerHTML = `
+    <p class="mega-feature-title">${escapeHtml(topCompany)}</p>
+    <p class="mega-feature-sub">${topCount} open role${topCount === 1 ? '' : 's'} on Bridge NG right now</p>
+  `;
+}
+
+function updateMegaJobCounts(){
+  const exploreCountEl = document.getElementById('mega-explore-count');
+  if(exploreCountEl) exploreCountEl.textContent = `${JOBS.length} active role${JOBS.length === 1 ? '' : 's'}`;
+  const abroadCountEl = document.getElementById('mega-abroad-count');
+  if(abroadCountEl) abroadCountEl.textContent = `${INTL_JOBS.length} remote & international roles`;
+  renderMegaFeatureCard();
+}
+
+function renderMegaProfileMeter(){
+  const el = document.getElementById('mega-profile-meter-card');
+  if(!el) return;
+  if(!currentAccount){
+    el.innerHTML = '<p class="mega-feature-sub">Sign in to see your profile score</p>';
+    return;
+  }
+  const profile = currentAccount.profile;
+  const filled = PROFILE_COMPLETION_FIELDS.filter(f => {
+    const v = profile[f.key];
+    return f.key === 'skills' ? !!(v && v.length) : !!(v && String(v).trim());
+  }).length;
+  const pct = Math.round(filled / PROFILE_COMPLETION_FIELDS.length * 100);
+  el.innerHTML = `
+    <span class="mega-feature-pct">${pct}%</span>
+    <p class="mega-feature-sub">Profile complete${pct < 100 ? ' — finish it for better matches' : ' — nice work!'}</p>
+  `;
+}
+
 function toggleMobileNav(){
-  document.querySelector('.tabs').classList.toggle('open');
+  document.getElementById('mega-nav').classList.toggle('open');
   document.getElementById('nav-backdrop').classList.toggle('open');
 }
 
 function closeMobileNav(){
-  document.querySelector('.tabs').classList.remove('open');
+  document.getElementById('mega-nav').classList.remove('open');
   document.getElementById('nav-backdrop').classList.remove('open');
+  document.querySelectorAll('.mega-nav-item.open').forEach(item => closeMegaDropdown(item));
 }
 
 async function markAllNotificationsRead(){
@@ -1596,7 +2016,95 @@ async function markAllNotificationsRead(){
 
 function startNotifPolling(){
   if(notifTimer) return;
-  notifTimer = setInterval(()=>{ if(currentAccount) loadNotifications(); }, 60000);
+  notifTimer = setInterval(()=>{ if(currentAccount){ loadNotifications(); loadConversations(); } }, 60000);
+}
+
+// Candidate-side messaging inbox
+let conversations = [];
+
+async function loadConversations(){
+  if(!currentAccount){ conversations = []; renderConversations(); updateMessagesUnreadBadge(); return; }
+  try{
+    const data = await apiListConversations();
+    conversations = data.conversations || [];
+  }catch(e){
+    conversations = [];
+  }
+  renderConversations();
+  updateMessagesUnreadBadge();
+}
+
+function updateMessagesUnreadBadge(){
+  const badge = document.getElementById('messages-unread-badge');
+  if(!badge) return;
+  const totalUnread = conversations.reduce((sum, c) => sum + (c.unread || 0), 0);
+  badge.textContent = totalUnread;
+  badge.style.display = totalUnread > 0 ? '' : 'none';
+}
+
+function renderConversations(){
+  const el = document.getElementById('conversations-list');
+  if(!el) return;
+  if(!currentAccount){
+    el.innerHTML = '<div class="empty">Sign in to see messages from employers.</div>';
+    return;
+  }
+  if(conversations.length === 0){
+    el.innerHTML = '<div class="empty">No messages yet. When an employer messages you about a role, it\'ll show up here.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="results-head"><h2>Your conversations</h2><span>${conversations.length}</span></div>
+    ${conversations.map(c => `
+      <div class="message-thread-card" data-convo-id="${c.id}">
+        <div class="message-thread-head" onclick="toggleConversation(${c.id})">
+          <p class="res-title">${escapeHtml(c.company)}${c.jobTitle ? ' · ' + escapeHtml(c.jobTitle) : ''} ${c.unread ? `<span class="new-badge">${c.unread} new</span>` : ''}</p>
+          <span class="message-thread-date">${(c.createdAt || '').slice(0, 10)}</span>
+        </div>
+        <div class="message-thread-body" id="convo-body-${c.id}" style="display:none;">
+          <div class="message-thread-list">
+            ${c.messages.map(m => `<div class="message-bubble ${m.senderRole}">${escapeHtml(m.body)}</div>`).join('')}
+          </div>
+          <div class="message-reply-row">
+            <input type="text" class="employer-reply-input" id="convo-reply-${c.id}" placeholder="Reply...">
+            <button class="upload-btn" onclick="sendConversationReply(${c.id})">Send</button>
+          </div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+async function toggleConversation(id){
+  const body = document.getElementById('convo-body-' + id);
+  if(!body) return;
+  const opening = body.style.display === 'none';
+  body.style.display = opening ? '' : 'none';
+  if(opening){
+    const convo = conversations.find(c => c.id === id);
+    if(convo && convo.unread > 0){
+      convo.unread = 0;
+      updateMessagesUnreadBadge();
+      const badgeEl = document.querySelector(`.message-thread-card[data-convo-id="${id}"] .new-badge`);
+      if(badgeEl) badgeEl.remove();
+      try{ await apiMarkConversationRead(id); }catch(e){}
+    }
+  }
+}
+
+async function sendConversationReply(id){
+  const input = document.getElementById('convo-reply-' + id);
+  const body = input.value.trim();
+  if(!body) return;
+  try{
+    await apiReplyToConversation(id, body);
+    input.value = '';
+    await loadConversations();
+    const bodyEl = document.getElementById('convo-body-' + id);
+    if(bodyEl) bodyEl.style.display = '';
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
 }
 
 document.addEventListener('click', (e)=>{
@@ -1890,6 +2398,146 @@ function quickMatchDecide(interested){
   renderQuickMatchCard();
 }
 
+// Employer messaging (Smart Sourcing) — employer side. There's no employer login in this
+// app, so "my sent conversations" is tracked in this browser's localStorage (a private token
+// per conversation, not a real account), while replies still land safely for the candidate
+// because that side IS behind real login.
+const EMPLOYER_CONVOS_KEY = 'bridgeng_employer_conversations';
+
+function getEmployerConversationsLocal(){
+  try{ return JSON.parse(localStorage.getItem(EMPLOYER_CONVOS_KEY) || '[]'); }catch(e){ return []; }
+}
+
+function saveEmployerConversationLocally(id, token, company, jobTitle){
+  const list = getEmployerConversationsLocal();
+  list.unshift({id, token, company, jobTitle});
+  localStorage.setItem(EMPLOYER_CONVOS_KEY, JSON.stringify(list.slice(0, 30)));
+}
+
+async function watchCandidatePitch(userId, btn){
+  const panel = document.getElementById('pitch-watch-' + userId);
+  if(!panel) return;
+  if(panel.style.display !== 'none'){ panel.style.display = 'none'; return; }
+  panel.style.display = '';
+  if(panel.dataset.loaded) return;
+  panel.innerHTML = '<p class="loading-line">Loading pitch…</p>';
+  try{
+    const data = await apiGetCandidatePitch(userId);
+    const url = `data:${data.mediaType};base64,${data.base64}`;
+    panel.innerHTML = data.kind === 'video'
+      ? `<video src="${url}" controls playsinline class="pitch-watch-media"></video>`
+      : `<audio src="${url}" controls style="width:100%;"></audio>`;
+    panel.dataset.loaded = '1';
+  }catch(e){
+    panel.innerHTML = '<p class="fit-none">Could not load this pitch.</p>';
+  }
+}
+
+function toggleMessageComposer(userId){
+  const el = document.getElementById('msg-composer-' + userId);
+  if(el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function sendEmployerMessage(btn){
+  const composer = btn.closest('.message-composer');
+  const textarea = composer.querySelector('textarea');
+  const body = textarea.value.trim();
+  if(!body){ showToast('Type a message first.'); return; }
+  const candidateUserId = Number(composer.dataset.userId);
+  const company = composer.dataset.company;
+  const jobTitle = composer.dataset.jobTitle;
+  try{
+    const data = await apiMessageStart({candidateUserId, company, jobTitle, body});
+    saveEmployerConversationLocally(data.conversationId, data.employerToken, company, jobTitle);
+    composer.innerHTML = '<p class="fit-none">✓ Message sent — see "Messages you\'ve sent" below for replies.</p>';
+    renderEmployerSentMessages();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+async function renderEmployerSentMessages(){
+  const el = document.getElementById('employer-sent-messages');
+  if(!el) return;
+  const list = getEmployerConversationsLocal();
+  if(list.length === 0){ el.innerHTML = ''; return; }
+  const threads = await Promise.all(list.map(async c => {
+    try{
+      const data = await apiEmployerMessageThread(c.id, c.token);
+      return {...c, messages: data.messages};
+    }catch(e){
+      return {...c, messages: null};
+    }
+  }));
+  const live = threads.filter(t => t.messages);
+  if(live.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Messages you've sent (this browser)</h2><span>${live.length}</span></div>
+    ${live.map(t => `
+      <div class="message-thread-card">
+        <p class="res-title">${escapeHtml(t.company)}${t.jobTitle ? ' · ' + escapeHtml(t.jobTitle) : ''}</p>
+        <div class="message-thread-list">
+          ${t.messages.map(m => `<div class="message-bubble ${m.senderRole}">${escapeHtml(m.body)}</div>`).join('')}
+        </div>
+        <div class="message-reply-row">
+          <input type="text" class="employer-reply-input" placeholder="Reply...">
+          <button class="upload-btn" onclick="sendEmployerReply(${t.id}, '${t.token}', this)">Send</button>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+async function sendEmployerReply(conversationId, token, btn){
+  const input = btn.previousElementSibling;
+  const body = input.value.trim();
+  if(!body) return;
+  try{
+    await apiEmployerMessageReply(conversationId, token, body);
+    input.value = '';
+    renderEmployerSentMessages();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+// Generic multi-step "wizard" card — purely a display layer over the same existing form
+// fields/IDs/submit functions (requestAppointment, runCareerMatch); it only shows/hides step
+// groups and never changes what those functions read or how they submit.
+function wizardShowStep(wizardId, stepIndex){
+  const wizard = document.getElementById(wizardId);
+  if(!wizard) return;
+  const steps = [...wizard.querySelectorAll('.wizard-step')];
+  const total = steps.length;
+  stepIndex = Math.max(0, Math.min(stepIndex, total - 1));
+  wizard.dataset.currentStep = stepIndex;
+  steps.forEach(el => el.classList.toggle('active', Number(el.dataset.step) === stepIndex));
+  wizard.querySelectorAll('.wizard-dot').forEach((el, i) => {
+    el.classList.toggle('active', i === stepIndex);
+    el.classList.toggle('done', i < stepIndex);
+  });
+  const backBtn = wizard.querySelector('.wizard-back-btn');
+  const nextBtn = wizard.querySelector('.wizard-next-btn');
+  if(backBtn) backBtn.disabled = stepIndex === 0;
+  if(nextBtn) nextBtn.style.display = stepIndex === total - 1 ? 'none' : '';
+}
+
+function wizardNext(wizardId){
+  const wizard = document.getElementById(wizardId);
+  if(!wizard) return;
+  wizardShowStep(wizardId, Number(wizard.dataset.currentStep || 0) + 1);
+}
+
+function wizardBack(wizardId){
+  const wizard = document.getElementById(wizardId);
+  if(!wizard) return;
+  wizardShowStep(wizardId, Number(wizard.dataset.currentStep || 0) - 1);
+}
+
+function wizardReset(wizardId){
+  wizardShowStep(wizardId, 0);
+}
+
 // Interactive booking calendar — replaces the plain date/time inputs with a visual month
 // grid + time-slot picker. Times are shown in the candidate's own detected local time zone
 // (a real value from Intl, not a guessed per-company time zone we have no real data for),
@@ -1980,6 +2628,152 @@ function selectBookingTime(t){
   bookingSelectedTime = t;
   document.getElementById('appt-time').value = t;
   renderBookingCalendar();
+}
+
+// 30-second pitch recorder — real getUserMedia + MediaRecorder, capped at 30 seconds. Nothing
+// is uploaded until the candidate explicitly clicks "Save to profile"; the stream is torn down
+// on Stop, Discard, or leaving this tab (same safeguard as the mock interview camera).
+const PITCH_MAX_SECONDS = 30;
+let pitchStream = null;
+let pitchRecorder = null;
+let pitchChunks = [];
+let pitchTimerInterval = null;
+let pitchBlob = null;
+let pitchKind = 'video';
+
+async function startPitchRecording(kind){
+  pitchKind = kind;
+  try{
+    pitchStream = await navigator.mediaDevices.getUserMedia(kind === 'video' ? {video: true, audio: true} : {audio: true});
+  }catch(e){
+    showToast('Could not access your camera/microphone — check permissions and try again.');
+    return;
+  }
+  const video = document.getElementById('pitch-preview-video');
+  const audio = document.getElementById('pitch-preview-audio');
+  if(kind === 'video'){
+    video.srcObject = pitchStream;
+    video.style.display = '';
+    audio.style.display = 'none';
+  }else{
+    video.style.display = 'none';
+  }
+  document.getElementById('pitch-placeholder').style.display = 'none';
+
+  pitchChunks = [];
+  pitchRecorder = new MediaRecorder(pitchStream);
+  pitchRecorder.ondataavailable = e => { if(e.data.size > 0) pitchChunks.push(e.data); };
+  pitchRecorder.onstop = onPitchRecordingStopped;
+  pitchRecorder.start();
+
+  document.getElementById('pitch-record-video-btn').style.display = 'none';
+  document.getElementById('pitch-record-audio-btn').style.display = 'none';
+  document.getElementById('pitch-stop-btn').style.display = '';
+
+  let secondsLeft = PITCH_MAX_SECONDS;
+  const timerEl = document.getElementById('pitch-timer');
+  timerEl.style.display = '';
+  timerEl.textContent = `0:${String(secondsLeft).padStart(2, '0')}`;
+  pitchTimerInterval = setInterval(() => {
+    secondsLeft--;
+    timerEl.textContent = `0:${String(Math.max(0, secondsLeft)).padStart(2, '0')}`;
+    if(secondsLeft <= 0) stopPitchRecording();
+  }, 1000);
+}
+
+function onPitchRecordingStopped(){
+  pitchBlob = new Blob(pitchChunks, {type: pitchRecorder.mimeType});
+  if(pitchStream){ pitchStream.getTracks().forEach(t => t.stop()); pitchStream = null; }
+  const url = URL.createObjectURL(pitchBlob);
+  const video = document.getElementById('pitch-preview-video');
+  const audio = document.getElementById('pitch-preview-audio');
+  if(pitchKind === 'video'){
+    video.srcObject = null;
+    video.src = url;
+    video.muted = false;
+    video.controls = true;
+  }else{
+    audio.src = url;
+    audio.style.display = '';
+  }
+  document.getElementById('pitch-timer').style.display = 'none';
+  document.getElementById('pitch-stop-btn').style.display = 'none';
+  document.getElementById('pitch-save-btn').style.display = '';
+  document.getElementById('pitch-discard-btn').style.display = '';
+}
+
+function stopPitchRecording(){
+  clearInterval(pitchTimerInterval);
+  if(pitchRecorder && pitchRecorder.state !== 'inactive') pitchRecorder.stop();
+}
+
+function stopPitchCamera(){
+  clearInterval(pitchTimerInterval);
+  if(pitchRecorder && pitchRecorder.state !== 'inactive'){
+    pitchRecorder.onstop = null; // leaving the tab — don't populate a preview, just release the hardware
+    pitchRecorder.stop();
+  }
+  if(pitchStream){ pitchStream.getTracks().forEach(t => t.stop()); pitchStream = null; }
+}
+
+function discardPitchRecording(resetButtons){
+  stopPitchCamera();
+  pitchBlob = null;
+  pitchChunks = [];
+  const video = document.getElementById('pitch-preview-video');
+  const audio = document.getElementById('pitch-preview-audio');
+  video.src = ''; video.srcObject = null; video.muted = true; video.controls = false; video.style.display = '';
+  audio.src = ''; audio.style.display = 'none';
+  document.getElementById('pitch-placeholder').style.display = '';
+  document.getElementById('pitch-timer').style.display = 'none';
+  if(resetButtons){
+    document.getElementById('pitch-record-video-btn').style.display = '';
+    document.getElementById('pitch-record-audio-btn').style.display = '';
+    document.getElementById('pitch-stop-btn').style.display = 'none';
+    document.getElementById('pitch-save-btn').style.display = 'none';
+    document.getElementById('pitch-discard-btn').style.display = 'none';
+    if(currentAccount) apiSavePitch({kind: '', mediaType: '', base64: ''}).catch(() => {});
+  }
+}
+
+function loadSavedPitch(profile){
+  if(!profile.pitchMedia) return;
+  pitchKind = profile.pitchMedia.kind;
+  const video = document.getElementById('pitch-preview-video');
+  const audio = document.getElementById('pitch-preview-audio');
+  const url = `data:${profile.pitchMedia.mediaType};base64,${profile.pitchMedia.base64}`;
+  document.getElementById('pitch-placeholder').style.display = 'none';
+  if(pitchKind === 'video'){
+    video.src = url;
+    video.muted = false;
+    video.controls = true;
+    video.style.display = '';
+    audio.style.display = 'none';
+  }else{
+    audio.src = url;
+    audio.style.display = '';
+    video.style.display = 'none';
+  }
+  document.getElementById('pitch-record-video-btn').style.display = 'none';
+  document.getElementById('pitch-record-audio-btn').style.display = 'none';
+  document.getElementById('pitch-save-btn').style.display = 'none';
+  document.getElementById('pitch-discard-btn').style.display = '';
+}
+
+async function savePitchToProfile(){
+  if(!currentAccount){ showToast('Sign in to save your pitch.'); return; }
+  if(!pitchBlob){ showToast('Record a pitch first.'); return; }
+  const msg = document.getElementById('pitch-msg');
+  try{
+    const base64 = await blobToBase64(pitchBlob);
+    const res = await apiSavePitch({kind: pitchKind, mediaType: pitchBlob.type, base64});
+    currentAccount.profile = res.profile;
+    msg.textContent = 'Pitch saved to your profile.';
+    msg.className = 'form-msg success';
+  }catch(e){
+    msg.textContent = "Couldn't save your pitch — it may be too large. Try recording a shorter clip.";
+    msg.className = 'form-msg error';
+  }
 }
 
 // ATS Score Check — real, computed heuristics (action verbs, quantifiable results, standard
@@ -2220,6 +3014,106 @@ function handleSkillChipToggle(containerId){
 
 let lastKnownStreak = 0;
 
+// NYSC/PPA matchmaking — self-declared only (see the "self-declared" labeling throughout).
+// PPA state reuses the same real Nigerian states list as the location selects.
+function populatePpaStateSelect(selectId, placeholder){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  sel.innerHTML = `<option value="">${placeholder || 'Select state'}</option>` + Object.keys(LOCATIONS).map(s => `<option>${s}</option>`).join('');
+}
+
+function onNyscStatusChange(){
+  const status = document.getElementById('s-nysc').value;
+  document.getElementById('ppa-field-row').style.display = status === 'Currently serving (corper)' ? '' : 'none';
+}
+
+// Community salary & culture reviews — truly anonymous at the storage layer (see server.py),
+// never labeled "verified" since nothing here is checked against a real payslip.
+let salaryRatingValue = 0;
+
+function setSalaryRating(n){
+  salaryRatingValue = n;
+  document.querySelectorAll('#sr-rating .star').forEach(star => {
+    star.classList.toggle('filled', Number(star.dataset.value) <= n);
+  });
+}
+
+async function submitSalaryReview(){
+  const msg = document.getElementById('sr-msg');
+  const company = document.getElementById('sr-company').value.trim();
+  const roleTitle = document.getElementById('sr-role').value.trim();
+  const monthlyPay = document.getElementById('sr-pay').value;
+  if(!company || !roleTitle || !monthlyPay || Number(monthlyPay) <= 0){
+    msg.textContent = 'Enter a company, role, and a real monthly pay figure.';
+    msg.className = 'form-msg error';
+    return;
+  }
+  if(salaryRatingValue === 0){
+    msg.textContent = 'Pick a culture rating (1-5 stars).';
+    msg.className = 'form-msg error';
+    return;
+  }
+  try{
+    await apiCreateSalaryReview({
+      company, roleTitle, level: document.getElementById('sr-level').value,
+      monthlyPay: Number(monthlyPay),
+      hasHousingAllowance: document.getElementById('sr-housing').checked,
+      hasTransportAllowance: document.getElementById('sr-transport').checked,
+      cultureRating: salaryRatingValue,
+      reviewText: document.getElementById('sr-text').value.trim(),
+    });
+    msg.textContent = 'Thanks — your anonymous review was submitted.';
+    msg.className = 'form-msg success';
+    document.getElementById('sr-company').value = '';
+    document.getElementById('sr-role').value = '';
+    document.getElementById('sr-pay').value = '';
+    document.getElementById('sr-housing').checked = false;
+    document.getElementById('sr-transport').checked = false;
+    document.getElementById('sr-text').value = '';
+    setSalaryRating(0);
+  }catch(err){
+    msg.textContent = friendlyErrorMessage('generic');
+    msg.className = 'form-msg error';
+  }
+}
+
+async function lookupSalaryReviews(){
+  const company = document.getElementById('sr-lookup-company').value.trim();
+  const el = document.getElementById('salary-lookup-results');
+  if(!company){
+    showToast('Enter a company name to look up.');
+    return;
+  }
+  el.innerHTML = '<p class="loading-line">Looking up reviews…</p>';
+  try{
+    const data = await apiListSalaryReviews(company);
+    if(data.count === 0){
+      el.innerHTML = `<div class="empty">No reviews yet for ${escapeHtml(company)} — be the first to submit one above.</div>`;
+      return;
+    }
+    el.innerHTML = `
+      <div class="salary-summary-card">
+        <p class="salary-summary-title">${escapeHtml(company)} — ${data.count} review${data.count === 1 ? '' : 's'}</p>
+        <div class="salary-summary-stats">
+          <div><span class="salary-summary-num">₦${data.avgPay.toLocaleString('en-NG')}</span><span class="salary-summary-lbl">Avg monthly pay</span></div>
+          <div><span class="salary-summary-num">₦${data.minPay.toLocaleString('en-NG')} – ₦${data.maxPay.toLocaleString('en-NG')}</span><span class="salary-summary-lbl">Range</span></div>
+          <div><span class="salary-summary-num">${'★'.repeat(Math.round(data.avgCultureRating))}${'☆'.repeat(5 - Math.round(data.avgCultureRating))}</span><span class="salary-summary-lbl">${data.avgCultureRating}/5 culture</span></div>
+        </div>
+      </div>
+      <div class="results-head"><h2>Individual reviews</h2><span>Anonymous — no submitter identity is ever stored</span></div>
+      ${data.reviews.map(r => `
+        <div class="salary-review-card">
+          <p class="res-title">${escapeHtml(r.roleTitle)}${r.level ? ' · ' + escapeHtml(r.level) : ''}</p>
+          <p class="res-sub">₦${r.monthlyPay.toLocaleString('en-NG')}/mo${r.hasHousingAllowance ? ' + housing' : ''}${r.hasTransportAllowance ? ' + transport' : ''} · ${'★'.repeat(r.cultureRating)}${'☆'.repeat(5 - r.cultureRating)}</p>
+          ${r.reviewText ? `<p class="salary-review-text">${escapeHtml(r.reviewText)}</p>` : ''}
+        </div>
+      `).join('')}
+    `;
+  }catch(err){
+    el.innerHTML = `<div class="empty">${friendlyErrorMessage('generic')}</div>`;
+  }
+}
+
 async function loadCheckinStatus(){
   const el = document.getElementById('streak-widget');
   if(!el) return;
@@ -2295,13 +3189,25 @@ const PROFILE_COMPLETION_FIELDS = [
   {key: 'careerLevel', label: 'Career stage', target: 's-level'},
   {key: 'fieldOfStudy', label: 'Field of study', target: 's-field'},
   {key: 'preferredLocation', label: 'Preferred location', target: 's-loc'},
+  {key: 'university', label: 'University / institution', target: 's-university'},
   {key: 'skills', label: 'Skills', target: 's-skill-input'},
 ];
+
+function renderNyscBadge(){
+  const el = document.getElementById('nysc-badge');
+  if(!el) return;
+  const status = currentAccount && currentAccount.profile.nyscStatus;
+  el.innerHTML = status
+    ? `<span class="milestone-badge self-declared" title="Self-declared by the candidate — Bridge NG has no way to verify this against NYSC's own systems.">📋 ${status} (self-declared)</span>`
+    : '';
+}
 
 function renderProfileCompletion(){
   const el = document.getElementById('profile-completion');
   if(!el) return;
   renderMilestoneBadges();
+  renderNyscBadge();
+  renderMegaProfileMeter();
   if(!currentAccount){ el.innerHTML = ''; return; }
   const profile = currentAccount.profile;
   const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
@@ -2365,8 +3271,40 @@ function fillSeekerFormFromProfile(profile){
   document.getElementById('s-field').value = profile.fieldOfStudy || '';
   if(profile.preferredLocation) document.getElementById('s-loc').value = profile.preferredLocation;
   document.getElementById('s-remote').value = profile.openToRemote ? 'yes' : 'no';
+  document.getElementById('s-university').value = profile.university || '';
+  if(profile.nyscStatus) document.getElementById('s-nysc').value = profile.nyscStatus;
+  if(profile.ppaState) document.getElementById('s-ppa-state').value = profile.ppaState;
+  document.getElementById('s-ppa-lga').value = profile.ppaLga || '';
+  onNyscStatusChange();
+  document.getElementById('s-whatsapp-number').value = profile.whatsappNumber || '';
+  document.getElementById('s-whatsapp-enabled').value = profile.whatsappAlertsEnabled ? 'yes' : 'no';
+  document.getElementById('whatsapp-status-note').textContent = 'Requires Bridge NG to have WhatsApp alerts configured on the backend — your preference is saved either way, but delivery isn\'t guaranteed until then.';
   applySelectedSkills('s-skills', seekerSkills, profile.skills);
   renderRemoteJobsFeed();
+  onUniversityFieldChange();
+}
+
+// Campus grouping — an aggregate count only (never a list of who else attends), computed from
+// real profile data, since this app has no way to verify enrollment either way.
+let campusCountDebounce = null;
+function onUniversityFieldChange(){
+  clearTimeout(campusCountDebounce);
+  const note = document.getElementById('campus-count-note');
+  const university = (document.getElementById('s-university').value || '').trim();
+  if(!university){ note.textContent = ''; return; }
+  campusCountDebounce = setTimeout(async () => {
+    try{
+      const data = await apiCampusCount(university);
+      // Guard against a slower, older request resolving after a newer one and clobbering
+      // the display with stale data — only apply this result if the field still matches.
+      if((document.getElementById('s-university').value || '').trim() !== university) return;
+      note.textContent = data.count > 0
+        ? `${data.count} other Bridge NG member${data.count === 1 ? '' : 's'} from ${university}`
+        : `Be the first Bridge NG member from ${university} to complete a profile.`;
+    }catch(e){
+      note.textContent = '';
+    }
+  }, 500);
 }
 
 function renderAuthArea(){
@@ -2388,6 +3326,7 @@ async function initAccount(){
       currentAccount = {email: me.email, profile: me.profile};
       fillSeekerFormFromProfile(me.profile);
       loadSavedResume(me.profile);
+      loadSavedPitch(me.profile);
     }
   }catch(e){
     // API not reachable (e.g. page opened directly from disk instead of via server.py) — stay signed out.
@@ -2400,6 +3339,7 @@ async function initAccount(){
   await loadAppointments();
   await loadApplications();
   await loadCheckinStatus();
+  await loadConversations();
   if(currentAccount) startNotifPolling();
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
@@ -2410,6 +3350,10 @@ renderSkillRadar();
 initResumeBuilder();
 initAtsDropzone();
 renderBookingCalendar();
+wizardShowStep('appt-wizard', 0);
+wizardShowStep('career-wizard', 0);
+initMegaNav();
+updateMegaJobCounts();
 
 // Subtle cursor-follow tilt on the hero photo — desktop pointer only, since a touch "hover"
 // has no real cursor position and would just leave the tilt stuck wherever it was last tapped.
@@ -2441,6 +3385,7 @@ async function signOut(){
   await loadAppointments();
   await loadApplications();
   await loadCheckinStatus();
+  await loadConversations();
   renderRecentJobsFeed();
   renderRemoteJobsFeed();
 }
@@ -2498,6 +3443,12 @@ async function saveProfile(){
     fieldOfStudy: document.getElementById('s-field').value,
     preferredLocation: document.getElementById('s-loc').value,
     openToRemote: document.getElementById('s-remote').value === 'yes',
+    university: document.getElementById('s-university').value,
+    nyscStatus: document.getElementById('s-nysc').value,
+    ppaState: document.getElementById('s-ppa-state').value,
+    ppaLga: document.getElementById('s-ppa-lga').value,
+    whatsappNumber: document.getElementById('s-whatsapp-number').value,
+    whatsappAlertsEnabled: document.getElementById('s-whatsapp-enabled').value === 'yes',
     skills: [...seekerSkills]
   };
   try{
@@ -2636,10 +3587,11 @@ function updateHeroLeft(page){
   });
 }
 
-const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch'];
+const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch', 'messages', 'salary'];
 
 function showPage(page){
   if(page !== 'interview' && mockInterviewStream) stopMockInterviewCamera();
+  if(page !== 'resume' && pitchStream) stopPitchCamera();
   TAB_PANELS.forEach(key=>{
     const panel = document.getElementById('panel-' + key);
     panel.style.display = key === page ? '' : 'none';
@@ -2650,8 +3602,33 @@ function showPage(page){
   updateHeroLeft(page);
   if(page === 'explore') renderExploreResults();
   if(page === 'jobmatch') updateJobMatchResumeNote();
+  if(page === 'employer') renderEmployerSentMessages();
+  if(page === 'messages') loadConversations();
   closeMobileNav();
   window.scrollTo({top:0, behavior:'smooth'});
+  updateDockActiveState(['seeker', 'explore', 'career'].includes(page) ? page : null);
+}
+
+// Bottom navigation dock (mobile only) — "Profile" reuses the same seeker panel as "Home"
+// (there's no separate profile page in this app) but scrolls straight to the profile card,
+// so it isn't just a duplicate of Home.
+function dockNavigate(target){
+  if(target === 'profile'){
+    showPage('seeker');
+    setTimeout(() => {
+      const el = document.querySelector('#panel-seeker .card');
+      if(el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }, 350);
+    updateDockActiveState('profile');
+  }else{
+    showPage(target);
+  }
+}
+
+function updateDockActiveState(active){
+  document.querySelectorAll('.dock-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.target === active);
+  });
 }
 
 function goToResumeStudio(jobId, action){
@@ -2743,6 +3720,41 @@ function isRemoteEligible(job){
   return /remote|anywhere|worldwide|global/.test(loc);
 }
 
+// Skill-Gap Bridge Pathways — reuses trainingResourcesFor() (real search URLs, no fabricated
+// course names) to point at exactly the skills a candidate is missing for a specific role.
+function bridgeGapButtonHtml(jobSkills, mySkillsSet){
+  const missing = (jobSkills || []).filter(s => !mySkillsSet.has(s));
+  if(missing.length === 0) return '';
+  return `<button class="ai-btn" data-missing="${escapeAttr(JSON.stringify(missing))}" onclick="toggleBridgeGap(this)">🌉 Bridge the Gap (${missing.length})</button>`;
+}
+
+function toggleBridgeGap(btn){
+  const panel = btn.closest('.res-body').querySelector('.bridge-gap-panel');
+  if(!panel) return;
+  const opening = panel.style.display === 'none';
+  panel.style.display = opening ? '' : 'none';
+  if(opening && !panel.dataset.rendered){
+    const missing = JSON.parse(btn.dataset.missing);
+    panel.innerHTML = `
+      <p class="bridge-gap-title">Skills to close the gap</p>
+      ${missing.map(skill => `
+        <div class="bridge-gap-skill">
+          <p class="bridge-gap-skill-name">${escapeHtml(skill)}</p>
+          <div class="bridge-gap-courses">
+            ${trainingResourcesFor(skill).slice(0, 3).map(r => `
+              <a class="bridge-gap-course" href="${r.url}" target="_blank" rel="noopener noreferrer">
+                <span class="bridge-gap-course-platform">${r.platform}</span>
+                <span class="bridge-gap-course-badge">${r.badge}</span>
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    `;
+    panel.dataset.rendered = '1';
+  }
+}
+
 function skillPills(allSkills, highlightSet){
   return allSkills.map(s=>{
     const cls = highlightSet.has(s) ? 'skill-pill match' : 'skill-pill';
@@ -2793,7 +3805,9 @@ function findJobs(){
               ${followButtonHtml(job.company)}
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'cover')">Write cover letter ↗</button>
+              ${bridgeGapButtonHtml(job.skills, seekerSkills)}
             </div>
+            <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
         </div>`;
       }).join('')}
@@ -3209,7 +4223,10 @@ function copyWorkbench(){
 function blobToBase64(blob){
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    // Split on the fixed ';base64,' marker, not a bare comma — a media blob's own mime type can
+    // legitimately contain commas (e.g. 'video/webm;codecs=vp8,opus'), which a naive
+    // .split(',')[1] would cut into instead of the actual payload.
+    reader.onloadend = () => resolve(reader.result.split(';base64,')[1]);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
@@ -3716,6 +4733,7 @@ async function findCandidates(){
   const loc = document.getElementById('e-loc').value;
   const payMin = document.getElementById('e-pay-min').value;
   const payMax = document.getElementById('e-pay-max').value;
+  const ppaState = document.getElementById('e-ppa-state').value;
   if(employerSkills.size === 0){
     showToast('Select at least one required skill to find candidates.');
     return;
@@ -3729,7 +4747,7 @@ async function findCandidates(){
   let notifiedCount = 0;
   try{
     const data = await apiPostEmployerJob({
-      title, company, level, location: loc, skills,
+      title, company, level, location: loc, skills, ppaState,
       payMin: Number(payMin) || 0, payMax: Number(payMax) || 0
     });
     realMatches = data.realMatches || [];
@@ -3761,7 +4779,17 @@ async function findCandidates(){
           <div class="res-body">
             <p class="res-title">${m.fullName} <span class="match-badge">Real member</span></p>
             <p class="res-sub">${m.fieldOfStudy || 'Field not specified'} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
+            ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="ai-btn" onclick="toggleMessageComposer(${m.userId})">✉ Message</button>
+              ${m.hasPitch ? `<button class="ai-btn" onclick="watchCandidatePitch(${m.userId}, this)">▶ Watch pitch</button>` : ''}
+            </div>
+            <div class="pitch-watch-panel" id="pitch-watch-${m.userId}" style="display:none;"></div>
+            <div class="message-composer" id="msg-composer-${m.userId}" style="display:none;" data-user-id="${m.userId}" data-company="${escapeAttr(company)}" data-job-title="${escapeAttr(title)}">
+              <textarea class="form-textarea" placeholder="e.g. We saw your profile on Career Match AI — are you free for a quick chat about this role?"></textarea>
+              <button class="go-btn" style="margin-top:8px;" onclick="sendEmployerMessage(this)">Send message →</button>
+            </div>
           </div>
         </div>`;
       }).join('')}
@@ -3773,6 +4801,60 @@ async function findCandidates(){
 
   results.innerHTML = realSection;
 }
+
+// Pull-to-refresh (mobile) — only arms when already scrolled to the very top, so it never
+// hijacks a normal downward scroll partway down the page. Refreshes the real imported-jobs
+// feed via the API, not a fake spinner with nothing behind it.
+(function setupPullToRefresh(){
+  const indicator = document.getElementById('pull-refresh-indicator');
+  if(!indicator) return;
+  let startY = null, pulling = false, refreshing = false;
+  const THRESHOLD = 70, MAX_PULL = 120;
+
+  document.addEventListener('touchstart', (e) => {
+    if(refreshing || window.scrollY > 2){ startY = null; pulling = false; return; }
+    startY = e.touches[0].clientY;
+    pulling = true;
+  }, {passive: true});
+
+  document.addEventListener('touchmove', (e) => {
+    if(!pulling || startY === null || refreshing) return;
+    const delta = e.touches[0].clientY - startY;
+    if(delta <= 0){ indicator.style.transform = 'translate(-50%, -100%)'; return; }
+    const pull = Math.min(delta, MAX_PULL);
+    const translatePct = -100 + (pull / MAX_PULL) * 130;
+    indicator.style.transform = `translate(-50%, ${translatePct}%) rotate(${pull * 2}deg)`;
+  }, {passive: true});
+
+  document.addEventListener('touchend', (e) => {
+    if(!pulling || startY === null) return;
+    const delta = e.changedTouches[0].clientY - startY;
+    pulling = false;
+    const shouldRefresh = delta > THRESHOLD && !refreshing;
+    startY = null;
+    if(shouldRefresh) triggerPullRefresh();
+    else indicator.style.transform = 'translate(-50%, -100%)';
+  });
+
+  async function triggerPullRefresh(){
+    refreshing = true;
+    indicator.classList.add('spinning');
+    indicator.style.transform = 'translate(-50%, 30%)';
+    try{
+      await loadImportedJobs();
+      const explorePanel = document.getElementById('panel-explore');
+      if(explorePanel && explorePanel.style.display !== 'none') renderExploreResults();
+      showToast('Feed refreshed.');
+    }catch(e){
+      // best-effort — loadImportedJobs already no-ops gracefully on failure
+    }
+    setTimeout(() => {
+      indicator.classList.remove('spinning');
+      indicator.style.transform = 'translate(-50%, -100%)';
+      refreshing = false;
+    }, 400);
+  }
+})();
 
 // Contextual company hover cards — shows only data we actually have (real open-role count,
 // locations, sectors from the currently-loaded JOBS list), never fabricated size/rating figures.

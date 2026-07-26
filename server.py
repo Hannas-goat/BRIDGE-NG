@@ -57,6 +57,7 @@ _fernet = Fernet(ENCRYPTION_KEY.encode("ascii") if isinstance(ENCRYPTION_KEY, st
 ENCRYPTED_PROFILE_COLUMNS = (
     "full_name", "dob", "sex", "phone", "address",
     "resume_text", "resume_filename", "resume_file_base64",
+    "pitch_media_base64", "whatsapp_number",
 )
 
 
@@ -131,6 +132,105 @@ def clear_failed_logins(email):
 
 # NVIDIA's build.nvidia.com API catalog is OpenAI-compatible and grants free trial credits on
 # signup — no live web search available, so job lookups are best-effort from pasted text only.
+# WhatsApp alerts via Twilio's WhatsApp API — same "closed until an operator opts in" pattern as
+# NVIDIA_API_KEY below. Unset by default; sends silently no-op (logged, not raised) until a real
+# Twilio account is configured, since a candidate's own alert preference shouldn't error out just
+# because the operator hasn't set this up yet.
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM")  # e.g. "whatsapp:+14155238886"
+WHATSAPP_CONFIGURED = bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_FROM)
+
+
+# Zoom Server-to-Server OAuth — same "closed until an operator opts in" pattern. Without these,
+# scheduling still works via a standard .ics calendar file (needs no API keys, opens in any
+# calendar app); a real Zoom link is added on top only when configured.
+ZOOM_ACCOUNT_ID = os.environ.get("ZOOM_ACCOUNT_ID")
+ZOOM_CLIENT_ID = os.environ.get("ZOOM_CLIENT_ID")
+ZOOM_CLIENT_SECRET = os.environ.get("ZOOM_CLIENT_SECRET")
+ZOOM_CONFIGURED = bool(ZOOM_ACCOUNT_ID and ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET)
+
+
+def create_zoom_meeting(topic, start_iso, duration_minutes=30):
+    """Best-effort: returns a real Zoom join URL if configured and successful, else None.
+    Never raises — callers treat a missing link as 'no Zoom link available', not an error."""
+    if not ZOOM_CONFIGURED:
+        return None
+    try:
+        auth = base64.b64encode(f"{ZOOM_CLIENT_ID}:{ZOOM_CLIENT_SECRET}".encode("utf-8")).decode("ascii")
+        token_req = urllib.request.Request(
+            f"https://zoom.us/oauth/token?grant_type=account_credentials&account_id={ZOOM_ACCOUNT_ID}",
+            method="POST",
+        )
+        token_req.add_header("Authorization", f"Basic {auth}")
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            access_token = json.loads(resp.read().decode("utf-8"))["access_token"]
+
+        meeting_payload = json.dumps({
+            "topic": topic, "type": 2, "start_time": start_iso, "duration": duration_minutes,
+            "settings": {"join_before_host": True, "approval_type": 2},
+        }).encode("utf-8")
+        meeting_req = urllib.request.Request(
+            "https://api.zoom.us/v2/users/me/meetings", data=meeting_payload, method="POST",
+        )
+        meeting_req.add_header("Authorization", f"Bearer {access_token}")
+        meeting_req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(meeting_req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8")).get("join_url")
+    except Exception as e:
+        print(f"[zoom] Failed to create meeting: {e}")
+        return None
+
+
+def build_ics_invite(uid, summary, description, start_dt, duration_minutes=30, location=""):
+    """A minimal, standards-compliant iCalendar VEVENT — opens in any real calendar app
+    (Google Calendar, Outlook, Apple Calendar), no API keys or third-party service needed."""
+    def fmt(dt):
+        return dt.strftime("%Y%m%dT%H%M%S")
+    end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+    escaped_desc = (description or "").replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
+    escaped_summary = (summary or "").replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;")
+    lines = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Bridge NG//Interview Scheduler//EN",
+        "BEGIN:VEVENT",
+        f"UID:{uid}@bridgeng",
+        f"DTSTAMP:{fmt(datetime.datetime.utcnow())}Z",
+        f"DTSTART:{fmt(start_dt)}",
+        f"DTEND:{fmt(end_dt)}",
+        f"SUMMARY:{escaped_summary}",
+    ]
+    if location:
+        lines.append(f"LOCATION:{location}")
+    if escaped_desc:
+        lines.append(f"DESCRIPTION:{escaped_desc}")
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return "\r\n".join(lines) + "\r\n"
+
+
+def send_whatsapp_alert(to_number, body):
+    """Best-effort: never raises. No-ops silently if Twilio isn't configured, or if the
+    candidate hasn't provided/opted into a WhatsApp number."""
+    if not WHATSAPP_CONFIGURED or not to_number:
+        return
+    try:
+        payload = urllib.parse.urlencode({
+            "From": TWILIO_WHATSAPP_FROM,
+            "To": f"whatsapp:{to_number}",
+            "Body": body,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json",
+            data=payload, method="POST",
+        )
+        auth = base64.b64encode(f"{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}".encode("utf-8")).decode("ascii")
+        req.add_header("Authorization", f"Basic {auth}")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception as e:
+        print(f"[whatsapp] Failed to send alert: {e}")
+
+
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
 # A bigger, more capable model for the resume/cover-letter writing itself (the part users actually
@@ -273,6 +373,7 @@ DOWNLOAD_RELAY = {}
 DOWNLOAD_RELAY_TTL_SECONDS = 300
 MAX_DOWNLOAD_RELAY_BYTES = 15 * 1024 * 1024
 MAX_SAVED_RESUME_BYTES = 8 * 1024 * 1024
+MAX_PITCH_MEDIA_BYTES = 15 * 1024 * 1024
 
 
 def _prune_download_relay():
@@ -451,6 +552,42 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    ensure_column(conn, "appointments", "zoom_join_url", "zoom_join_url TEXT DEFAULT ''")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            company TEXT NOT NULL,
+            job_title TEXT DEFAULT '',
+            employer_token TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+            sender_role TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            read_by_candidate INTEGER NOT NULL DEFAULT 0,
+            read_by_employer INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS salary_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company TEXT NOT NULL,
+            role_title TEXT NOT NULL,
+            level TEXT DEFAULT '',
+            monthly_pay INTEGER NOT NULL,
+            has_housing_allowance INTEGER NOT NULL DEFAULT 0,
+            has_transport_allowance INTEGER NOT NULL DEFAULT 0,
+            culture_rating INTEGER NOT NULL,
+            review_text TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS checkins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -496,6 +633,17 @@ def init_db():
     ensure_column(conn, "profiles", "resume_file_media_type", "resume_file_media_type TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "resume_file_base64", "resume_file_base64 TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "resume_filename", "resume_filename TEXT DEFAULT ''")
+    # Self-declared only — Bridge NG has no way to verify NYSC status or university enrollment
+    # against any real registry, so these are never labeled "verified" anywhere in the UI.
+    ensure_column(conn, "profiles", "university", "university TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "nysc_status", "nysc_status TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "ppa_state", "ppa_state TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "ppa_lga", "ppa_lga TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "pitch_media_kind", "pitch_media_kind TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "pitch_media_type", "pitch_media_type TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "pitch_media_base64", "pitch_media_base64 TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "whatsapp_number", "whatsapp_number TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "whatsapp_alerts_enabled", "whatsapp_alerts_enabled INTEGER DEFAULT 0")
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -578,6 +726,8 @@ def profile_row_to_json(row):
             "fullName": "", "dob": "", "sex": "", "phone": "", "address": "", "education": "",
             "careerLevel": "", "fieldOfStudy": "", "preferredLocation": "", "skills": [],
             "openToRemote": False, "resumeText": "", "resumeFile": None, "resumeFilename": "",
+            "university": "", "nyscStatus": "", "ppaState": "", "ppaLga": "", "pitchMedia": None,
+            "whatsappNumber": "", "whatsappAlertsEnabled": False,
         }
     resume_file_kind = row["resume_file_kind"] or ""
     resume_file = None
@@ -602,6 +752,17 @@ def profile_row_to_json(row):
         "resumeText": decrypt_field(row["resume_text"] or ""),
         "resumeFile": resume_file,
         "resumeFilename": decrypt_field(row["resume_filename"] or ""),
+        "university": row["university"] or "",
+        "nyscStatus": row["nysc_status"] or "",
+        "ppaState": row["ppa_state"] or "",
+        "ppaLga": row["ppa_lga"] or "",
+        "pitchMedia": {
+            "kind": row["pitch_media_kind"],
+            "mediaType": row["pitch_media_type"] or "",
+            "base64": decrypt_field(row["pitch_media_base64"] or ""),
+        } if row["pitch_media_kind"] else None,
+        "whatsappNumber": decrypt_field(row["whatsapp_number"] or ""),
+        "whatsappAlertsEnabled": bool(row["whatsapp_alerts_enabled"]),
     }
 
 
@@ -660,10 +821,23 @@ def appointment_row_to_json(row):
         "notes": row["notes"],
         "status": row["status"],
         "createdAt": row["created_at"],
+        "zoomJoinUrl": row["zoom_join_url"] or "",
     }
 
 
 APPLICATION_STATUSES = ("applied", "interviewing", "offer", "archived")
+
+
+MAX_MESSAGE_LENGTH = 2000
+
+
+def message_row_to_json(row):
+    return {
+        "id": row["id"],
+        "senderRole": row["sender_role"],
+        "body": row["body"],
+        "createdAt": row["created_at"],
+    }
 
 
 def application_row_to_json(row):
@@ -1258,6 +1432,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_notifications()
         if parsed.path == "/api/checkin":
             return self.handle_checkin_status()
+        if parsed.path == "/api/campus-count":
+            return self.handle_campus_count(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/salary-reviews":
+            return self.handle_list_salary_reviews(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/candidate-pitch":
+            return self.handle_get_candidate_pitch(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/appointments/ics":
+            return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/messages":
+            return self.handle_list_conversations()
+        if parsed.path == "/api/messages/employer-thread":
+            return self.handle_employer_message_thread(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/appointments":
             return self.handle_list_appointments()
         if parsed.path == "/api/applications":
@@ -1303,6 +1489,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_create_application()
         if parsed.path == "/api/employer-jobs":
             return self.handle_post_employer_job()
+        if parsed.path == "/api/messages/start":
+            return self.handle_message_start()
+        if parsed.path == "/api/messages/employer-reply":
+            return self.handle_employer_message_reply()
+        if parsed.path == "/api/messages/reply":
+            return self.handle_reply_to_conversation()
+        if parsed.path == "/api/messages/read":
+            return self.handle_mark_conversation_read()
+        if parsed.path == "/api/salary-reviews":
+            return self.handle_create_salary_review()
         if parsed.path == "/api/resume/find-job":
             return self.handle_resume_find_job()
         if parsed.path == "/api/job-match":
@@ -1322,6 +1518,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_save_profile()
         if parsed.path == "/api/profile/resume":
             return self.handle_save_resume()
+        if parsed.path == "/api/profile/pitch":
+            return self.handle_save_pitch()
         if parsed.path == "/api/applications/status":
             return self.handle_update_application_status()
         if parsed.path == "/api/appointments/status":
@@ -1384,14 +1582,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 skills = data.get("skills") or []
                 conn.execute(
                     """INSERT INTO profiles (user_id, full_name, dob, sex, phone, address,
-                       education, career_level, field_of_study, preferred_location, skills, open_to_remote)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       education, career_level, field_of_study, preferred_location, skills, open_to_remote,
+                       university, nysc_status, ppa_state, ppa_lga, whatsapp_number, whatsapp_alerts_enabled)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (user_id, encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
                      encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
                      encrypt_field(data.get("address", "")), data.get("education", ""),
                      data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
                      data.get("preferredLocation", ""), json.dumps(skills),
-                     1 if data.get("openToRemote") else 0),
+                     1 if data.get("openToRemote") else 0,
+                     (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
+                     (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
+                     encrypt_field((data.get("whatsappNumber") or "").strip()),
+                     1 if data.get("whatsappAlertsEnabled") else 0),
                 )
                 conn.commit()
             except Exception as e:
@@ -1528,13 +1731,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.execute(
                 """UPDATE profiles SET full_name=?, dob=?, sex=?, phone=?, address=?,
                    education=?, career_level=?, field_of_study=?, preferred_location=?,
-                   skills=?, open_to_remote=?, updated_at=datetime('now') WHERE user_id=?""",
+                   skills=?, open_to_remote=?, university=?, nysc_status=?, ppa_state=?, ppa_lga=?,
+                   whatsapp_number=?, whatsapp_alerts_enabled=?,
+                   updated_at=datetime('now') WHERE user_id=?""",
                 (encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
                  encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
                  encrypt_field(data.get("address", "")), data.get("education", ""),
                  data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
                  data.get("preferredLocation", ""), json.dumps(skills),
-                 1 if data.get("openToRemote") else 0, user_id),
+                 1 if data.get("openToRemote") else 0,
+                 (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
+                 (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
+                 encrypt_field((data.get("whatsappNumber") or "").strip()),
+                 1 if data.get("whatsappAlertsEnabled") else 0, user_id),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
@@ -1580,6 +1789,60 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
         self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_save_pitch(self):
+        """Saves a candidate's recorded 30-second video/audio pitch. A blank payload (after
+        'Discard') clears it, same pattern as the resume save above."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        kind = (data.get("kind") or "").strip()
+        media_type = (data.get("mediaType") or "").strip()
+        base64_data = data.get("base64") or ""
+        if kind and kind not in ("video", "audio"):
+            return self.send_json(400, {"error": "Pitch kind must be 'video' or 'audio'."})
+        if base64_data:
+            try:
+                decoded_len = len(base64.b64decode(base64_data, validate=True))
+            except Exception:
+                return self.send_json(400, {"error": "Invalid pitch media data."})
+            if decoded_len > MAX_PITCH_MEDIA_BYTES:
+                return self.send_json(400, {"error": "That recording is too large to save (max 15MB — try a shorter clip)."})
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                """UPDATE profiles SET pitch_media_kind=?, pitch_media_type=?, pitch_media_base64=?,
+                   updated_at=datetime('now') WHERE user_id=?""",
+                (kind, media_type, encrypt_field(base64_data), user_id),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_get_candidate_pitch(self, query):
+        """Employer-side lookup of one candidate's pitch by user id — same unauthenticated trust
+        model as the rest of the employer-facing endpoints (handle_post_employer_job already
+        hands out full names/skills to anyone who posts a job)."""
+        candidate_user_id = query.get("userId", [None])[0]
+        if not candidate_user_id:
+            return self.send_json(400, {"error": "Missing candidate id."})
+        with db_lock:
+            conn = get_db()
+            row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (candidate_user_id,)).fetchone()
+            conn.close()
+        if row is None or not row["pitch_media_kind"]:
+            return self.send_json(404, {"error": "No pitch available for this candidate."})
+        self.send_json(200, {
+            "kind": row["pitch_media_kind"],
+            "mediaType": row["pitch_media_type"] or "",
+            "base64": decrypt_field(row["pitch_media_base64"] or ""),
+        })
 
     # ---------- job import & board ----------
 
@@ -1766,6 +2029,101 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     # ---------- daily check-in streak ----------
 
+    def handle_campus_count(self, query):
+        """How many other Bridge NG members share this (self-declared) university — an
+        aggregate count only, never a list of who they are, so this can't be used to identify
+        individuals."""
+        university = (query.get("university", [""])[0] or "").strip()
+        if not university:
+            return self.send_json(200, {"count": 0})
+        user_id = self.current_user_id()
+        with db_lock:
+            conn = get_db()
+            if user_id is not None:
+                row = conn.execute(
+                    "SELECT COUNT(*) AS c FROM profiles WHERE lower(university) = lower(?) AND user_id != ?",
+                    (university, user_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT COUNT(*) AS c FROM profiles WHERE lower(university) = lower(?)",
+                    (university,),
+                ).fetchone()
+            conn.close()
+        self.send_json(200, {"count": row["c"]})
+
+    # ---------- salary & culture reviews ----------
+    # Truly anonymous at the storage layer: the salary_reviews table has no user_id column at
+    # all, so even Bridge NG's own database can't tie a review back to who submitted it. Sign-in
+    # is required only as a lightweight spam gate on submission, not to identify reviewers.
+    # Labeled "community-submitted" everywhere, never "verified" — nothing here is checked
+    # against real payslips or employment records.
+
+    def handle_create_salary_review(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "Sign in first (just to prevent spam — your review itself stays anonymous)."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        company = (data.get("company") or "").strip()
+        role_title = (data.get("roleTitle") or "").strip()
+        level = (data.get("level") or "").strip()
+        review_text = (data.get("reviewText") or "").strip()[:1000]
+        try:
+            monthly_pay = int(data.get("monthlyPay") or 0)
+            culture_rating = int(data.get("cultureRating") or 0)
+        except (TypeError, ValueError):
+            return self.send_json(400, {"error": "Monthly pay and culture rating must be numbers."})
+        if not company or not role_title or monthly_pay <= 0:
+            return self.send_json(400, {"error": "Company, role, and a real monthly pay figure are required."})
+        if not 1 <= culture_rating <= 5:
+            return self.send_json(400, {"error": "Culture rating must be between 1 and 5."})
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                """INSERT INTO salary_reviews (company, role_title, level, monthly_pay,
+                   has_housing_allowance, has_transport_allowance, culture_rating, review_text)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (company, role_title, level, monthly_pay,
+                 1 if data.get("hasHousingAllowance") else 0, 1 if data.get("hasTransportAllowance") else 0,
+                 culture_rating, review_text),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    def handle_list_salary_reviews(self, query):
+        company = (query.get("company", [""])[0] or "").strip()
+        if not company:
+            return self.send_json(400, {"error": "Enter a company name to look up."})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM salary_reviews WHERE lower(company) = lower(?) ORDER BY id DESC",
+                (company,),
+            ).fetchall()
+            conn.close()
+        if not rows:
+            return self.send_json(200, {"count": 0, "reviews": []})
+        pays = [r["monthly_pay"] for r in rows]
+        ratings = [r["culture_rating"] for r in rows]
+        self.send_json(200, {
+            "count": len(rows),
+            "avgPay": round(sum(pays) / len(pays)),
+            "minPay": min(pays),
+            "maxPay": max(pays),
+            "avgCultureRating": round(sum(ratings) / len(ratings), 1),
+            "reviews": [{
+                "roleTitle": r["role_title"], "level": r["level"], "monthlyPay": r["monthly_pay"],
+                "hasHousingAllowance": bool(r["has_housing_allowance"]),
+                "hasTransportAllowance": bool(r["has_transport_allowance"]),
+                "cultureRating": r["culture_rating"], "reviewText": r["review_text"],
+                "createdAt": r["created_at"],
+            } for r in rows],
+        })
+
     def handle_checkin_status(self):
         user_id = self.current_user_id()
         if user_id is None:
@@ -1862,18 +2220,86 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         with db_lock:
             conn = get_db()
+            existing = conn.execute(
+                "SELECT * FROM appointments WHERE id = ? AND user_id = ?", (appt_id, user_id)
+            ).fetchone()
+            conn.close()
+        if existing is None:
+            return self.send_json(404, {"error": "Appointment not found."})
+
+        # Best-effort, outside any db_lock hold — a slow/failed Zoom call must never block other
+        # requests or the status update itself (create_zoom_meeting already never raises).
+        zoom_join_url = existing["zoom_join_url"] or ""
+        if status == "confirmed" and not zoom_join_url:
+            try:
+                start_dt = datetime.datetime.strptime(
+                    f"{existing['appt_date']} {existing['appt_time'] or '09:00'}", "%Y-%m-%d %H:%M"
+                )
+                zoom_join_url = create_zoom_meeting(
+                    f"Interview: {existing['role'] or 'Role'} at {existing['company']}",
+                    start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                ) or ""
+            except ValueError:
+                pass  # malformed stored date/time — skip the Zoom link, .ics still works
+
+        with db_lock:
+            conn = get_db()
             conn.execute(
-                "UPDATE appointments SET status = ? WHERE id = ? AND user_id = ?",
-                (status, appt_id, user_id),
+                "UPDATE appointments SET status = ?, zoom_join_url = ? WHERE id = ? AND user_id = ?",
+                (status, zoom_join_url, appt_id, user_id),
             )
             conn.commit()
             row = conn.execute(
                 "SELECT * FROM appointments WHERE id = ? AND user_id = ?", (appt_id, user_id)
             ).fetchone()
             conn.close()
+        self.send_json(200, {"ok": True, "appointment": appointment_row_to_json(row)})
+
+    def handle_appointment_ics(self, query):
+        """Serves a standard .ics calendar invite for one appointment — works in any real
+        calendar app with no API keys. Includes a real Zoom link in the description/location
+        if one was created (see handle_update_appointment_status), otherwise just the interview
+        details."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        appt_id = query.get("id", [None])[0]
+        if not appt_id:
+            return self.send_json(400, {"error": "Missing appointment id."})
+        with db_lock:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT * FROM appointments WHERE id = ? AND user_id = ?", (appt_id, user_id)
+            ).fetchone()
+            conn.close()
         if row is None:
             return self.send_json(404, {"error": "Appointment not found."})
-        self.send_json(200, {"ok": True, "appointment": appointment_row_to_json(row)})
+
+        try:
+            start_dt = datetime.datetime.strptime(
+                f"{row['appt_date']} {row['appt_time'] or '09:00'}", "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            start_dt = datetime.datetime.strptime(row["appt_date"], "%Y-%m-%d")
+
+        location = row["zoom_join_url"] or ""
+        description = row["notes"] or ""
+        if location:
+            description = (description + "\n\nJoin: " + location).strip()
+        ics_text = build_ics_invite(
+            uid=f"appt-{row['id']}",
+            summary=f"Interview: {row['role'] or 'Role'} at {row['company']}",
+            description=description,
+            start_dt=start_dt,
+            location=location,
+        )
+        body = ics_text.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/calendar; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", f'attachment; filename="interview-{row["id"]}.ics"')
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_cancel_appointment(self):
         user_id = self.current_user_id()
@@ -1977,6 +2403,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         skills = data.get("skills") or []
         level = (data.get("level") or "").strip()
         location = (data.get("location") or "").strip()
+        ppa_state_filter = (data.get("ppaState") or "").strip()
         try:
             pay_min = int(data.get("payMin") or 0)
             pay_max = int(data.get("payMax") or 0)
@@ -2002,13 +2429,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 cand_skills = json.loads(row["skills"] or "[]")
                 if not cand_skills:
                     continue  # skip accounts that haven't picked any skills yet — nothing real to match on
+                if ppa_state_filter and (row["ppa_state"] or "").strip().lower() != ppa_state_filter.lower():
+                    continue  # employer asked for a specific (self-declared) PPA state only
                 score = match_score(skills, cand_skills, level, row["career_level"], location, row["preferred_location"])
                 matches.append({
                     "userId": row["uid"],
-                    "fullName": row["full_name"] or "Bridge NG member",
+                    "fullName": decrypt_field(row["full_name"]) or "Bridge NG member",
                     "careerLevel": row["career_level"],
                     "fieldOfStudy": row["field_of_study"],
                     "preferredLocation": row["preferred_location"],
+                    "ppaState": row["ppa_state"] or "",
+                    "nyscStatus": row["nysc_status"] or "",
+                    "hasPitch": bool(row["pitch_media_kind"]),
                     "skills": cand_skills,
                     "score": score,
                 })
@@ -2019,6 +2451,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (row["uid"], "employer_match", message, title, company),
                     )
                     notified += 1
+                    if row["whatsapp_alerts_enabled"]:
+                        send_whatsapp_alert(decrypt_field(row["whatsapp_number"]), message)
             conn.commit()
             conn.close()
 
@@ -2028,6 +2462,182 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "realMatches": matches[:10],
             "notifiedCount": notified,
         })
+
+    # ---------- messaging (Smart Sourcing) ----------
+    # There's no employer login anywhere in this app — the whole employer side is an
+    # unauthenticated form (same trust model as handle_post_employer_job above: anyone can type
+    # any company name). So the employer's identity for messaging is just "whoever holds this
+    # conversation's private token", generated here and never guessable/enumerable, rather than
+    # a real authenticated account. The candidate side IS behind real login, same as everywhere
+    # else in the app.
+
+    def handle_message_start(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        company = (data.get("company") or "").strip()
+        job_title = (data.get("jobTitle") or "").strip()
+        body = (data.get("body") or "").strip()[:MAX_MESSAGE_LENGTH]
+        if not candidate_user_id or not company or not body:
+            return self.send_json(400, {"error": "Missing candidate, company, or message."})
+
+        with db_lock:
+            conn = get_db()
+            candidate = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (candidate_user_id,)).fetchone()
+            if candidate is None:
+                conn.close()
+                return self.send_json(404, {"error": "Candidate not found."})
+            token = secrets.token_urlsafe(24)
+            cur = conn.execute(
+                "INSERT INTO conversations (candidate_user_id, company, job_title, employer_token) VALUES (?, ?, ?, ?)",
+                (candidate_user_id, company, job_title, token),
+            )
+            conversation_id = cur.lastrowid
+            conn.execute(
+                "INSERT INTO messages (conversation_id, sender_role, body, read_by_employer) VALUES (?, 'employer', ?, 1)",
+                (conversation_id, body),
+            )
+            notif_message = f"{company} sent you a message about {job_title or 'a role'}."
+            conn.execute(
+                "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
+                (candidate_user_id, "employer_message", notif_message, job_title, company),
+            )
+            conn.commit()
+            conn.close()
+        if candidate["whatsapp_alerts_enabled"]:
+            send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
+        self.send_json(200, {"ok": True, "conversationId": conversation_id, "employerToken": token})
+
+    def handle_employer_message_thread(self, query):
+        conversation_id = query.get("id", [None])[0]
+        token = query.get("token", [None])[0]
+        if not conversation_id or not token:
+            return self.send_json(400, {"error": "Missing conversation id or token."})
+        with db_lock:
+            conn = get_db()
+            convo = conn.execute(
+                "SELECT * FROM conversations WHERE id = ? AND employer_token = ?", (conversation_id, token)
+            ).fetchone()
+            if convo is None:
+                conn.close()
+                return self.send_json(404, {"error": "Conversation not found."})
+            rows = conn.execute(
+                "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id", (conversation_id,)
+            ).fetchall()
+            conn.execute("UPDATE messages SET read_by_employer = 1 WHERE conversation_id = ?", (conversation_id,))
+            conn.commit()
+            conn.close()
+        self.send_json(200, {
+            "conversation": {"id": convo["id"], "company": convo["company"], "jobTitle": convo["job_title"]},
+            "messages": [message_row_to_json(r) for r in rows],
+        })
+
+    def handle_employer_message_reply(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        conversation_id = data.get("conversationId")
+        token = (data.get("token") or "").strip()
+        body = (data.get("body") or "").strip()[:MAX_MESSAGE_LENGTH]
+        if not conversation_id or not token or not body:
+            return self.send_json(400, {"error": "Missing conversation, token, or message."})
+        with db_lock:
+            conn = get_db()
+            convo = conn.execute(
+                "SELECT * FROM conversations WHERE id = ? AND employer_token = ?", (conversation_id, token)
+            ).fetchone()
+            if convo is None:
+                conn.close()
+                return self.send_json(404, {"error": "Conversation not found."})
+            conn.execute(
+                "INSERT INTO messages (conversation_id, sender_role, body, read_by_employer) VALUES (?, 'employer', ?, 1)",
+                (conversation_id, body),
+            )
+            notif_message = f"{convo['company']} replied to your conversation."
+            conn.execute(
+                "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
+                (convo["candidate_user_id"], "employer_message", notif_message, convo["job_title"], convo["company"]),
+            )
+            candidate = conn.execute(
+                "SELECT whatsapp_number, whatsapp_alerts_enabled FROM profiles WHERE user_id = ?",
+                (convo["candidate_user_id"],),
+            ).fetchone()
+            conn.commit()
+            conn.close()
+        if candidate is not None and candidate["whatsapp_alerts_enabled"]:
+            send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
+        self.send_json(200, {"ok": True})
+
+    def handle_list_conversations(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(200, {"conversations": []})
+        with db_lock:
+            conn = get_db()
+            convos = conn.execute(
+                "SELECT * FROM conversations WHERE candidate_user_id = ? ORDER BY id DESC", (user_id,)
+            ).fetchall()
+            result = []
+            for c in convos:
+                messages = conn.execute(
+                    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id", (c["id"],)
+                ).fetchall()
+                result.append({
+                    "id": c["id"], "company": c["company"], "jobTitle": c["job_title"], "createdAt": c["created_at"],
+                    "messages": [message_row_to_json(m) for m in messages],
+                    "unread": sum(1 for m in messages if m["sender_role"] == "employer" and not m["read_by_candidate"]),
+                })
+            conn.close()
+        self.send_json(200, {"conversations": result})
+
+    def handle_reply_to_conversation(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        conversation_id = data.get("conversationId")
+        body = (data.get("body") or "").strip()[:MAX_MESSAGE_LENGTH]
+        if not conversation_id or not body:
+            return self.send_json(400, {"error": "Missing conversation or message."})
+        with db_lock:
+            conn = get_db()
+            convo = conn.execute(
+                "SELECT * FROM conversations WHERE id = ? AND candidate_user_id = ?", (conversation_id, user_id)
+            ).fetchone()
+            if convo is None:
+                conn.close()
+                return self.send_json(404, {"error": "Conversation not found."})
+            conn.execute(
+                "INSERT INTO messages (conversation_id, sender_role, body, read_by_candidate) VALUES (?, 'candidate', ?, 1)",
+                (conversation_id, body),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    def handle_mark_conversation_read(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if not data or not data.get("conversationId"):
+            return self.send_json(400, {"error": "Missing conversation id."})
+        with db_lock:
+            conn = get_db()
+            convo = conn.execute(
+                "SELECT id FROM conversations WHERE id = ? AND candidate_user_id = ?",
+                (data["conversationId"], user_id),
+            ).fetchone()
+            if convo is not None:
+                conn.execute(
+                    "UPDATE messages SET read_by_candidate = 1 WHERE conversation_id = ?", (data["conversationId"],)
+                )
+                conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
 
     def handle_chat(self):
         if not NVIDIA_API_KEY:
