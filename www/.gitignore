@@ -2,6 +2,11 @@
 bridgeng.db
 bridgeng.db.backup-*
 
+# Scratch/test databases created during manual or automated testing
+bridgeng_scratch*.db
+bridgeng_test*.db
+bridgeng_regression_test.db
+
 # Nested repo — was accidentally tracked as a broken submodule reference
 ngrok-playground/
 
@@ -9,3 +14,9 @@ ngrok-playground/
 __pycache__/
 *.pyc
 _t.log
+
+# IDE and local-only files
+.idea/
+.claude/settings.local.json
+Start Bridge NG.bat
+

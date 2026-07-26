@@ -66,8 +66,12 @@ body::after{
 img{max-width:100%;height:auto;}
 h1,h2,h3{font-family:'Fraunces',serif;font-weight:500;margin:0;}
 .wrap{padding:0 32px;}
-.nav{display:flex;flex-direction:column;gap:6px;padding:20px 0;border-bottom:1px solid rgba(139,92,246,0.18);position:sticky;top:0;z-index:1000;background:rgba(11,13,17,0.72);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);transition:padding 0.3s ease-in-out,box-shadow 0.3s ease-in-out,background 0.3s ease-in-out;}
-.site-header.is-scrolled{padding:8px 0;box-shadow:0 8px 24px rgba(0,0,0,0.35);background:rgba(11,13,17,0.88);}
+/* padding is a CONSTANT here, never touched by .is-scrolled — animating it would resize the
+   sticky header's box in the document flow and force a reflow (jump) of everything below it
+   on every scroll tick. The "shrink" effect is delivered entirely through GPU-only paint
+   properties instead: transform (on .brand-logo), box-shadow, and background. */
+.nav{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-bottom:1px solid rgba(139,92,246,0.18);position:sticky;top:0;z-index:1000;background:rgba(11,13,17,0.72);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);transition:box-shadow 0.3s ease-in-out,background 0.3s ease-in-out;}
+.site-header.is-scrolled{box-shadow:0 8px 24px rgba(0,0,0,0.35);background:rgba(11,13,17,0.88);}
 .nav-top{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .nav-left{display:flex;align-items:center;gap:12px;}
 .brand{display:flex;align-items:center;gap:10px;}

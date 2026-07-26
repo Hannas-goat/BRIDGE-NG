@@ -18,7 +18,7 @@
 <body>
 <div class="wrap">
 
-  <div class="nav">
+  <header class="nav site-header" id="site-header">
     <div class="nav-top">
       <div class="nav-left">
         <button class="menu-toggle" id="menu-toggle" onclick="toggleMobileNav()" aria-label="Open menu">
@@ -167,7 +167,7 @@
       </div>
     </nav>
     <div class="nav-backdrop" id="nav-backdrop" onclick="closeMobileNav()"></div>
-  </div>
+  </header>
 
   <div class="hero">
     <div id="hero-left-default">
@@ -4801,6 +4801,26 @@ async function findCandidates(){
 
   results.innerHTML = realSection;
 }
+
+// Sticky header scroll-shrink (Handshake-style) — throttled via requestAnimationFrame so the
+// scroll handler itself does as little work as possible per event, deferring the actual
+// class toggle to the next paint frame instead of running on every single scroll tick.
+(function setupHeaderScrollShrink(){
+  const header = document.getElementById('site-header');
+  if(!header) return;
+  let ticking = false;
+  function updateHeaderState(){
+    header.classList.toggle('is-scrolled', window.scrollY > 50);
+    ticking = false;
+  }
+  window.addEventListener('scroll', () => {
+    if(!ticking){
+      requestAnimationFrame(updateHeaderState);
+      ticking = true;
+    }
+  }, {passive: true});
+  updateHeaderState(); // correct initial state if the page loads already scrolled
+})();
 
 // Pull-to-refresh (mobile) — only arms when already scrolled to the very top, so it never
 // hijacks a normal downward scroll partway down the page. Refreshes the real imported-jobs
