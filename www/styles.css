@@ -812,21 +812,28 @@ textarea#s-resume:disabled{background:var(--surface-3);color:var(--ink-soft);}
   }
   .mega-nav.open{transform:translateX(0);}
   .mega-nav-item{width:100%;}
-  .mega-nav-trigger{width:100%;justify-content:space-between;padding:12px 10px;}
+  /* No accordion on mobile: the category trigger button is hidden entirely and every dropdown
+     is unconditionally visible, so the off-canvas menu is just one flat, directly-tappable list
+     of pages — no parent/child nesting, no expand-collapse interaction. */
+  .mega-nav-trigger{display:none;}
   .mega-dropdown{
     position:static;
     transform:none;
     opacity:1;
     pointer-events:auto;
-    max-height:0;
-    overflow:hidden;
-    transition:max-height .25s ease;
+    max-height:none;
+    overflow:visible;
     width:100%;
     max-width:none;
   }
-  .mega-nav-item.open .mega-dropdown{max-height:1000px;}
   .mega-dropdown-inner{flex-direction:column;gap:14px;background:transparent;border:none;box-shadow:none;padding:4px 4px 14px;backdrop-filter:none;-webkit-backdrop-filter:none;}
   .mega-col{min-width:0;}
+  /* Dashboard widgets, not navigation links — keep the mobile menu a pure list of pages instead
+     of mixing in content cards. The "Trending now" column is ONLY the card (safe to hide whole),
+     but "Your readiness" also holds the real "Interview Tips" link — hide just the card there, or
+     that link would silently vanish along with the column. */
+  .mega-nav .mega-col-feature:has(#mega-feature-card){display:none;}
+  .mega-nav #mega-profile-meter-card{display:none;}
   .social-fab{width:38px;height:38px;}
   .footer-top{flex-direction:column;gap:24px;}
   .footer-bottom{flex-direction:column;align-items:flex-start;gap:6px;}
