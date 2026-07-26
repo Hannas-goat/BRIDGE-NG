@@ -77,14 +77,31 @@ def is_encrypted_field(value):
         return False
 
 
+def _looks_like_fernet_token(value):
+    # Fernet.decrypt() raises the same InvalidToken for "wrong/rotated key" and "not a token at
+    # all" — it doesn't distinguish them. Structurally, a real token is base64url of >= 57 bytes
+    # (1 version + 8 timestamp + 16 IV + ciphertext + 32 HMAC) starting with the version byte 0x80.
+    try:
+        raw = base64.urlsafe_b64decode(value.encode("ascii"))
+    except Exception:
+        return False
+    return len(raw) >= 57 and raw[0:1] == b"\x80"
+
+
 def decrypt_field(value):
     if not value:
         return value or ""
     try:
         return _fernet.decrypt(value.encode("ascii")).decode("utf-8")
     except (InvalidToken, ValueError, UnicodeEncodeError, UnicodeDecodeError):
-        # Not a valid Fernet token — either pre-migration plaintext, or (if ENCRYPTION_KEY changed)
-        # data this process can no longer read. Either way, don't crash the request over it.
+        if _looks_like_fernet_token(value):
+            # This really was encrypted at some point but isn't readable with the CURRENT
+            # ENCRYPTION_KEY (almost always: the key was never persisted and rotated on a
+            # restart). Showing the raw ciphertext would be confusing and would still leak that
+            # PII exists there — show nothing instead of garbage. The data itself is genuinely
+            # unrecoverable; the affected field will just read as blank until re-entered.
+            return ""
+        # Doesn't even look like a token — genuine pre-migration plaintext, safe to show as-is.
         return value
 
 
@@ -653,7 +670,15 @@ def migrate_encrypt_existing_profiles(conn):
     """One-time-per-row upgrade: any profile column that predates field-level encryption is still
     sitting on disk as plaintext. Re-checked (cheaply) on every startup rather than gated behind a
     one-shot flag, since that's simpler and idempotent — a column already encrypted is detected via
-    is_encrypted_field() and left untouched."""
+    is_encrypted_field() and left untouched.
+
+    Critical: is_encrypted_field() returning False means "didn't decrypt under the CURRENT key" —
+    that's true both for genuine plaintext AND for real ciphertext encrypted under a since-rotated
+    key (e.g. ENCRYPTION_KEY not persisted across a restart). Blindly encrypting anything that
+    fails that check would take already-undecryptable ciphertext and wrap it in ANOTHER layer of
+    encryption under the new key, permanently overwriting the one copy that a restored key could
+    otherwise still have recovered. _looks_like_fernet_token() tells the two apart structurally
+    (independent of any key) — only genuine, never-encrypted plaintext gets touched here."""
     rows = conn.execute(
         f"SELECT user_id, {', '.join(ENCRYPTED_PROFILE_COLUMNS)} FROM profiles"
     ).fetchall()
@@ -662,7 +687,7 @@ def migrate_encrypt_existing_profiles(conn):
         updates = {}
         for col in ENCRYPTED_PROFILE_COLUMNS:
             value = row[col] or ""
-            if value and not is_encrypted_field(value):
+            if value and not is_encrypted_field(value) and not _looks_like_fernet_token(value):
                 updates[col] = encrypt_field(value)
         if updates:
             set_clause = ", ".join(f"{c}=?" for c in updates)
