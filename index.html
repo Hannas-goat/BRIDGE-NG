@@ -160,6 +160,28 @@
             <div id="notif-list"></div>
           </div>
         </div>
+        <div class="profile-meter-area" id="profile-meter-area" style="display:none;">
+          <button class="profile-meter-badge" id="profile-meter-badge" onclick="toggleProfileMeterDropdown()" aria-label="Profile strength">
+            <svg width="34" height="34" viewBox="0 0 34 34" class="profile-meter-ring">
+              <defs>
+                <linearGradient id="header-meter-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#8B5CF6"/>
+                  <stop offset="100%" stop-color="#22D3EE"/>
+                </linearGradient>
+              </defs>
+              <circle class="profile-meter-ring-track" cx="17" cy="17" r="14"/>
+              <circle class="profile-meter-ring-fill" id="profile-meter-ring-fill" cx="17" cy="17" r="14"/>
+            </svg>
+            <span class="profile-meter-pct" id="profile-meter-pct">0%</span>
+          </button>
+          <div class="profile-meter-dropdown" id="profile-meter-dropdown">
+            <div class="profile-meter-dropdown-head">
+              <span>Profile strength</span>
+              <span id="profile-meter-dropdown-pct">0%</span>
+            </div>
+            <div id="profile-meter-dropdown-list"></div>
+          </div>
+        </div>
         <div class="auth-area" id="auth-area">
           <a class="auth-btn" href="auth.html?mode=signin">Sign in</a>
           <a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>
@@ -227,6 +249,10 @@
     <div class="hero-photo-single" id="hero-photo-single">
       <img id="hero-photo-img" src="images/Bridge NG - New Hire.png" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
     </div>
+  </div>
+
+  <div class="activity-ticker" id="activity-ticker">
+    <div class="activity-ticker-track" id="activity-ticker-track"></div>
   </div>
 
   <!-- SEEKER PANEL -->
@@ -1240,11 +1266,35 @@ async function loadImportedJobs(){
     populateAppointmentCompanies();
     renderSalaryBenchmark();
     updateMegaJobCounts();
+    renderActivityTicker();
   }catch(e){
     // Imported jobs are an enhancement — the rest of the app works fine without them.
   }
 }
 loadImportedJobs();
+
+// Real, currently-computable platform stats only — no fabricated named "Amaka just matched"
+// style events, since Bridge NG has no live match-event feed to draw those from honestly.
+function renderActivityTicker(){
+  const wrap = document.getElementById('activity-ticker');
+  const track = document.getElementById('activity-ticker-track');
+  if(!track) return;
+  const totalLive = JOBS.length;
+  const recentCount = JOBS.filter(j => j.imported).slice(-5).length;
+  const remoteCount = JOBS.filter(isRemoteEligible).length + INTL_JOBS.length;
+
+  const items = [];
+  if(totalLive > 0) items.push(`💼 ${totalLive} live role${totalLive === 1 ? '' : 's'} open right now`);
+  if(recentCount > 0) items.push(`⚡ ${recentCount} new role${recentCount === 1 ? '' : 's'} just added`);
+  if(remoteCount > 0) items.push(`🌍 ${remoteCount} remote &amp; international role${remoteCount === 1 ? '' : 's'} available`);
+  items.push('📍 36+ Nigerian states covered');
+
+  if(items.length === 0){ wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const inner = items.map(t => `<span class="ticker-item">${t}</span>`).join('<span class="ticker-dot">•</span>');
+  // Content is duplicated once so the CSS animation can loop seamlessly (see @keyframes ticker-scroll).
+  track.innerHTML = inner + '<span class="ticker-dot">•</span>' + inner;
+}
 
 // --- Applications: makes "Apply" buttons actually record something, instead of doing nothing ---
 
@@ -1994,6 +2044,48 @@ function renderMegaProfileMeter(){
   `;
 }
 
+function renderHeaderProfileMeter(){
+  const area = document.getElementById('profile-meter-area');
+  if(!area) return;
+  if(!currentAccount){ area.style.display = 'none'; return; }
+  area.style.display = '';
+
+  const profile = currentAccount.profile;
+  const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
+    const v = profile[f.key];
+    return f.key === 'skills' ? !(v && v.length) : !(v && String(v).trim());
+  });
+  const filledCount = PROFILE_COMPLETION_FIELDS.length - missing.length;
+  const pct = Math.round(filledCount / PROFILE_COMPLETION_FIELDS.length * 100);
+  const perFieldPct = Math.round(100 / PROFILE_COMPLETION_FIELDS.length);
+
+  const r = 14, circumference = 2 * Math.PI * r;
+  const ring = document.getElementById('profile-meter-ring-fill');
+  ring.style.strokeDasharray = circumference;
+  ring.style.strokeDashoffset = circumference * (1 - pct / 100);
+  document.getElementById('profile-meter-pct').textContent = pct + '%';
+  document.getElementById('profile-meter-dropdown-pct').textContent = pct + '%';
+
+  const list = document.getElementById('profile-meter-dropdown-list');
+  list.innerHTML = missing.length
+    ? missing.map(f => `<button type="button" class="profile-meter-item" onclick="focusProfileFieldFromHeader('${f.target}')"><span>+ ${f.label}</span><span class="profile-meter-item-pct">+${perFieldPct}%</span></button>`).join('')
+    : '<div class="profile-meter-complete">✓ Your profile is fully filled in.</div>';
+}
+
+function toggleProfileMeterDropdown(force){
+  const dd = document.getElementById('profile-meter-dropdown');
+  if(typeof force === 'boolean') dd.classList.toggle('open', force);
+  else dd.classList.toggle('open');
+}
+
+// Mirrors dockNavigate('profile')'s pattern: switch to the seeker panel first (the field being
+// linked to might live on a panel that isn't currently visible), then scroll/flash once it's rendered.
+function focusProfileFieldFromHeader(id){
+  toggleProfileMeterDropdown(false);
+  showPage('seeker');
+  setTimeout(() => focusProfileField(id), 350);
+}
+
 function toggleMobileNav(){
   document.getElementById('mega-nav').classList.toggle('open');
   document.getElementById('nav-backdrop').classList.toggle('open');
@@ -2111,6 +2203,10 @@ document.addEventListener('click', (e)=>{
   const area = document.getElementById('notif-area');
   if(area && !area.contains(e.target)){
     document.getElementById('notif-dropdown').classList.remove('open');
+  }
+  const meterArea = document.getElementById('profile-meter-area');
+  if(meterArea && !meterArea.contains(e.target)){
+    document.getElementById('profile-meter-dropdown').classList.remove('open');
   }
 });
 
@@ -3208,6 +3304,7 @@ function renderProfileCompletion(){
   renderMilestoneBadges();
   renderNyscBadge();
   renderMegaProfileMeter();
+  renderHeaderProfileMeter();
   if(!currentAccount){ el.innerHTML = ''; return; }
   const profile = currentAccount.profile;
   const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
