@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Board Sync — Bridge NG Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="images/bridgeng-logo-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" style="position:static;animation:none;">
+    <div class="nav-top">
+      <a class="brand" href="index.html" style="text-decoration:none;color:inherit;">
+        <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG">
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="auth-wrap">
+  <div class="auth-panel">
+    <div class="auth-head">
+      <h2 style="color:var(--indigo);">Job board sync</h2>
+      <p>Internal tool — pull live listings from a company's public Greenhouse or Lever job board straight into Bridge NG. Synced jobs are saved to the platform and trigger alerts for any matching saved search or followed company. Requires the server's import token.</p>
+    </div>
+    <div class="card">
+      <p class="form-msg" id="sync-msg"></p>
+      <div class="field-row">
+        <div>
+          <label>Import token</label>
+          <input type="password" id="sync-token" placeholder="Server IMPORT_TOKEN" autocomplete="off">
+        </div>
+        <div>
+          <label>ATS platform</label>
+          <select id="sync-ats">
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Company board slug</label>
+          <input type="text" id="sync-slug" placeholder="e.g. figma">
+        </div>
+        <div>
+          <label>Company display name (optional)</label>
+          <input type="text" id="sync-company" placeholder="Leave blank to auto-detect">
+        </div>
+      </div>
+      <button class="go-btn" onclick="syncJobs()">Sync jobs →</button>
+      <p style="font-size:12px;color:var(--ink-soft);margin:14px 0 0;">The slug is the company identifier in their board URL — e.g. <code>boards.greenhouse.io/<b>figma</b></code> or <code>jobs.lever.co/<b>ro</b></code>.</p>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" id="sync-results-wrap" style="display:none;">
+  <div class="card" style="margin-bottom:24px;">
+    <h3 style="margin-bottom:4px;color:var(--indigo);">Browse this sync</h3>
+    <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">These roles are already live on Bridge NG and matched against real signed-in users' skills on the Job seeker tab — this is just a quick way to review what came in from this sync.</p>
+    <div class="field-row" style="margin-bottom:0;">
+      <div>
+        <label>Search title, company, or department</label>
+        <input type="text" id="sync-filter-keyword" placeholder="e.g. designer, engineering..." oninput="renderSyncResults()">
+      </div>
+      <div>
+        <label>Filter by location</label>
+        <input type="text" id="sync-filter-location" placeholder="e.g. Remote, Lagos, Berlin..." oninput="renderSyncResults()">
+      </div>
+    </div>
+  </div>
+  <div id="sync-results"></div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+let lastSyncedJobs = [];
+
+async function syncJobs(){
+  const msg = document.getElementById('sync-msg');
+  const token = document.getElementById('sync-token').value.trim();
+  const ats = document.getElementById('sync-ats').value;
+  const slug = document.getElementById('sync-slug').value.trim().toLowerCase();
+  const company = document.getElementById('sync-company').value.trim();
+
+  if(!token || !slug){
+    msg.textContent = 'Enter the import token and a company board slug.';
+    msg.className = 'form-msg error';
+    return;
+  }
+
+  msg.textContent = 'Syncing…';
+  msg.className = 'form-msg success';
+
+  try{
+    const data = await apiRequest('/api/jobs/sync', 'POST', {token, ats, slug, company});
+    if(data.imported === 0){
+      msg.textContent = data.message || `No listings found for ${ats}/${slug}.`;
+      msg.className = 'form-msg error';
+      lastSyncedJobs = [];
+      document.getElementById('sync-results-wrap').style.display = 'none';
+    }else{
+      msg.textContent = `Synced ${data.imported} job${data.imported === 1 ? '' : 's'} from ${ats}/${slug} — they're now live on Bridge NG.`;
+      msg.className = 'form-msg success';
+      lastSyncedJobs = data.jobs || [];
+      document.getElementById('sync-results-wrap').style.display = '';
+      document.getElementById('sync-filter-keyword').value = '';
+      document.getElementById('sync-filter-location').value = '';
+      renderSyncResults();
+    }
+  }catch(err){
+    msg.textContent = err.message;
+    msg.className = 'form-msg error';
+  }
+}
+
+function payLabelFor(job){
+  if(!job.payMin && !job.payMax) return 'Competitive salary';
+  return '₦' + job.payMin.toLocaleString('en-NG') + ' – ₦' + job.payMax.toLocaleString('en-NG') + '/mo';
+}
+
+function renderSyncResults(){
+  const keyword = document.getElementById('sync-filter-keyword').value.trim().toLowerCase();
+  const location = document.getElementById('sync-filter-location').value.trim().toLowerCase();
+  const el = document.getElementById('sync-results');
+
+  const filtered = lastSyncedJobs.filter(j=>{
+    const matchesKeyword = !keyword ||
+      j.title.toLowerCase().includes(keyword) ||
+      j.company.toLowerCase().includes(keyword) ||
+      (j.sector || '').toLowerCase().includes(keyword);
+    const matchesLocation = !location || (j.location || '').toLowerCase().includes(location);
+    return matchesKeyword && matchesLocation;
+  });
+
+  if(filtered.length === 0){
+    el.innerHTML = '<div class="empty">No synced roles match those filters.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="results-head"><h2>Synced roles</h2><span>${filtered.length} of ${lastSyncedJobs.length}</span></div>
+    <div class="grid">
+      ${filtered.map(j => `
+        <div class="res-card">
+          <div class="res-body">
+            <p class="res-title">${j.title}</p>
+            <p class="res-sub">${j.company} · ${j.location} · ${j.sector}</p>
+            <span class="pay-pill">${payLabelFor(j)}</span>
+            <div class="skill-row">${(j.skills || []).map(s => `<span class="skill-pill">${s}</span>`).join('')}</div>
+            <div class="btn-row">
+              ${j.applicationLink ? `<a class="apply-btn" href="${j.applicationLink}" target="_blank" rel="noopener noreferrer">View posting ↗</a>` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

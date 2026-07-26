@@ -1,0 +1,3 @@
+pypdf
+libsql-client
+cryptography

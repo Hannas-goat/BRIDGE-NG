@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
     "expo": "^54.0.36",
     "expo-splash-screen": "~31.0.13",
     "react": "19.1.0",

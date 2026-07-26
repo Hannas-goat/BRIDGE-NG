@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -f bridgeng.db)",
+      "Bash(python server.py)"
+    ]
+  }
+}
