@@ -182,6 +182,33 @@
             <div id="profile-meter-dropdown-list"></div>
           </div>
         </div>
+        <div class="whatsapp-header-area" id="whatsapp-header-area" style="display:none;">
+          <button class="whatsapp-header-badge" id="whatsapp-header-badge" onclick="toggleWhatsappHeaderPopover()" aria-label="WhatsApp alerts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.6 14.3c-.24.66-1.4 1.27-1.93 1.33-.5.06-1.03.26-3.5-.73-2.96-1.18-4.85-4.2-5-4.4-.14-.2-1.2-1.6-1.2-3.06 0-1.46.77-2.17 1.04-2.47.27-.3.6-.37.8-.37h.58c.18 0 .43-.03.66.5.24.58.82 2 .9 2.14.06.14.1.3.02.48-.08.18-.13.3-.26.46-.13.16-.27.35-.38.47-.13.13-.26.27-.11.53.14.26.63 1.05 1.37 1.7.94.84 1.73 1.1 1.99 1.23.26.13.4.1.55-.06.15-.16.63-.72.8-.97.16-.24.33-.2.55-.12.23.08 1.44.68 1.68.8.25.13.4.19.47.3.06.1.06.62-.18 1.28z"/></svg>
+            <span class="whatsapp-header-dot" id="whatsapp-header-dot" style="display:none;"></span>
+          </button>
+          <div class="whatsapp-header-dropdown" id="whatsapp-header-dropdown">
+            <div class="whatsapp-card">
+              <div class="whatsapp-card-head">
+                <div>
+                  <p class="whatsapp-card-title">📲 WhatsApp instant alerts</p>
+                  <p class="whatsapp-card-sub">Get high-match roles and employer messages the moment they happen.</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="hdr-whatsapp-enabled">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <label>WhatsApp number</label>
+              <div class="phone-field-row">
+                <select id="hdr-whatsapp-cc"></select>
+                <input type="tel" id="hdr-whatsapp-number" placeholder="803 123 4567">
+              </div>
+              <button class="go-btn" style="width:100%;margin-top:12px;" onclick="saveWhatsappFromHeader()">Save</button>
+              <p class="whatsapp-status-note">Requires Bridge NG to have WhatsApp alerts configured on the backend — your preference is saved either way, but delivery isn't guaranteed until then.</p>
+            </div>
+          </div>
+        </div>
         <div class="auth-area" id="auth-area">
           <a class="auth-btn" href="auth.html?mode=signin">Sign in</a>
           <a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>
@@ -375,20 +402,24 @@
           <input type="text" id="s-ppa-lga" placeholder="e.g. Ikeja">
         </div>
       </div>
-      <div class="field-row">
-        <div>
-          <label>WhatsApp number for alerts (optional)</label>
-          <input type="text" id="s-whatsapp-number" placeholder="e.g. +2348031234567">
+      <div class="whatsapp-card">
+        <div class="whatsapp-card-head">
+          <div>
+            <p class="whatsapp-card-title">📲 WhatsApp instant alerts</p>
+            <p class="whatsapp-card-sub">Get high-match roles and employer messages the moment they happen.</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="s-whatsapp-enabled">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
         </div>
-        <div>
-          <label>Get high-match roles &amp; messages on WhatsApp</label>
-          <select id="s-whatsapp-enabled">
-            <option value="no">Off</option>
-            <option value="yes">On</option>
-          </select>
+        <label>WhatsApp number</label>
+        <div class="phone-field-row">
+          <select id="s-whatsapp-cc"></select>
+          <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567">
         </div>
+        <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
       </div>
-      <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
       <div class="skill-add-row">
@@ -1249,6 +1280,8 @@ populateLocationSelect('e-loc', false);
 populatePpaStateSelect('s-ppa-state');
 populatePpaStateSelect('e-ppa-state', 'Any PPA state / not NYSC-specific');
 populatePhoneCountrySelect('s-phone-cc');
+populatePhoneCountrySelect('s-whatsapp-cc');
+populatePhoneCountrySelect('hdr-whatsapp-cc');
 
 const REGIONS = ["Any region", "Americas", "Europe", "Middle East", "Asia-Pacific", "Global"];
 document.getElementById('ab-region').innerHTML = REGIONS.map(r => `<option>${r}</option>`).join('');
@@ -2217,6 +2250,51 @@ function focusProfileFieldFromHeader(id){
   setTimeout(() => focusProfileField(id), 350);
 }
 
+// Header WhatsApp alerts popover. Writes into the SAME real seeker-form fields (s-whatsapp-cc/
+// -number/-enabled) and calls the existing saveProfile() rather than duplicating profile-save
+// logic — those fields already stay populated at all times via fillSeekerFormFromProfile(),
+// regardless of which tab is active, so this stays correct without a second source of truth.
+function renderWhatsappHeaderArea(){
+  const area = document.getElementById('whatsapp-header-area');
+  if(!area) return;
+  if(!currentAccount){ area.style.display = 'none'; return; }
+  area.style.display = '';
+  const profile = currentAccount.profile;
+  const split = splitPhoneCountryCode(profile.whatsappNumber);
+  document.getElementById('hdr-whatsapp-cc').value = split.cc;
+  document.getElementById('hdr-whatsapp-number').value = split.number;
+  document.getElementById('hdr-whatsapp-enabled').checked = !!profile.whatsappAlertsEnabled;
+  document.getElementById('whatsapp-header-dot').style.display = profile.whatsappAlertsEnabled ? '' : 'none';
+}
+
+function toggleWhatsappHeaderPopover(force){
+  const dd = document.getElementById('whatsapp-header-dropdown');
+  if(typeof force === 'boolean') dd.classList.toggle('open', force);
+  else dd.classList.toggle('open');
+}
+
+async function saveWhatsappFromHeader(){
+  const cc = document.getElementById('hdr-whatsapp-cc').value;
+  const number = document.getElementById('hdr-whatsapp-number').value;
+  const enabled = document.getElementById('hdr-whatsapp-enabled').checked;
+  document.getElementById('s-whatsapp-cc').value = cc;
+  document.getElementById('s-whatsapp-number').value = number;
+  document.getElementById('s-whatsapp-enabled').checked = enabled;
+  const ok = await saveProfile();
+  if(ok){
+    toggleWhatsappHeaderPopover(false);
+    showToast(enabled ? 'WhatsApp alerts turned on.' : 'WhatsApp alerts turned off.');
+  }else{
+    showToast('Could not save — check the seeker profile tab for details.');
+  }
+}
+document.addEventListener('click', (e) => {
+  const area = document.getElementById('whatsapp-header-area');
+  if(area && !area.contains(e.target)){
+    document.getElementById('whatsapp-header-dropdown').classList.remove('open');
+  }
+});
+
 function toggleMobileNav(){
   document.getElementById('mega-nav').classList.toggle('open');
   document.getElementById('nav-backdrop').classList.toggle('open');
@@ -2651,14 +2729,54 @@ async function watchCandidatePitch(userId, btn){
   try{
     const data = await apiGetCandidatePitch(userId);
     const url = `data:${data.mediaType};base64,${data.base64}`;
-    panel.innerHTML = data.kind === 'video'
-      ? `<video src="${url}" controls playsinline class="pitch-watch-media"></video>`
-      : `<audio src="${url}" controls style="width:100%;"></audio>`;
+    const isVideo = data.kind === 'video';
+    // Decorative equalizer, not a real waveform of the recording's actual samples — staggered
+    // per-bar animation-delay is what gives it a natural (non-uniform) pulse instead of every
+    // bar bouncing in lockstep.
+    const bars = isVideo ? '' : Array.from({length: 20}, (_, i) =>
+      `<span style="animation-delay:${(i % 5) * 0.11}s"></span>`).join('');
+    panel.innerHTML = `
+      <div class="pitch-player" data-kind="${isVideo ? 'video' : 'audio'}">
+        ${isVideo ? `<video class="pitch-player-media" src="${url}" playsinline></video>` : ''}
+        <button class="pitch-player-toggle" onclick="togglePitchPlayback(this)" aria-label="Play pitch">
+          <svg class="icon-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="icon-pause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+        </button>
+        ${isVideo ? '' : `<audio class="pitch-player-media" src="${url}"></audio><div class="pitch-player-wave">${bars}</div>`}
+      </div>
+    `;
     panel.dataset.loaded = '1';
   }catch(e){
     panel.innerHTML = '<p class="fit-none">Could not load this pitch.</p>';
   }
 }
+
+function togglePitchPlayback(btn){
+  const media = btn.closest('.pitch-player').querySelector('.pitch-player-media');
+  if(media.paused) media.play();
+  else media.pause();
+}
+
+// play/pause don't bubble on media elements, but they DO propagate in the capture phase — this
+// single delegated pair keeps the icon and wave animation correct regardless of how playback
+// started or stopped (button click, native seek, or the track simply ending, which also fires
+// pause right before ended per the HTML spec).
+document.addEventListener('play', (e) => {
+  const media = e.target;
+  if(!media.classList || !media.classList.contains('pitch-player-media')) return;
+  const player = media.closest('.pitch-player');
+  player.classList.add('playing');
+  player.querySelector('.icon-play').style.display = 'none';
+  player.querySelector('.icon-pause').style.display = '';
+}, true);
+document.addEventListener('pause', (e) => {
+  const media = e.target;
+  if(!media.classList || !media.classList.contains('pitch-player-media')) return;
+  const player = media.closest('.pitch-player');
+  player.classList.remove('playing');
+  player.querySelector('.icon-play').style.display = '';
+  player.querySelector('.icon-pause').style.display = 'none';
+}, true);
 
 function toggleMessageComposer(userId){
   const el = document.getElementById('msg-composer-' + userId);
@@ -3436,6 +3554,7 @@ function renderProfileCompletion(){
   renderNyscBadge();
   renderMegaProfileMeter();
   renderHeaderProfileMeter();
+  renderWhatsappHeaderArea();
   if(!currentAccount){ el.innerHTML = ''; return; }
   const profile = currentAccount.profile;
   const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
@@ -3504,9 +3623,12 @@ function fillSeekerFormFromProfile(profile){
   if(profile.ppaState) document.getElementById('s-ppa-state').value = profile.ppaState;
   document.getElementById('s-ppa-lga').value = profile.ppaLga || '';
   onNyscStatusChange();
-  document.getElementById('s-whatsapp-number').value = profile.whatsappNumber || '';
-  document.getElementById('s-whatsapp-enabled').value = profile.whatsappAlertsEnabled ? 'yes' : 'no';
+  const whatsappSplit = splitPhoneCountryCode(profile.whatsappNumber);
+  document.getElementById('s-whatsapp-cc').value = whatsappSplit.cc;
+  document.getElementById('s-whatsapp-number').value = whatsappSplit.number;
+  document.getElementById('s-whatsapp-enabled').checked = !!profile.whatsappAlertsEnabled;
   document.getElementById('whatsapp-status-note').textContent = 'Requires Bridge NG to have WhatsApp alerts configured on the backend — your preference is saved either way, but delivery isn\'t guaranteed until then.';
+  renderWhatsappHeaderArea();
   applySelectedSkills('s-skills', seekerSkills, profile.skills);
   renderRemoteJobsFeed();
   onUniversityFieldChange();
@@ -3675,8 +3797,8 @@ async function saveProfile(){
     nyscStatus: document.getElementById('s-nysc').value,
     ppaState: document.getElementById('s-ppa-state').value,
     ppaLga: document.getElementById('s-ppa-lga').value,
-    whatsappNumber: document.getElementById('s-whatsapp-number').value,
-    whatsappAlertsEnabled: document.getElementById('s-whatsapp-enabled').value === 'yes',
+    whatsappNumber: formatPhoneWithCountryCode(document.getElementById('s-whatsapp-cc').value, document.getElementById('s-whatsapp-number').value),
+    whatsappAlertsEnabled: document.getElementById('s-whatsapp-enabled').checked,
     skills: [...seekerSkills]
   };
   try{
@@ -3686,9 +3808,11 @@ async function saveProfile(){
     msg.className = 'form-msg success';
     renderRemoteJobsFeed();
     renderProfileCompletion();
+    return true;
   }catch(err){
     msg.textContent = "Couldn't save profile (" + err.message + ").";
     msg.className = 'form-msg error';
+    return false;
   }
 }
 
