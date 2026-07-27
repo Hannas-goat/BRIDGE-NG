@@ -227,6 +227,7 @@ async function apiRequest(path, method, body){
 function apiSignup(payload){ return apiRequest('/api/signup', 'POST', payload); }
 function apiLogin(email, password){ return apiRequest('/api/login', 'POST', {email, password}); }
 function apiLogout(){ return apiRequest('/api/logout', 'POST', {}); }
+function apiDeleteAccount(password){ return apiRequest('/api/account/delete', 'POST', {password}); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }

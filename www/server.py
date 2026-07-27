@@ -1541,6 +1541,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_login()
         if parsed.path == "/api/logout":
             return self.handle_logout()
+        if parsed.path == "/api/account/delete":
+            return self.handle_delete_account()
         if parsed.path == "/api/chat":
             return self.handle_chat()
         if parsed.path == "/api/jobs/import":
@@ -1720,6 +1722,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
         token = self.get_cookie(SESSION_COOKIE)
         if token:
             sessions.pop(token, None)
+        self.send_json(200, {"ok": True}, clear_cookie=True)
+
+    def handle_delete_account(self):
+        """NDPR-style "right to be forgotten": a real, permanent delete of everything tied to this
+        account, not a soft-delete flag. Requires re-entering the password (not just an active
+        session) since this is irreversible. salary_reviews is deliberately untouched — it has no
+        user_id column at all by design, so there's nothing there to attribute to this account."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        password = data.get("password") or ""
+
+        with db_lock:
+            conn = get_db()
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if user is None or not verify_password(password, user["salt"], user["password_hash"]):
+                conn.close()
+                return self.send_json(401, {"error": "Incorrect password."})
+
+            email = user["email"]
+            conv_ids = [r["id"] for r in conn.execute(
+                "SELECT id FROM conversations WHERE candidate_user_id=?", (user_id,)
+            ).fetchall()]
+            for cid in conv_ids:
+                conn.execute("DELETE FROM messages WHERE conversation_id=?", (cid,))
+            conn.execute("DELETE FROM conversations WHERE candidate_user_id=?", (user_id,))
+            conn.execute("DELETE FROM saved_searches WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM followed_companies WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM notifications WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM appointments WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM checkins WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM applications WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM profiles WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+            conn.commit()
+            conn.close()
+
+        revoke_sessions_for_user(user_id)
+        clear_failed_logins(email)
         self.send_json(200, {"ok": True}, clear_cookie=True)
 
     def handle_me(self):

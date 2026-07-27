@@ -439,6 +439,11 @@
       </div>
       <p class="form-msg" id="profile-save-msg"></p>
       <div id="saved-searches-list"></div>
+      <div class="danger-zone" id="danger-zone-section" style="display:none;">
+        <p class="danger-zone-title">Danger zone</p>
+        <p class="danger-zone-sub">Permanently delete your account and everything tied to it — profile, resume, applications, saved searches, messages. This can't be undone.</p>
+        <button type="button" class="danger-btn" onclick="openDeleteAccountModal()">Delete my account</button>
+      </div>
     </div>
     <div id="my-applications-list"></div>
     <div id="seeker-results"></div>
@@ -1117,6 +1122,10 @@
         </div>
         <div></div>
       </div>
+      <label class="blind-screening-row">
+        <input type="checkbox" id="e-blinded-screening" onchange="renderEmployerResultsSection()">
+        <span>🕶️ Blinded screening — hide candidate names until you invite them to interview, so shortlisting is judged on skills and score alone</span>
+      </label>
       <button class="go-btn" onclick="findCandidates()">Find matching candidates →</button>
     </div>
     <div id="employer-results"></div>
@@ -1233,6 +1242,29 @@
       </button>
     </div>
     <div id="challenge-modal-body"></div>
+  </div>
+</div>
+
+<!-- NDPR-style "right to be forgotten" confirmation — requires re-entering the password (not just
+     an active session) since this permanently deletes everything, no soft-delete/undo. -->
+<div class="pitch-modal-overlay" id="delete-account-modal-overlay" onclick="if(event.target === this) closeDeleteAccountModal()">
+  <div class="pitch-modal">
+    <div class="pitch-modal-head">
+      <div>
+        <h3>Delete your account?</h3>
+        <p class="pitch-modal-sub">This permanently deletes your profile, resume, applications, saved searches, and messages. There's no undo.</p>
+      </div>
+      <button class="pitch-modal-close" onclick="closeDeleteAccountModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <label>Confirm your password to continue</label>
+    <input type="password" id="delete-account-password" class="form-textarea" style="min-height:auto;" placeholder="Your password">
+    <p class="form-msg" id="delete-account-msg"></p>
+    <div class="pitch-modal-actions">
+      <button class="upload-btn" onclick="closeDeleteAccountModal()">Cancel</button>
+      <button class="danger-btn" onclick="confirmDeleteAccount()">Permanently delete my account</button>
+    </div>
   </div>
 </div>
 
@@ -3807,9 +3839,11 @@ function renderAuthArea(){
     const firstName = (currentAccount.profile.fullName || currentAccount.email).split(' ')[0];
     el.innerHTML = `<span class="user-greet">Signed in as <b>${firstName}</b></span><button class="auth-btn" onclick="signOut()">Sign out</button>`;
     document.getElementById('save-profile-btn').style.display = '';
+    document.getElementById('danger-zone-section').style.display = '';
   }else{
     el.innerHTML = `<a class="auth-btn" href="auth.html?mode=signin">Sign in</a><a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>`;
     document.getElementById('save-profile-btn').style.display = 'none';
+    document.getElementById('danger-zone-section').style.display = 'none';
   }
 }
 
@@ -3882,6 +3916,43 @@ async function signOut(){
   await loadConversations();
   renderRecentJobsFeed();
   renderRemoteJobsFeed();
+}
+
+function openDeleteAccountModal(){
+  document.getElementById('delete-account-password').value = '';
+  document.getElementById('delete-account-msg').textContent = '';
+  document.getElementById('delete-account-modal-overlay').classList.add('open');
+}
+
+function closeDeleteAccountModal(){
+  document.getElementById('delete-account-modal-overlay').classList.remove('open');
+}
+
+async function confirmDeleteAccount(){
+  const password = document.getElementById('delete-account-password').value;
+  const msg = document.getElementById('delete-account-msg');
+  if(!password){
+    msg.textContent = 'Enter your password to confirm.';
+    msg.className = 'form-msg error';
+    return;
+  }
+  try{
+    await apiDeleteAccount(password);
+  }catch(err){
+    msg.textContent = err.message || "Couldn't delete your account.";
+    msg.className = 'form-msg error';
+    return;
+  }
+  closeDeleteAccountModal();
+  // Same client-state reset as signing out — the account (and its session) no longer exists server-side.
+  currentAccount = null;
+  clearResumeFile();
+  clearInterval(notifTimer);
+  notifTimer = null;
+  renderAuthArea();
+  renderProfileCompletion();
+  showToast('Your account and all associated data have been permanently deleted.');
+  showPage('seeker');
 }
 
 // Soft, dismissible nudges only — never blocks saving. Career switches and non-traditional
@@ -5231,6 +5302,12 @@ function renderResumeFit(job, fit){
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
+// Kept in module state (not just local to findCandidates) so toggling "Blinded screening" or
+// inviting someone to interview can re-render the same result set without re-hitting the API —
+// the underlying match data never changes, only how much of it is currently shown.
+let lastEmployerResults = null;
+let blindedUnmasked = new Set();
+
 async function findCandidates(){
   const title = document.getElementById('e-title').value || 'This role';
   const company = document.getElementById('e-company').value || 'Your company';
@@ -5262,16 +5339,36 @@ async function findCandidates(){
     // Real matching is layered on top — the sample results below still render either way.
   }
 
-  const budgetLine = (payMin && payMax)
-    ? `<span class="pay-pill" style="margin-left:10px;">Budget: ₦${Number(payMin).toLocaleString('en-NG')} – ₦${Number(payMax).toLocaleString('en-NG')}/mo</span>`
-    : '';
+  lastEmployerResults = {matches: realMatches, company, title, notifiedCount};
+  blindedUnmasked = new Set();
+  renderEmployerResultsSection();
+}
+
+// Blinded screening: masks name + field of study (the two most identity-adjacent fields) for
+// every candidate except ones in blindedUnmasked — populated only by actually inviting someone to
+// interview, which is the deliberate "ok, I'm evaluating this specific person now" trigger.
+// Skills/score/location/badges stay visible either way, since those are the fair signals the
+// whole point of this feature is to keep the focus on.
+function candidateDisplayName(m, blinded, index){
+  return (blinded && !blindedUnmasked.has(m.userId)) ? `Candidate #${index + 1}` : m.fullName;
+}
+function candidateFieldOfStudy(m, blinded){
+  return (blinded && !blindedUnmasked.has(m.userId)) ? 'Hidden until interview' : (m.fieldOfStudy || 'Field not specified');
+}
+
+function renderEmployerResultsSection(){
+  if(!lastEmployerResults) return;
+  const {matches: realMatches, company, title, notifiedCount} = lastEmployerResults;
+  const results = document.getElementById('employer-results');
+  const blinded = document.getElementById('e-blinded-screening').checked;
 
   const realSection = realMatches.length ? `
     <div class="results-head"><h2>Real Bridge NG members</h2><span>${realMatches.length} matched${notifiedCount ? ' · ' + notifiedCount + ' notified' : ''}</span></div>
-    ${shortlistMatrixHtml(realMatches)}
+    ${shortlistMatrixHtml(realMatches, blinded)}
     <div class="grid">
-      ${realMatches.map(m=>{
+      ${realMatches.map((m, i)=>{
         const g = gaugeColor(m.score);
+        const name = candidateDisplayName(m, blinded, i);
         return `<div class="res-card">
           <div class="gauge">
             <svg width="60" height="42" viewBox="0 0 60 42">
@@ -5283,8 +5380,8 @@ async function findCandidates(){
             <span class="lbl">match</span>
           </div>
           <div class="res-body">
-            <p class="res-title">${m.fullName} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
-            <p class="res-sub">${m.fieldOfStudy || 'Field not specified'} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
+            <p class="res-title">${escapeHtml(name)} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
+            <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
             ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
             <div class="btn-row" style="margin-top:10px;">
@@ -5312,7 +5409,7 @@ async function findCandidates(){
 // same realMatches data (already sorted by score server-side). "Invite to Interview" reuses the
 // card grid's own message composer/sendEmployerMessage plumbing rather than a separate system —
 // it just opens that candidate's composer pre-filled with an interview-invite template.
-function shortlistMatrixHtml(matches){
+function shortlistMatrixHtml(matches, blinded){
   return `
     <div class="shortlist-matrix-wrap">
       <table class="shortlist-matrix">
@@ -5320,9 +5417,9 @@ function shortlistMatrixHtml(matches){
           <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th></th></tr>
         </thead>
         <tbody>
-          ${matches.map(m => `
+          ${matches.map((m, i) => `
             <tr>
-              <td>${escapeHtml(m.fullName)}</td>
+              <td>${escapeHtml(candidateDisplayName(m, blinded, i))}</td>
               <td><span class="matrix-score-pill" style="background:${gaugeColor(m.score).bg};color:${gaugeColor(m.score).fg};">${m.score}%</span></td>
               <td>${m.nyscStatus ? escapeHtml(m.nyscStatus) + (m.ppaState ? ' · ' + escapeHtml(m.ppaState) : '') : '—'}</td>
               <td>${escapeHtml(m.preferredLocation || '—')}</td>
@@ -5337,6 +5434,8 @@ function shortlistMatrixHtml(matches){
 }
 
 function inviteToInterview(userId){
+  blindedUnmasked.add(userId);
+  if(lastEmployerResults) renderEmployerResultsSection(); // reveals this candidate's name if blinding was on
   const composer = document.getElementById('msg-composer-' + userId);
   if(!composer) return;
   composer.style.display = '';
