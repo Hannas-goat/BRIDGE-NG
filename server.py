@@ -661,6 +661,11 @@ def init_db():
     ensure_column(conn, "profiles", "pitch_media_base64", "pitch_media_base64 TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "whatsapp_number", "whatsapp_number TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "whatsapp_alerts_enabled", "whatsapp_alerts_enabled INTEGER DEFAULT 0")
+    # verified_badges: only ever written by handle_submit_skill_challenge after a real server-side
+    # scored quiz — never trust a client-submitted score. portfolio_link is self-declared, same
+    # honesty rule as nysc_status/university above (Bridge NG can't verify it against anything real).
+    ensure_column(conn, "profiles", "verified_badges", "verified_badges TEXT DEFAULT '[]'")
+    ensure_column(conn, "profiles", "portfolio_link", "portfolio_link TEXT DEFAULT ''")
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -737,6 +742,49 @@ def verify_password(password, salt, expected_hash):
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Real, fixed 5-question banks — deterministic scoring, no AI involved. The correct-answer index
+# never leaves the server (handle_get_skill_challenge strips it before responding); scoring only
+# ever happens in handle_submit_skill_challenge against this same dict, so a badge can't be earned
+# by reading the page source or replaying a guessed score from the client.
+SKILL_CHALLENGE_PASS_THRESHOLD = 4  # out of 5 (80%) to earn the verified badge
+SKILL_CHALLENGES = {
+    "Python": [
+        {"q": "What does `len([1, 2, 3])` return?", "options": ["2", "3", "4", "Error"], "answer": 1},
+        {"q": "Which keyword defines a function in Python?", "options": ["func", "def", "function", "lambda"], "answer": 1},
+        {"q": "What is the output of `3 // 2`?", "options": ["1.5", "1", "2", "0"], "answer": 1},
+        {"q": "Which data type is immutable in Python?", "options": ["list", "dict", "tuple", "set"], "answer": 2},
+        {"q": "What does `range(5)` produce values for?", "options": ["1 to 5", "0 to 4", "0 to 5", "1 to 4"], "answer": 1},
+    ],
+    "SQL": [
+        {"q": "Which SQL clause filters rows before grouping?", "options": ["HAVING", "WHERE", "GROUP BY", "ORDER BY"], "answer": 1},
+        {"q": "Which JOIN returns only matching rows from both tables?", "options": ["LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "FULL OUTER JOIN"], "answer": 2},
+        {"q": "Which statement removes rows from a table?", "options": ["DROP", "DELETE", "REMOVE", "TRUNCATE ONLY"], "answer": 1},
+        {"q": "What does `COUNT(*)` return?", "options": ["Sum of a column", "Number of rows", "Number of columns", "Average of a column"], "answer": 1},
+        {"q": "Which clause filters groups after GROUP BY?", "options": ["WHERE", "HAVING", "FILTER", "ON"], "answer": 1},
+    ],
+    "Excel": [
+        {"q": "Which function looks up a value in a table by row?", "options": ["SUMIF", "VLOOKUP", "CONCAT", "INDEX only"], "answer": 1},
+        {"q": "What does pressing F4 do to a selected cell reference in a formula?", "options": ["Deletes it", "Toggles absolute/relative references", "Copies it", "Sorts the column"], "answer": 1},
+        {"q": "Which function counts cells matching a condition?", "options": ["COUNTIF", "SUMPRODUCT", "IFERROR", "COUNTBLANK"], "answer": 0},
+        {"q": "What does `$A$1` mean in a formula?", "options": ["Relative row and column", "Absolute row and column", "Named range", "External reference"], "answer": 1},
+        {"q": "Which feature summarizes large datasets interactively?", "options": ["Conditional formatting", "PivotTable", "Data validation", "Text to Columns"], "answer": 1},
+    ],
+    "Customer Service": [
+        {"q": "A customer is angry about a late delivery. What's the best first step?", "options": ["Explain company policy immediately", "Acknowledge their frustration and listen", "Transfer them to another department", "Offer a discount right away"], "answer": 1},
+        {"q": "What does \"first-call resolution\" mean?", "options": ["Answering the phone quickly", "Solving the issue in the first contact", "Escalating every call", "Following a script exactly"], "answer": 1},
+        {"q": "A customer asks for something outside policy. Best approach?", "options": ["Refuse and end the call", "Explain what you CAN do, and check if an exception is possible", "Ignore the request", "Promise it will be done regardless"], "answer": 1},
+        {"q": "What's an example of active listening?", "options": ["Interrupting to solve faster", "Paraphrasing back what the customer said", "Multitasking while they talk", "Reading from a script without pausing"], "answer": 1},
+        {"q": "Why is tone important in written support (e.g. email/chat)?", "options": ["It isn't, only accuracy matters", "It affects how the message is perceived even without voice cues", "Only spoken tone matters", "Formal tone always works best"], "answer": 1},
+    ],
+    "JavaScript": [
+        {"q": "Which keyword declares a block-scoped variable?", "options": ["var", "let", "global", "static"], "answer": 1},
+        {"q": "What does `===` check that `==` doesn't?", "options": ["Nothing, they're the same", "Type, in addition to value", "Only value, not type", "Reference equality only"], "answer": 1},
+        {"q": "What does `Array.map()` return?", "options": ["The original array, mutated", "A new array of transformed values", "A single value", "undefined"], "answer": 1},
+        {"q": "What is a Promise used for?", "options": ["Styling elements", "Handling asynchronous operations", "Declaring variables", "Looping over arrays"], "answer": 1},
+        {"q": "What does `typeof null` return in JavaScript?", "options": ["\"null\"", "\"object\"", "\"undefined\"", "\"boolean\""], "answer": 1},
+    ],
+}
+
 PROFILE_FIELDS = ["fullName", "dob", "sex", "phone", "address", "education",
                    "careerLevel", "fieldOfStudy", "preferredLocation"]
 PROFILE_COLUMNS = ["full_name", "dob", "sex", "phone", "address", "education",
@@ -753,6 +801,7 @@ def profile_row_to_json(row):
             "openToRemote": False, "resumeText": "", "resumeFile": None, "resumeFilename": "",
             "university": "", "nyscStatus": "", "ppaState": "", "ppaLga": "", "pitchMedia": None,
             "whatsappNumber": "", "whatsappAlertsEnabled": False,
+            "verifiedBadges": [], "portfolioLink": "",
         }
     resume_file_kind = row["resume_file_kind"] or ""
     resume_file = None
@@ -788,6 +837,8 @@ def profile_row_to_json(row):
         } if row["pitch_media_kind"] else None,
         "whatsappNumber": decrypt_field(row["whatsapp_number"] or ""),
         "whatsappAlertsEnabled": bool(row["whatsapp_alerts_enabled"]),
+        "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
+        "portfolioLink": row["portfolio_link"] or "",
     }
 
 
@@ -1463,6 +1514,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_salary_reviews(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/candidate-pitch":
             return self.handle_get_candidate_pitch(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/skill-challenge":
+            return self.handle_get_skill_challenge(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/appointments/ics":
             return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/messages":
@@ -1534,6 +1587,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_career_match()
         if parsed.path == "/api/download-relay":
             return self.handle_download_relay_create()
+        if parsed.path == "/api/skill-challenge/submit":
+            return self.handle_submit_skill_challenge()
         return self.send_json(404, {"error": "Not found"})
 
     def do_PUT(self):
@@ -1757,7 +1812,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 """UPDATE profiles SET full_name=?, dob=?, sex=?, phone=?, address=?,
                    education=?, career_level=?, field_of_study=?, preferred_location=?,
                    skills=?, open_to_remote=?, university=?, nysc_status=?, ppa_state=?, ppa_lga=?,
-                   whatsapp_number=?, whatsapp_alerts_enabled=?,
+                   whatsapp_number=?, whatsapp_alerts_enabled=?, portfolio_link=?,
                    updated_at=datetime('now') WHERE user_id=?""",
                 (encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
                  encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
@@ -1768,7 +1823,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
                  (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
                  encrypt_field((data.get("whatsappNumber") or "").strip()),
-                 1 if data.get("whatsappAlertsEnabled") else 0, user_id),
+                 1 if data.get("whatsappAlertsEnabled") else 0,
+                 (data.get("portfolioLink") or "").strip(), user_id),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
@@ -1849,6 +1905,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
         self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_get_skill_challenge(self, query):
+        """Returns the 5 questions for a skill with the correct-answer index stripped out — the
+        client never sees which option is right, so a badge can't be earned by inspecting this
+        response; scoring only happens server-side in handle_submit_skill_challenge below."""
+        skill = (query.get("skill", [None])[0] or "").strip()
+        bank = SKILL_CHALLENGES.get(skill)
+        if not bank:
+            return self.send_json(404, {"error": "No challenge is available for that skill yet."})
+        questions = [{"q": item["q"], "options": item["options"]} for item in bank]
+        self.send_json(200, {"skill": skill, "questions": questions})
+
+    def handle_submit_skill_challenge(self):
+        """Scores a candidate's answers against the real answer key (never the client-submitted
+        score) and, at 4/5 or better, adds or refreshes a verified badge on their profile."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        skill = (data.get("skill") or "").strip()
+        answers = data.get("answers") or []
+        bank = SKILL_CHALLENGES.get(skill)
+        if not bank:
+            return self.send_json(404, {"error": "No challenge is available for that skill yet."})
+        if not isinstance(answers, list) or len(answers) != len(bank):
+            return self.send_json(400, {"error": f"Expected {len(bank)} answers."})
+
+        correct = sum(1 for given, item in zip(answers, bank) if given == item["answer"])
+        passed = correct >= SKILL_CHALLENGE_PASS_THRESHOLD
+
+        with db_lock:
+            conn = get_db()
+            row = conn.execute("SELECT verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            badges = json.loads(row["verified_badges"] or "[]") if row else []
+            if passed:
+                badges = [b for b in badges if b.get("skill") != skill]
+                badges.append({
+                    "skill": skill,
+                    "score": correct,
+                    "total": len(bank),
+                    "date": datetime.date.today().isoformat(),
+                })
+                conn.execute(
+                    "UPDATE profiles SET verified_badges=?, updated_at=datetime('now') WHERE user_id=?",
+                    (json.dumps(badges), user_id),
+                )
+                conn.commit()
+            conn.close()
+
+        self.send_json(200, {"score": correct, "total": len(bank), "passed": passed, "badges": badges})
 
     def handle_get_candidate_pitch(self, query):
         """Employer-side lookup of one candidate's pitch by user id — same unauthenticated trust
@@ -2468,6 +2577,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "hasPitch": bool(row["pitch_media_kind"]),
                     "skills": cand_skills,
                     "score": score,
+                    "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
+                    "portfolioLink": row["portfolio_link"] or "",
                 })
                 if score >= 60:
                     message = f"A new role matches your profile: {title} at {company} — {score}% match."

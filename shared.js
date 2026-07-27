@@ -224,6 +224,8 @@ function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', paylo
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }
 function apiSavePitch(payload){ return apiRequest('/api/profile/pitch', 'PUT', payload); }
 function apiGetCandidatePitch(userId){ return apiRequest('/api/candidate-pitch?userId=' + encodeURIComponent(userId), 'GET'); }
+function apiGetSkillChallenge(skill){ return apiRequest('/api/skill-challenge?skill=' + encodeURIComponent(skill), 'GET'); }
+function apiSubmitSkillChallenge(payload){ return apiRequest('/api/skill-challenge/submit', 'POST', payload); }
 function apiChat(messages, context){ return apiRequest('/api/chat', 'POST', {messages, context}); }
 
 function apiListJobs(){ return apiRequest('/api/jobs', 'GET'); }

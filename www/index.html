@@ -427,6 +427,11 @@
         <button class="upload-btn" onclick="addCustomSkill('s-skills', seekerSkills, 's-skill-input')">Add skill</button>
       </div>
       <div id="skill-radar"></div>
+      <label>Portfolio / project link (optional, self-declared)</label>
+      <input type="text" id="s-portfolio-link" placeholder="e.g. https://github.com/yourname or a Figma/portfolio link" style="margin-bottom:16px;">
+      <label>Verified skill challenges</label>
+      <p class="whatsapp-card-sub" style="margin:-4px 0 10px;">Take a real 5-question challenge on any of your selected skills — score 4/5 or better to earn a verified badge employers can see on your profile.</p>
+      <div id="skill-challenges-list"></div>
       <div class="btn-row">
         <button class="go-btn" style="margin-top:0;" onclick="findJobs()">Find matching jobs →</button>
         <button class="ai-btn" onclick="saveCurrentSearch()">🔔 Save this search &amp; get alerts</button>
@@ -1214,6 +1219,23 @@
   </div>
 </div>
 
+<!-- Skill challenge modal — real, server-scored 5-question quiz (see SKILL_CHALLENGES in
+     server.py). The correct answers never reach this page; scoring happens entirely server-side. -->
+<div class="pitch-modal-overlay" id="challenge-modal-overlay" onclick="if(event.target === this) closeSkillChallengeModal()">
+  <div class="pitch-modal">
+    <div class="pitch-modal-head">
+      <div>
+        <h3>Skill challenge</h3>
+        <p class="pitch-modal-sub" id="challenge-modal-sub"></p>
+      </div>
+      <button class="pitch-modal-close" onclick="closeSkillChallengeModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="challenge-modal-body"></div>
+  </div>
+</div>
+
 <nav class="bottom-dock" id="bottom-dock">
   <button class="dock-btn" data-target="seeker" onclick="dockNavigate('seeker')">
     <span class="dock-icon">🏠</span><span class="dock-label">Home</span>
@@ -1576,6 +1598,26 @@ function toggleOverlapPopover(event){
 document.addEventListener('click', (e) => {
   if(!e.target.closest('.overlap-badge')) document.querySelectorAll('.overlap-badge.open').forEach(b => b.classList.remove('open'));
 });
+
+// Employer-facing verified-skill badges — real, only ever set by handle_submit_skill_challenge
+// after a genuine server-scored quiz (see SKILL_CHALLENGES in server.py). Same inline-safe-tags
+// rule as skillOverlapBadgeHtml above: every nested tag here must be a span, never div/p, since
+// this sits inside a <p class="res-title"> and a block element would trigger HTML's auto-close-<p>
+// parsing rule and silently hoist the popover out of the badge entirely.
+function verifiedBadgesHtml(match){
+  const badges = match.verifiedBadges || [];
+  if(badges.length === 0) return '';
+  return badges.map(b => `
+    <span class="verified-skill-badge overlap-badge" onclick="toggleOverlapPopover(event)">
+      ✓ Verified ${escapeHtml(b.skill)}
+      <span class="overlap-popover">
+        <span class="overlap-popover-title">Skill challenge result</span>
+        <span class="verified-badge-detail">${b.score}/${b.total} correct · ${escapeHtml(b.date)}</span>
+        ${match.portfolioLink ? `<span class="overlap-popover-title">Portfolio (self-declared)</span><a class="verified-badge-link" href="${escapeAttr(match.portfolioLink)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${escapeHtml(match.portfolioLink)}</a>` : ''}
+      </span>
+    </span>
+  `).join('');
+}
 
 // Pitch button reuses the exact same real AI cover-letter plumbing as Resume Studio's "Write cover
 // letter" (apiGenerateResumeDoc mode:'cover' -> NVIDIA-backed handle_resume_generate on the server),
@@ -2294,6 +2336,92 @@ document.addEventListener('click', (e) => {
     document.getElementById('whatsapp-header-dropdown').classList.remove('open');
   }
 });
+
+// Real, server-scored skill challenges (see SKILL_CHALLENGES in server.py) — this list just
+// mirrors which skill names the server has a question bank for, nothing else.
+const SKILL_CHALLENGE_SKILLS = ['Python', 'SQL', 'Excel', 'Customer Service', 'JavaScript'];
+
+function renderSkillChallenges(){
+  const el = document.getElementById('skill-challenges-list');
+  if(!el) return;
+  if(!currentAccount){ el.innerHTML = ''; return; }
+  const badges = currentAccount.profile.verifiedBadges || [];
+  const badgeBySkill = Object.fromEntries(badges.map(b => [b.skill, b]));
+  const eligible = SKILL_CHALLENGE_SKILLS.filter(s => seekerSkills.has(s));
+  if(eligible.length === 0){
+    el.innerHTML = `<p class="whatsapp-status-note">Select one of these skills above to unlock a challenge: ${SKILL_CHALLENGE_SKILLS.join(', ')}.</p>`;
+    return;
+  }
+  el.innerHTML = eligible.map(skill => {
+    const badge = badgeBySkill[skill];
+    return `<div class="challenge-row">
+      <span class="challenge-skill">${escapeHtml(skill)}</span>
+      ${badge
+        ? `<span class="verified-badge" onclick="showBadgeDetail('${escapeHtml(skill)}', ${badge.score}, ${badge.total}, '${escapeHtml(badge.date)}')">✓ Verified (${badge.score}/${badge.total})</span>`
+        : `<button type="button" class="upload-btn" onclick="openSkillChallenge('${escapeHtml(skill)}')">Take challenge</button>`}
+    </div>`;
+  }).join('');
+}
+
+let currentChallengeSkill = null;
+let currentChallengeQuestionCount = 0;
+
+async function openSkillChallenge(skill){
+  currentChallengeSkill = skill;
+  document.getElementById('challenge-modal-sub').textContent = skill;
+  document.getElementById('challenge-modal-overlay').classList.add('open');
+  const body = document.getElementById('challenge-modal-body');
+  body.innerHTML = '<div class="pitch-modal-loading">Loading questions…</div>';
+  try{
+    const data = await apiGetSkillChallenge(skill);
+    currentChallengeQuestionCount = data.questions.length;
+    body.innerHTML = data.questions.map((q, i) => `
+      <div class="challenge-question">
+        <p class="challenge-question-text">${i + 1}. ${escapeHtml(q.q)}</p>
+        ${q.options.map((opt, oi) => `
+          <label class="challenge-option">
+            <input type="radio" name="challenge-q${i}" value="${oi}">
+            <span>${escapeHtml(opt)}</span>
+          </label>
+        `).join('')}
+      </div>
+    `).join('') + '<button class="go-btn" style="width:100%;margin-top:10px;" onclick="submitSkillChallenge()">Submit answers</button>';
+  }catch(e){
+    body.innerHTML = '<p class="fit-none">Could not load this challenge.</p>';
+  }
+}
+
+function closeSkillChallengeModal(){
+  document.getElementById('challenge-modal-overlay').classList.remove('open');
+  currentChallengeSkill = null;
+}
+
+async function submitSkillChallenge(){
+  const body = document.getElementById('challenge-modal-body');
+  const answers = Array.from({length: currentChallengeQuestionCount}, (_, i) => {
+    const checked = document.querySelector(`input[name="challenge-q${i}"]:checked`);
+    return checked ? Number(checked.value) : -1;
+  });
+  if(answers.some(a => a === -1)){
+    showToast('Answer every question before submitting.');
+    return;
+  }
+  try{
+    const data = await apiSubmitSkillChallenge({skill: currentChallengeSkill, answers});
+    currentAccount.profile.verifiedBadges = data.badges;
+    body.innerHTML = data.passed
+      ? `<p class="fit-none" style="color:var(--green-deep);">✓ Passed — ${data.score}/${data.total}. Verified badge added to your profile.</p>`
+      : `<p class="fit-none">Scored ${data.score}/${data.total} — that's below the bar for a verified badge this time.</p>
+         <button type="button" class="upload-btn" onclick="openSkillChallenge('${escapeHtml(currentChallengeSkill)}')">Try again</button>`;
+    renderSkillChallenges();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+function showBadgeDetail(skill, score, total, date){
+  showToast(`✓ Verified ${skill}: ${score}/${total} (${date})`);
+}
 
 function toggleMobileNav(){
   document.getElementById('mega-nav').classList.toggle('open');
@@ -3354,7 +3482,7 @@ function renderSkillRadar(){
 }
 
 function handleSkillChipToggle(containerId){
-  if(containerId === 's-skills') renderSkillRadar();
+  if(containerId === 's-skills'){ renderSkillRadar(); renderSkillChallenges(); }
 }
 
 let lastKnownStreak = 0;
@@ -3555,6 +3683,7 @@ function renderProfileCompletion(){
   renderMegaProfileMeter();
   renderHeaderProfileMeter();
   renderWhatsappHeaderArea();
+  renderSkillChallenges();
   if(!currentAccount){ el.innerHTML = ''; return; }
   const profile = currentAccount.profile;
   const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
@@ -3629,6 +3758,7 @@ function fillSeekerFormFromProfile(profile){
   document.getElementById('s-whatsapp-enabled').checked = !!profile.whatsappAlertsEnabled;
   document.getElementById('whatsapp-status-note').textContent = 'Requires Bridge NG to have WhatsApp alerts configured on the backend — your preference is saved either way, but delivery isn\'t guaranteed until then.';
   renderWhatsappHeaderArea();
+  document.getElementById('s-portfolio-link').value = profile.portfolioLink || '';
   applySelectedSkills('s-skills', seekerSkills, profile.skills);
   renderRemoteJobsFeed();
   onUniversityFieldChange();
@@ -3799,6 +3929,7 @@ async function saveProfile(){
     ppaLga: document.getElementById('s-ppa-lga').value,
     whatsappNumber: formatPhoneWithCountryCode(document.getElementById('s-whatsapp-cc').value, document.getElementById('s-whatsapp-number').value),
     whatsappAlertsEnabled: document.getElementById('s-whatsapp-enabled').checked,
+    portfolioLink: document.getElementById('s-portfolio-link').value,
     skills: [...seekerSkills]
   };
   try{
@@ -5115,6 +5246,7 @@ async function findCandidates(){
 
   const realSection = realMatches.length ? `
     <div class="results-head"><h2>Real Bridge NG members</h2><span>${realMatches.length} matched${notifiedCount ? ' · ' + notifiedCount + ' notified' : ''}</span></div>
+    ${shortlistMatrixHtml(realMatches)}
     <div class="grid">
       ${realMatches.map(m=>{
         const g = gaugeColor(m.score);
@@ -5129,7 +5261,7 @@ async function findCandidates(){
             <span class="lbl">match</span>
           </div>
           <div class="res-body">
-            <p class="res-title">${m.fullName} <span class="match-badge">Real member</span></p>
+            <p class="res-title">${m.fullName} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
             <p class="res-sub">${m.fieldOfStudy || 'Field not specified'} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
             ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
@@ -5152,6 +5284,45 @@ async function findCandidates(){
   `;
 
   results.innerHTML = realSection;
+}
+
+// AI Shortlist Matrix — a fast-scan ranked table above the detailed cards below, using the exact
+// same realMatches data (already sorted by score server-side). "Invite to Interview" reuses the
+// card grid's own message composer/sendEmployerMessage plumbing rather than a separate system —
+// it just opens that candidate's composer pre-filled with an interview-invite template.
+function shortlistMatrixHtml(matches){
+  return `
+    <div class="shortlist-matrix-wrap">
+      <table class="shortlist-matrix">
+        <thead>
+          <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${matches.map(m => `
+            <tr>
+              <td>${escapeHtml(m.fullName)}</td>
+              <td><span class="matrix-score-pill" style="background:${gaugeColor(m.score).bg};color:${gaugeColor(m.score).fg};">${m.score}%</span></td>
+              <td>${m.nyscStatus ? escapeHtml(m.nyscStatus) + (m.ppaState ? ' · ' + escapeHtml(m.ppaState) : '') : '—'}</td>
+              <td>${escapeHtml(m.preferredLocation || '—')}</td>
+              <td>${(m.verifiedBadges || []).length ? (m.verifiedBadges || []).map(b => `<span class="verified-badge" style="margin-right:4px;" onclick="showBadgeDetail('${escapeHtml(b.skill)}', ${b.score}, ${b.total}, '${escapeHtml(b.date)}')">✓ ${escapeHtml(b.skill)}</span>`).join('') : '—'}</td>
+              <td><button type="button" class="ai-btn" style="white-space:nowrap;" onclick="inviteToInterview(${m.userId})">📅 Invite to Interview</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function inviteToInterview(userId){
+  const composer = document.getElementById('msg-composer-' + userId);
+  if(!composer) return;
+  composer.style.display = '';
+  const textarea = composer.querySelector('textarea');
+  if(textarea && !textarea.value){
+    textarea.value = "We'd like to invite you to interview for this role — could you share a few times that work for you this week?";
+  }
+  composer.scrollIntoView({behavior: 'smooth', block: 'center'});
 }
 
 // Sticky header scroll-shrink (Handshake-style) — throttled via requestAnimationFrame so the
