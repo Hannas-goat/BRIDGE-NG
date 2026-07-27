@@ -686,6 +686,10 @@ def init_db():
     # honesty rule as nysc_status/university above (Bridge NG can't verify it against anything real).
     ensure_column(conn, "profiles", "verified_badges", "verified_badges TEXT DEFAULT '[]'")
     ensure_column(conn, "profiles", "portfolio_link", "portfolio_link TEXT DEFAULT ''")
+    # Employer-declared, self-reported like everything else on this side of the app (no way to
+    # audit an office's actual power/internet setup) — real value for candidates in a market where
+    # grid power and connectivity are genuinely inconsistent, not decorative.
+    ensure_column(conn, "employer_posted_jobs", "perks", "perks TEXT DEFAULT '[]'")
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -767,6 +771,15 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # ever happens in handle_submit_skill_challenge against this same dict, so a badge can't be earned
 # by reading the page source or replaying a guessed score from the client.
 SKILL_CHALLENGE_PASS_THRESHOLD = 4  # out of 5 (80%) to earn the verified badge
+
+# Employer-declared workplace infrastructure perks — real value in a market with inconsistent
+# grid power and connectivity, self-reported like everything else on the employer side (there's
+# no employer login/verification system to audit these against).
+PERK_LABELS = {
+    "power": "⚡ 24/7 power backup",
+    "internet": "📶 Fiber internet",
+    "transport": "🚌 Company transport",
+}
 SKILL_CHALLENGES = {
     "Python": [
         {"q": "What does `len([1, 2, 3])` return?", "options": ["2", "3", "4", "Error"], "answer": 1},
@@ -2621,6 +2634,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         level = (data.get("level") or "").strip()
         location = (data.get("location") or "").strip()
         ppa_state_filter = (data.get("ppaState") or "").strip()
+        perks = [p for p in (data.get("perks") or []) if p in PERK_LABELS]
         try:
             pay_min = int(data.get("payMin") or 0)
             pay_max = int(data.get("payMax") or 0)
@@ -2630,9 +2644,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with db_lock:
             conn = get_db()
             cur = conn.execute(
-                """INSERT INTO employer_posted_jobs (title, company, level, location, skills, pay_min, pay_max)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (title, company, level, location, json.dumps(skills), pay_min, pay_max),
+                """INSERT INTO employer_posted_jobs (title, company, level, location, skills, pay_min, pay_max, perks)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (title, company, level, location, json.dumps(skills), pay_min, pay_max, json.dumps(perks)),
             )
             job_id = cur.lastrowid
 
@@ -2664,7 +2678,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "portfolioLink": row["portfolio_link"] or "",
                 })
                 if score >= 60:
-                    message = f"A new role matches your profile: {title} at {company} — {score}% match."
+                    perk_note = (" (" + ", ".join(PERK_LABELS[p] for p in perks) + ")") if perks else ""
+                    message = f"A new role matches your profile: {title} at {company} — {score}% match.{perk_note}"
                     conn.execute(
                         "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
                         (row["uid"], "employer_match", message, title, company),
@@ -2680,6 +2695,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "ok": True, "jobId": job_id,
             "realMatches": matches[:10],
             "notifiedCount": notified,
+            "perks": perks,
         })
 
     # ---------- messaging (Smart Sourcing) ----------

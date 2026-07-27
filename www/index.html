@@ -1123,6 +1123,12 @@
         </div>
         <div></div>
       </div>
+      <label>Workplace infrastructure (optional — shown to matched candidates)</label>
+      <div class="chip-field" id="e-perks" style="margin-bottom:16px;">
+        <div class="chip" data-perk="power" tabindex="0" role="button" aria-pressed="false" onclick="togglePerkChip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePerkChip(this);}">⚡ 24/7 power backup</div>
+        <div class="chip" data-perk="internet" tabindex="0" role="button" aria-pressed="false" onclick="togglePerkChip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePerkChip(this);}">📶 Fiber internet</div>
+        <div class="chip" data-perk="transport" tabindex="0" role="button" aria-pressed="false" onclick="togglePerkChip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePerkChip(this);}">🚌 Company transport</div>
+      </div>
       <label class="blind-screening-row">
         <input type="checkbox" id="e-blinded-screening" onchange="renderEmployerResultsSection()">
         <span>🕶️ Blinded screening — hide candidate names until you invite them to interview, so shortlisting is judged on skills and score alone</span>
@@ -5293,6 +5299,13 @@ function renderResumeFit(job, fit){
 let lastEmployerResults = null;
 let blindedUnmasked = new Set();
 
+const PERK_LABELS = {power: '⚡ 24/7 power backup', internet: '📶 Fiber internet', transport: '🚌 Company transport'};
+
+function togglePerkChip(el){
+  const selected = el.classList.toggle('selected');
+  el.setAttribute('aria-pressed', selected ? 'true' : 'false');
+}
+
 async function findCandidates(){
   const title = document.getElementById('e-title').value || 'This role';
   const company = document.getElementById('e-company').value || 'Your company';
@@ -5301,6 +5314,7 @@ async function findCandidates(){
   const payMin = document.getElementById('e-pay-min').value;
   const payMax = document.getElementById('e-pay-max').value;
   const ppaState = document.getElementById('e-ppa-state').value;
+  const perks = [...document.querySelectorAll('#e-perks .chip.selected')].map(c => c.dataset.perk);
   if(employerSkills.size === 0){
     showToast('Select at least one required skill to find candidates.');
     return;
@@ -5312,19 +5326,21 @@ async function findCandidates(){
 
   let realMatches = [];
   let notifiedCount = 0;
+  let confirmedPerks = [];
   try{
     const data = await apiPostEmployerJob({
-      title, company, level, location: loc, skills, ppaState,
+      title, company, level, location: loc, skills, ppaState, perks,
       payMin: Number(payMin) || 0, payMax: Number(payMax) || 0
     });
     realMatches = data.realMatches || [];
     notifiedCount = data.notifiedCount || 0;
+    confirmedPerks = data.perks || [];
   }catch(err){
     console.error('Posting employer job failed:', err);
     // Real matching is layered on top — the sample results below still render either way.
   }
 
-  lastEmployerResults = {matches: realMatches, company, title, notifiedCount};
+  lastEmployerResults = {matches: realMatches, company, title, notifiedCount, perks: confirmedPerks};
   blindedUnmasked = new Set();
   renderEmployerResultsSection();
 }
@@ -5343,7 +5359,7 @@ function candidateFieldOfStudy(m, blinded){
 
 function renderEmployerResultsSection(){
   if(!lastEmployerResults) return;
-  const {matches: allMatches, company, title, notifiedCount} = lastEmployerResults;
+  const {matches: allMatches, company, title, notifiedCount, perks} = lastEmployerResults;
   const results = document.getElementById('employer-results');
   const blinded = document.getElementById('e-blinded-screening').checked;
   const verifiedOnly = document.getElementById('e-verified-only').checked;
@@ -5351,8 +5367,12 @@ function renderEmployerResultsSection(){
   const countLabel = verifiedOnly && realMatches.length !== allMatches.length
     ? `${realMatches.length} of ${allMatches.length} matched (verified-only filter)`
     : `${realMatches.length} matched${notifiedCount ? ' · ' + notifiedCount + ' notified' : ''}`;
+  const perksLine = (perks && perks.length)
+    ? `<p style="font-size:12px;color:var(--ink-soft);margin:-8px 0 16px;">Shown to matched candidates: ${perks.map(p => PERK_LABELS[p]).join(' · ')}</p>`
+    : '';
 
   const realSection = realMatches.length ? `
+    ${perksLine}
     <div class="results-head"><h2>Real Bridge NG members</h2><span>${countLabel}</span></div>
     ${shortlistMatrixHtml(realMatches, blinded)}
     <div class="grid">
