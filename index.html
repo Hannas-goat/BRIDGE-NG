@@ -3257,6 +3257,12 @@ function discardPitchRecording(resetButtons){
 
 function loadSavedPitch(profile){
   if(!profile.pitchMedia) return;
+  if(profile.pitchMedia.unreadable){
+    // Same cause as an unreadable saved resume: the encrypted bytes are fine, but the server's
+    // ENCRYPTION_KEY changed since this was recorded, so it can't be decrypted anymore.
+    document.getElementById('pitch-placeholder').textContent = "Your previously saved pitch couldn't be read (a server security key changed since you recorded it) — please record a new one.";
+    return;
+  }
   pitchKind = profile.pitchMedia.kind;
   const video = document.getElementById('pitch-preview-video');
   const audio = document.getElementById('pitch-preview-audio');
@@ -4509,7 +4515,16 @@ async function saveResumeToAccount(filename){
 // blank every visit — same UI states handleResumeUpload/clearResumeFile already set, just driven
 // from the saved profile instead of a fresh upload.
 function loadSavedResume(profile){
-  if(profile.resumeFile){
+  if(profile.resumeFile && profile.resumeFile.unreadable){
+    // The file was genuinely saved, but its encrypted bytes can no longer be decrypted (almost
+    // always: the server's ENCRYPTION_KEY changed since it was uploaded) — nothing recoverable
+    // here, so don't pretend a usable resume exists. Leave the textarea open for a fresh upload.
+    resumeFile = null;
+    document.getElementById('s-resume-filename').textContent = "Your previously saved resume couldn't be read (a server security key changed since you uploaded it) — please re-upload it below.";
+    document.getElementById('s-resume-remove').style.display = 'none';
+    document.getElementById('s-resume').disabled = false;
+    document.getElementById('s-resume').placeholder = 'Paste your resume text, or upload a file below.';
+  }else if(profile.resumeFile){
     resumeFile = profile.resumeFile;
     document.getElementById('s-resume-filename').textContent = (profile.resumeFilename || 'Saved resume') + ' (from your account — remove it to upload a different one)';
     document.getElementById('s-resume-remove').style.display = '';

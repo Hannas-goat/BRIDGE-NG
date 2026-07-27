@@ -347,12 +347,18 @@ PY_SKILLS = ["JavaScript", "Python", "SQL", "Data Analysis", "Excel", "Software 
              "Insurance Underwriting", "Banking Operations", "Journalism", "Video Editing"]
 
 db_lock = threading.Lock()
-sessions = {}  # token -> (user_id, expires_at)
 
 
 def create_session(user_id):
     token = secrets.token_hex(24)
-    sessions[token] = (user_id, time.time() + SESSION_TTL_SECONDS)
+    with db_lock:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+            (token, user_id, time.time() + SESSION_TTL_SECONDS),
+        )
+        conn.commit()
+        conn.close()
     return token
 
 
@@ -361,8 +367,11 @@ def revoke_sessions_for_user(user_id):
     that user_id is killed, so a session cookie that was already valid (stolen or otherwise)
     stops working immediately. Used when repeated failed logins suggest someone other than the
     account owner is trying to get in."""
-    for token in [t for t, (uid, _) in sessions.items() if uid == user_id]:
-        sessions.pop(token, None)
+    with db_lock:
+        conn = get_db()
+        conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        conn.commit()
+        conn.close()
 
 # Recent AI-call failures (capped), for the /api/debug/ai-errors endpoint — a direct way to see
 # why a resume-tailoring/job-lookup call failed without having to find the right line in Render's
@@ -639,6 +648,17 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    # Sessions used to live in an in-memory dict, which meant every server restart (every deploy,
+    # and on Render's free tier every idle-spindown too) silently signed every single user out —
+    # the cookie in their browser was still there, just no longer recognized by the new process.
+    # Storing them here instead means they survive a restart exactly as long as the database does.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            expires_at REAL NOT NULL
+        )
+    """)
     # CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists on disk from
     # an earlier version of this schema, so new columns need an explicit, safe migration.
     ensure_column(conn, "profiles", "open_to_remote", "open_to_remote INTEGER DEFAULT 0")
@@ -806,10 +826,26 @@ def profile_row_to_json(row):
     resume_file_kind = row["resume_file_kind"] or ""
     resume_file = None
     if resume_file_kind:
+        decrypted_resume_b64 = decrypt_field(row["resume_file_base64"] or "")
         resume_file = {
             "kind": resume_file_kind,
             "mediaType": row["resume_file_media_type"] or "",
-            "base64": decrypt_field(row["resume_file_base64"] or ""),
+            "base64": decrypted_resume_b64,
+            # kind is set (a file WAS saved) but decrypt_field came back empty — the ciphertext
+            # itself is fine (Turso doesn't lose bytes), it just isn't readable under the CURRENT
+            # ENCRYPTION_KEY. Flagged here so the frontend can say so immediately at profile-load
+            # time instead of only surfacing a confusing "Couldn't read that PDF" later, deep in
+            # the AI-tailoring flow, once it tries to decode empty bytes as a PDF.
+            "unreadable": not decrypted_resume_b64,
+        }
+    pitch_media = None
+    if row["pitch_media_kind"]:
+        decrypted_pitch_b64 = decrypt_field(row["pitch_media_base64"] or "")
+        pitch_media = {
+            "kind": row["pitch_media_kind"],
+            "mediaType": row["pitch_media_type"] or "",
+            "base64": decrypted_pitch_b64,
+            "unreadable": not decrypted_pitch_b64,
         }
     return {
         "fullName": decrypt_field(row["full_name"]),
@@ -830,11 +866,7 @@ def profile_row_to_json(row):
         "nyscStatus": row["nysc_status"] or "",
         "ppaState": row["ppa_state"] or "",
         "ppaLga": row["ppa_lga"] or "",
-        "pitchMedia": {
-            "kind": row["pitch_media_kind"],
-            "mediaType": row["pitch_media_type"] or "",
-            "base64": decrypt_field(row["pitch_media_base64"] or ""),
-        } if row["pitch_media_kind"] else None,
+        "pitchMedia": pitch_media,
         "whatsappNumber": decrypt_field(row["whatsapp_number"] or ""),
         "whatsappAlertsEnabled": bool(row["whatsapp_alerts_enabled"]),
         "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
@@ -1478,14 +1510,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         token = self.get_cookie(SESSION_COOKIE)
         if not token:
             return None
-        entry = sessions.get(token)
-        if entry is None:
-            return None
-        user_id, expires_at = entry
-        if time.time() > expires_at:
-            sessions.pop(token, None)
-            return None
-        return user_id
+        with db_lock:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT user_id, expires_at FROM sessions WHERE token=?", (token,)
+            ).fetchone()
+            if row is not None and time.time() > row["expires_at"]:
+                conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+                conn.commit()
+                row = None
+            conn.close()
+        return row["user_id"] if row is not None else None
 
     # ---------- routing ----------
 
@@ -1721,7 +1756,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def handle_logout(self):
         token = self.get_cookie(SESSION_COOKIE)
         if token:
-            sessions.pop(token, None)
+            with db_lock:
+                conn = get_db()
+                conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+                conn.commit()
+                conn.close()
         self.send_json(200, {"ok": True}, clear_cookie=True)
 
     def handle_delete_account(self):
