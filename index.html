@@ -195,7 +195,7 @@
                   <p class="whatsapp-card-sub">Get high-match roles and employer messages the moment they happen.</p>
                 </div>
                 <label class="toggle-switch">
-                  <input type="checkbox" id="hdr-whatsapp-enabled">
+                  <input type="checkbox" id="hdr-whatsapp-enabled" onchange="syncWhatsappNumberFromPhone('hdr-whatsapp-cc', 'hdr-whatsapp-number', this.checked)">
                   <span class="toggle-track"><span class="toggle-thumb"></span></span>
                 </label>
               </div>
@@ -409,7 +409,7 @@
             <p class="whatsapp-card-sub">Get high-match roles and employer messages the moment they happen.</p>
           </div>
           <label class="toggle-switch">
-            <input type="checkbox" id="s-whatsapp-enabled">
+            <input type="checkbox" id="s-whatsapp-enabled" onchange="syncWhatsappNumberFromPhone('s-whatsapp-cc', 's-whatsapp-number', this.checked)">
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </div>
@@ -1126,7 +1126,7 @@
   <footer class="site-footer">
     <div class="footer-top">
       <div class="footer-brand">
-        <img src="images/bridgeng-logo-wordmark.png" alt="Bridge NG">
+        <img src="images/bridgeng-logo-wordmark.png" alt="Bridge NG" loading="lazy">
         <p>Closing the gap between graduating and getting hired.</p>
       </div>
       <nav class="footer-links" aria-label="Company">
@@ -2296,6 +2296,20 @@ function focusProfileFieldFromHeader(id){
 // -number/-enabled) and calls the existing saveProfile() rather than duplicating profile-save
 // logic — those fields already stay populated at all times via fillSeekerFormFromProfile(),
 // regardless of which tab is active, so this stays correct without a second source of truth.
+// Convenience default only: pre-fills the WhatsApp number from whatever's currently in the main
+// phone field — reads the live #s-phone-cc/#s-phone DOM values (not the saved profile), so this
+// works immediately for someone filling in both fields in the same sitting, before ever saving.
+// Never overwrites a WhatsApp number the user already typed themselves.
+function syncWhatsappNumberFromPhone(ccId, numberId, isChecked){
+  if(!isChecked) return;
+  const numberEl = document.getElementById(numberId);
+  if(numberEl.value.trim()) return;
+  const phoneNumber = document.getElementById('s-phone').value.trim();
+  if(!phoneNumber) return;
+  document.getElementById(ccId).value = document.getElementById('s-phone-cc').value;
+  numberEl.value = phoneNumber;
+}
+
 function renderWhatsappHeaderArea(){
   const area = document.getElementById('whatsapp-header-area');
   if(!area) return;
@@ -5012,12 +5026,20 @@ async function runJobMatch(){
 
 let chatMessages = [];
 let chatOpen = false;
+// Separate from chatMessages on purpose: that array only tracks actually-sent exchanges (it's
+// sent to /api/chat as conversation history), so gating the greeting on its length meant closing
+// the panel before sending anything and reopening it re-triggered the greeting every time —
+// each cycle appended another identical bubble to the DOM without ever clearing the old ones.
+let chatGreetingShown = false;
 
 function toggleChatWidget(){
   chatOpen = !chatOpen;
   document.getElementById('chat-panel').style.display = chatOpen ? 'flex' : 'none';
   if(chatOpen){
-    if(chatMessages.length === 0) appendChatBubble('bot', "Hi! I'm Bridge AI. Ask me anything about the site, a job listing, or your career search.");
+    if(!chatGreetingShown){
+      appendChatBubble('bot', "Hi! I'm Bridge AI. Ask me anything about the site, a job listing, or your career search.");
+      chatGreetingShown = true;
+    }
     document.getElementById('chat-input').focus();
   }
 }

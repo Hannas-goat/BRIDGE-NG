@@ -88,10 +88,18 @@ function createChip(containerId, targetSet, label, startSelected){
   const c = document.createElement('div');
   c.className = 'chip' + (startSelected ? ' selected' : '');
   c.textContent = label;
-  c.onclick = ()=>{
+  c.tabIndex = 0;
+  c.setAttribute('role', 'button');
+  c.setAttribute('aria-pressed', startSelected ? 'true' : 'false');
+  const toggle = ()=>{
     if(targetSet.has(label)){ targetSet.delete(label); c.classList.remove('selected'); }
     else { targetSet.add(label); c.classList.add('selected'); }
+    c.setAttribute('aria-pressed', c.classList.contains('selected') ? 'true' : 'false');
     onSkillChipToggle(containerId);
+  };
+  c.onclick = toggle;
+  c.onkeydown = (e)=>{
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
   };
   el.appendChild(c);
   return c;

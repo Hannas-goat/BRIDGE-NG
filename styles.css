@@ -288,6 +288,7 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .chip-field{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface-2);display:flex;flex-wrap:wrap;gap:12px;min-height:46px;}
 .chip{font-size:14px;padding:11px 16px;min-height:44px;display:inline-flex;align-items:center;border-radius:999px;border:1px solid var(--line);background:var(--card);cursor:pointer;color:var(--ink-soft);user-select:none;transition:all .12s;}
 .chip:hover{border-color:var(--indigo-soft);transform:translateY(-1px);}
+.chip:focus-visible{outline:2px solid var(--indigo);outline-offset:2px;}
 .chip:active{transform:scale(.95);}
 .chip.selected{background:var(--indigo);border-color:var(--indigo);color:#fff;}
 .chip.selected:hover{transform:translateY(-1px) scale(1.03);}
