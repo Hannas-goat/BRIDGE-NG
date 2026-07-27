@@ -419,6 +419,7 @@
           <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567">
         </div>
         <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
+        <p class="ndpr-note">🔒 Your phone number is encrypted at rest and used only to send you the alerts above — never shared with employers or anyone else, and you can remove it any time by clearing this field and saving.</p>
       </div>
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
@@ -1125,6 +1126,10 @@
       <label class="blind-screening-row">
         <input type="checkbox" id="e-blinded-screening" onchange="renderEmployerResultsSection()">
         <span>🕶️ Blinded screening — hide candidate names until you invite them to interview, so shortlisting is judged on skills and score alone</span>
+      </label>
+      <label class="blind-screening-row">
+        <input type="checkbox" id="e-verified-only" onchange="renderEmployerResultsSection()">
+        <span>✓ Only show candidates with at least one verified skill badge (scored 4/5+ on a real 5-question challenge — see their profile card for which skill)</span>
       </label>
       <button class="go-btn" onclick="findCandidates()">Find matching candidates →</button>
     </div>
@@ -5373,12 +5378,17 @@ function candidateFieldOfStudy(m, blinded){
 
 function renderEmployerResultsSection(){
   if(!lastEmployerResults) return;
-  const {matches: realMatches, company, title, notifiedCount} = lastEmployerResults;
+  const {matches: allMatches, company, title, notifiedCount} = lastEmployerResults;
   const results = document.getElementById('employer-results');
   const blinded = document.getElementById('e-blinded-screening').checked;
+  const verifiedOnly = document.getElementById('e-verified-only').checked;
+  const realMatches = verifiedOnly ? allMatches.filter(m => (m.verifiedBadges || []).length > 0) : allMatches;
+  const countLabel = verifiedOnly && realMatches.length !== allMatches.length
+    ? `${realMatches.length} of ${allMatches.length} matched (verified-only filter)`
+    : `${realMatches.length} matched${notifiedCount ? ' · ' + notifiedCount + ' notified' : ''}`;
 
   const realSection = realMatches.length ? `
-    <div class="results-head"><h2>Real Bridge NG members</h2><span>${realMatches.length} matched${notifiedCount ? ' · ' + notifiedCount + ' notified' : ''}</span></div>
+    <div class="results-head"><h2>Real Bridge NG members</h2><span>${countLabel}</span></div>
     ${shortlistMatrixHtml(realMatches, blinded)}
     <div class="grid">
       ${realMatches.map((m, i)=>{
@@ -5412,10 +5422,13 @@ function renderEmployerResultsSection(){
         </div>`;
       }).join('')}
     </div>
+  ` : (verifiedOnly && allMatches.length > 0 ? `
+    <div class="results-head"><h2>Real Bridge NG members</h2><span>0 of ${allMatches.length} have a verified badge</span></div>
+    <div class="empty">${allMatches.length} candidate${allMatches.length === 1 ? '' : 's'} matched this role, but none have a verified skill badge yet — try unchecking the verified-only filter.</div>
   ` : `
     <div class="results-head"><h2>Real Bridge NG members</h2><span>0 matched yet</span></div>
     <div class="empty">No registered job seekers match this role yet — as more people sign up with matching skills, they'll show here automatically and get notified.</div>
-  `;
+  `);
 
   results.innerHTML = realSection;
 }
