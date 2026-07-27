@@ -36,6 +36,18 @@ function wizardReset(wizardId){
   wizardShowStep(wizardId, 0);
 }
 
+function blobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    // Split on the fixed ';base64,' marker, not a bare comma — a media blob's own mime type can
+    // legitimately contain commas (e.g. 'video/webm;codecs=vp8,opus'), which a naive
+    // .split(',')[1] would cut into instead of the actual payload.
+    reader.onloadend = () => resolve(reader.result.split(';base64,')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 const SKILLS = ["JavaScript","Python","SQL","Data Analysis","Excel","Software Development","Cloud Computing",
 "Accounting","Financial Modeling","Digital Marketing","Content Writing","Graphic Design","UI/UX Design",
 "Social Media Management","Civil Engineering","Mechanical Engineering","Electrical Engineering",
@@ -306,6 +318,7 @@ function apiUpdateApplicationStatus(id, status){ return apiRequest('/api/applica
 function apiPostEmployerJob(payload){ return apiRequest('/api/employer-jobs', 'POST', payload); }
 function apiFindJob(jobText){ return apiRequest('/api/resume/find-job', 'POST', {jobText}); }
 function apiGenerateResumeDoc(payload){ return apiRequest('/api/resume/tailor', 'POST', payload); }
+function apiExtractCvProfile(payload){ return apiRequest('/api/resume/extract-profile', 'POST', payload); }
 function apiFindJobMatches(payload){ return apiRequest('/api/job-match', 'POST', payload); }
 
 // --- Toast notifications — replaces blocking alert() popups with a non-blocking, on-brand

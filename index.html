@@ -4779,17 +4779,7 @@ function copyWorkbench(){
   navigator.clipboard.writeText(resumeBlocksToPlainText(parseResumeBlocks(lastWorkbenchRawText)));
 }
 
-function blobToBase64(blob){
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    // Split on the fixed ';base64,' marker, not a bare comma — a media blob's own mime type can
-    // legitimately contain commas (e.g. 'video/webm;codecs=vp8,opus'), which a naive
-    // .split(',')[1] would cut into instead of the actual payload.
-    reader.onloadend = () => resolve(reader.result.split(';base64,')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
+// blobToBase64 moved to shared.js so auth.html's CV-upload flow can use it too.
 
 // A blob: URL click (the normal browser download path) is invisible to the wrapped Android
 // app's WebView — it has no network response to hand off to the OS, so nothing happens. Inside

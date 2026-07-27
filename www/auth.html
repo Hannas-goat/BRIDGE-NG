@@ -63,6 +63,18 @@
       <div class="card">
         <p class="form-msg" id="signup-msg"></p>
 
+        <div class="cv-upload-box" id="cv-upload-box">
+          <div>
+            <p class="whatsapp-card-title">⚡ Already have a CV?</p>
+            <p class="whatsapp-card-sub">Upload it and we'll pre-fill this form — review and edit before submitting. Nothing here is fabricated: any field we can't find stays blank for you to fill in.</p>
+          </div>
+          <label class="upload-btn" style="cursor:pointer;">
+            Upload PDF / image
+            <input type="file" id="cv-upload-input" accept=".pdf,image/*" style="display:none;" onchange="extractCvIntoWizard(this.files[0])">
+          </label>
+        </div>
+        <p class="form-msg" id="cv-upload-msg"></p>
+
         <div class="wizard" id="signup-wizard">
           <div class="wizard-progress">
             <span class="wizard-dot"></span>
@@ -133,10 +145,12 @@
                 </select>
               </div>
               <div>
-                <label>Field of study / background</label>
-                <input type="text" id="su-field" placeholder="e.g. Computer Science, UNILAG">
+                <label>Field of study</label>
+                <input type="text" id="su-field" placeholder="e.g. Computer Science">
               </div>
             </div>
+            <label>University / institution</label>
+            <input type="text" id="su-university" placeholder="e.g. University of Lagos (UNILAG)" style="margin-bottom:14px;">
             <label>NYSC status</label>
             <select id="su-nysc" onchange="onSignupNyscStatusChange()">
               <option value="">Not applicable</option>
@@ -319,6 +333,46 @@ function handleSkillChipToggle(containerId){
   if(containerId === 'su-skills') updateSignupSkillCount();
 }
 
+// Zero-form onboarding: parse an uploaded CV via the real AI extraction endpoint and pre-fill
+// whatever it genuinely found — every field left blank by the model stays blank here too, the
+// candidate reviews each wizard step afterward rather than the form silently submitting guesses.
+async function extractCvIntoWizard(file){
+  if(!file) return;
+  const msg = document.getElementById('cv-upload-msg');
+  msg.textContent = 'Reading your CV…';
+  msg.className = 'form-msg';
+  try{
+    const isPdf = file.type === 'application/pdf';
+    const base64 = await blobToBase64(file);
+    const resumeFile = {kind: isPdf ? 'pdf' : 'image', mediaType: file.type || 'application/octet-stream', base64};
+    const { profile } = await apiExtractCvProfile({ resumeFile });
+
+    if(profile.fullName) document.getElementById('su-name').value = profile.fullName;
+    if(profile.email) document.getElementById('su-email').value = profile.email;
+    if(profile.phone){
+      const split = splitPhoneCountryCode(profile.phone);
+      document.getElementById('su-phone-cc').value = split.cc;
+      document.getElementById('su-phone').value = split.number;
+    }
+    if(profile.address) document.getElementById('su-address').value = profile.address;
+    if(profile.university) document.getElementById('su-university').value = profile.university;
+    if(profile.fieldOfStudy) document.getElementById('su-field').value = profile.fieldOfStudy;
+    if(profile.education) document.getElementById('su-education').value = profile.education;
+    if(profile.careerLevel) document.getElementById('su-level').value = profile.careerLevel;
+    if(profile.skills && profile.skills.length) applySelectedSkills('su-skills', signupSkills, profile.skills);
+
+    const filledCount = ['fullName','email','phone','address','university','fieldOfStudy','education','careerLevel']
+      .filter(k => profile[k]).length + (profile.skills.length ? 1 : 0);
+    msg.textContent = filledCount
+      ? `✓ Pre-filled ${filledCount} field${filledCount === 1 ? '' : 's'} from your CV — go through each step below to review and edit anything that's wrong.`
+      : "Couldn't find much to extract from that file — no problem, just fill the form in below.";
+    msg.className = filledCount ? 'form-msg success' : 'form-msg';
+  }catch(err){
+    msg.textContent = err.message || "Couldn't read that file — you can still fill the form manually.";
+    msg.className = 'form-msg error';
+  }
+}
+
 function showMode(mode){
   document.getElementById('mode-signin').style.display = mode==='signin' ? '' : 'none';
   document.getElementById('mode-signup').style.display = mode==='signup' ? '' : 'none';
@@ -379,6 +433,7 @@ async function doSignUp(){
     education: document.getElementById('su-education').value,
     careerLevel: document.getElementById('su-level').value,
     fieldOfStudy: document.getElementById('su-field').value,
+    university: document.getElementById('su-university').value,
     preferredLocation: document.getElementById('su-loc').value,
     openToRemote: document.getElementById('su-remote').value === 'yes',
     skills: [...signupSkills],

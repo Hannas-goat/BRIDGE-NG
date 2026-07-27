@@ -1095,6 +1095,51 @@ def parse_job_match_json(reply, valid_ids):
     return matches[:3]
 
 
+VALID_EDUCATION_LEVELS = {
+    "Secondary school", "OND / HND (Polytechnic)", "NCE (College of Education)",
+    "Bachelor's degree (B.Sc / B.A / B.Eng)", "Master's degree", "Doctorate (Ph.D)",
+    "Professional certification",
+}
+VALID_CAREER_LEVELS = {"Student", "Early career (0-3 yrs)", "Mid career (4-8 yrs)"}
+
+
+def parse_cv_extraction_json(reply):
+    """Same markdown-fence tolerance as parse_job_match_json above. Any field the model got wrong
+    shape on, or any enum value that isn't one of the app's real options, is dropped to "" rather
+    than passed through — the frontend pre-fills whatever came back and leaves the rest for the
+    candidate to fill in themselves, same as an empty form field."""
+    cleaned = reply.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+
+    def text_field(key, max_len=200):
+        v = data.get(key)
+        return str(v).strip()[:max_len] if isinstance(v, (str, int, float)) else ""
+
+    education = text_field("education")
+    career_level = text_field("careerLevel")
+    skills = data.get("skills")
+    return {
+        "fullName": text_field("fullName"),
+        "email": text_field("email"),
+        "phone": text_field("phone"),
+        "university": text_field("university"),
+        "fieldOfStudy": text_field("fieldOfStudy"),
+        "education": education if education in VALID_EDUCATION_LEVELS else "",
+        "careerLevel": career_level if career_level in VALID_CAREER_LEVELS else "",
+        "address": text_field("address", max_len=300),
+        "skills": [str(s).strip()[:60] for s in skills if isinstance(s, (str, int, float)) and str(s).strip()][:15]
+                  if isinstance(skills, list) else [],
+    }
+
+
 def level_distance(a, b):
     """Python port of index.html's levelDistance() — kept in sync deliberately so a
     real candidate match score means the same thing as the sample-data match score."""
@@ -1633,6 +1678,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_job_match()
         if parsed.path == "/api/resume/tailor":
             return self.handle_resume_generate()
+        if parsed.path == "/api/resume/extract-profile":
+            return self.handle_extract_cv_profile()
         if parsed.path == "/api/career-match":
             return self.handle_career_match()
         if parsed.path == "/api/download-relay":
@@ -3191,6 +3238,97 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
 
         self.send_json(200, {"text": reply})
+
+    def handle_extract_cv_profile(self):
+        """Zero-form onboarding: parse an uploaded CV and hand back structured fields so the
+        signup wizard can pre-fill itself instead of the candidate retyping everything that's
+        already sitting in their resume. Reuses the exact same PDF/image handling as
+        handle_resume_generate above. Every field the model can't actually find in the text comes
+        back as an empty string/list — never fabricated, and the candidate reviews/edits before
+        anything is submitted, so a wrong guess is just an inconvenience, not silent bad data."""
+        if not NVIDIA_API_KEY:
+            return self.send_json(
+                503,
+                {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"},
+            )
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": CHAT_FALLBACK_MESSAGE})
+
+        resume_text = (data.get("resumeText") or "").strip()
+        resume_file = data.get("resumeFile") or None
+
+        image_part = None
+        if resume_file:
+            kind = resume_file.get("kind")
+            b64 = resume_file.get("base64") or ""
+            if kind == "pdf":
+                if PdfReader is None:
+                    return self.send_json(
+                        500,
+                        {"error": "PDF support isn't installed on the server yet — try a JPG/PNG, or paste your resume text instead."},
+                    )
+                try:
+                    pdf_bytes = base64.b64decode(b64)
+                    reader = PdfReader(io.BytesIO(pdf_bytes))
+                    resume_text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+                except Exception as e:
+                    print("PDF extraction failed:", e)
+                    return self.send_json(400, {"error": "Couldn't read that PDF. Try a JPG/PNG instead, or paste your resume text directly."})
+                if len(resume_text) < 50:
+                    return self.send_json(
+                        400,
+                        {"error": "Couldn't find readable text in that PDF (it may be a scanned image). Try a JPG/PNG instead, or paste your resume text directly."},
+                    )
+            elif kind == "image":
+                media_type = resume_file.get("mediaType") or "image/jpeg"
+                image_part = {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}}
+
+        if not resume_text and not image_part:
+            return self.send_json(400, {"error": "Upload or paste your CV/resume first."})
+
+        system_prompt = (
+            "Extract structured profile information from this Nigerian job seeker's resume/CV. "
+            "Only extract what is genuinely present in the text — never invent or guess a missing detail.\n\n"
+            "Respond with ONLY a JSON object (no markdown fences, no commentary) matching exactly this shape:\n"
+            '{"fullName": "", "email": "", "phone": "", "university": "", "fieldOfStudy": "", '
+            '"education": "", "careerLevel": "", "address": "", "skills": []}\n\n'
+            'education must be exactly one of: "Secondary school", "OND / HND (Polytechnic)", '
+            '"NCE (College of Education)", "Bachelor\'s degree (B.Sc / B.A / B.Eng)", "Master\'s degree", '
+            '"Doctorate (Ph.D)", "Professional certification" — or "" if unclear.\n'
+            'careerLevel must be exactly one of: "Student", "Early career (0-3 yrs)", "Mid career (4-8 yrs)" '
+            '— inferred from work history length, or "" if unclear.\n'
+            "skills: 3-15 concrete skill/tool/technology names actually mentioned or clearly demonstrated — "
+            'not generic filler like "hardworking" or "team player".\n'
+            'Leave any field "" (or [] for skills) if it genuinely is not findable in the text.'
+        )
+        if image_part:
+            user_content = [
+                {"type": "text", "text": "The candidate's resume is attached as an image — read it directly."},
+                image_part,
+            ]
+        else:
+            user_content = f'Resume text:\n"""\n{resume_text}\n"""'
+
+        try:
+            reply = call_nvidia_with_fallbacks(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                [NVIDIA_RESUME_MODEL, NVIDIA_MODEL], timeout=60, source="cv-extract",
+            )
+        except urllib.error.HTTPError as e:
+            print("NVIDIA cv-extract error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except (KeyError, IndexError) as e:
+            print("Unexpected NVIDIA cv-extract response shape:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except Exception as e:
+            print("NVIDIA cv-extract request failed:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+
+        self.send_json(200, {"profile": parse_cv_extraction_json(reply)})
 
     def handle_career_match(self):
         if not NVIDIA_API_KEY:
