@@ -1,3 +1,41 @@
+// Generic multi-step "wizard" card — purely a display layer over whatever form fields/IDs/submit
+// functions live inside each .wizard-step; it only shows/hides step groups and never changes what
+// those functions read or how they submit. Shared here (not index.html-only) since both index.html
+// (appointment booking, career match) and auth.html (signup) use the same .wizard markup pattern.
+function wizardShowStep(wizardId, stepIndex){
+  const wizard = document.getElementById(wizardId);
+  if(!wizard) return;
+  const steps = [...wizard.querySelectorAll('.wizard-step')];
+  const total = steps.length;
+  stepIndex = Math.max(0, Math.min(stepIndex, total - 1));
+  wizard.dataset.currentStep = stepIndex;
+  steps.forEach(el => el.classList.toggle('active', Number(el.dataset.step) === stepIndex));
+  wizard.querySelectorAll('.wizard-dot').forEach((el, i) => {
+    el.classList.toggle('active', i === stepIndex);
+    el.classList.toggle('done', i < stepIndex);
+  });
+  const backBtn = wizard.querySelector('.wizard-back-btn');
+  const nextBtn = wizard.querySelector('.wizard-next-btn');
+  if(backBtn) backBtn.disabled = stepIndex === 0;
+  if(nextBtn) nextBtn.style.display = stepIndex === total - 1 ? 'none' : '';
+}
+
+function wizardNext(wizardId){
+  const wizard = document.getElementById(wizardId);
+  if(!wizard) return;
+  wizardShowStep(wizardId, Number(wizard.dataset.currentStep || 0) + 1);
+}
+
+function wizardBack(wizardId){
+  const wizard = document.getElementById(wizardId);
+  if(!wizard) return;
+  wizardShowStep(wizardId, Number(wizard.dataset.currentStep || 0) - 1);
+}
+
+function wizardReset(wizardId){
+  wizardShowStep(wizardId, 0);
+}
+
 const SKILLS = ["JavaScript","Python","SQL","Data Analysis","Excel","Software Development","Cloud Computing",
 "Accounting","Financial Modeling","Digital Marketing","Content Writing","Graphic Design","UI/UX Design",
 "Social Media Management","Civil Engineering","Mechanical Engineering","Electrical Engineering",

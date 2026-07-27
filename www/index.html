@@ -3025,42 +3025,7 @@ async function sendEmployerReply(conversationId, token, btn){
   }
 }
 
-// Generic multi-step "wizard" card — purely a display layer over the same existing form
-// fields/IDs/submit functions (requestAppointment, runCareerMatch); it only shows/hides step
-// groups and never changes what those functions read or how they submit.
-function wizardShowStep(wizardId, stepIndex){
-  const wizard = document.getElementById(wizardId);
-  if(!wizard) return;
-  const steps = [...wizard.querySelectorAll('.wizard-step')];
-  const total = steps.length;
-  stepIndex = Math.max(0, Math.min(stepIndex, total - 1));
-  wizard.dataset.currentStep = stepIndex;
-  steps.forEach(el => el.classList.toggle('active', Number(el.dataset.step) === stepIndex));
-  wizard.querySelectorAll('.wizard-dot').forEach((el, i) => {
-    el.classList.toggle('active', i === stepIndex);
-    el.classList.toggle('done', i < stepIndex);
-  });
-  const backBtn = wizard.querySelector('.wizard-back-btn');
-  const nextBtn = wizard.querySelector('.wizard-next-btn');
-  if(backBtn) backBtn.disabled = stepIndex === 0;
-  if(nextBtn) nextBtn.style.display = stepIndex === total - 1 ? 'none' : '';
-}
-
-function wizardNext(wizardId){
-  const wizard = document.getElementById(wizardId);
-  if(!wizard) return;
-  wizardShowStep(wizardId, Number(wizard.dataset.currentStep || 0) + 1);
-}
-
-function wizardBack(wizardId){
-  const wizard = document.getElementById(wizardId);
-  if(!wizard) return;
-  wizardShowStep(wizardId, Number(wizard.dataset.currentStep || 0) - 1);
-}
-
-function wizardReset(wizardId){
-  wizardShowStep(wizardId, 0);
-}
+// wizardShowStep/Next/Back/Reset moved to shared.js so auth.html's signup wizard can use them too.
 
 // Interactive booking calendar — replaces the plain date/time inputs with a visual month
 // grid + time-slot picker. Times are shown in the candidate's own detected local time zone

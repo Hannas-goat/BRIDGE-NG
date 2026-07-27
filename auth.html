@@ -58,122 +58,187 @@
     <div id="mode-signup" style="display:none;">
       <div class="auth-head">
         <h2 style="color:var(--indigo);">Create your account</h2>
-        <p>Register once — your details are stored and restored every time you sign in, even after a restart.</p>
+        <p>A few quick steps — your details are stored and restored every time you sign in, even after a restart.</p>
       </div>
       <div class="card">
         <p class="form-msg" id="signup-msg"></p>
 
-        <p class="section-label">Login details</p>
-        <div class="field-row">
-          <div>
-            <label>Email address</label>
-            <input type="email" id="su-email" placeholder="e.g. amaka.nwosu@email.com">
+        <div class="wizard" id="signup-wizard">
+          <div class="wizard-progress">
+            <span class="wizard-dot"></span>
+            <span class="wizard-dot"></span>
+            <span class="wizard-dot"></span>
+            <span class="wizard-dot"></span>
           </div>
-          <div>
-            <label>Password</label>
-            <input type="password" id="su-password" placeholder="At least 6 characters">
-          </div>
-        </div>
-        <div class="field-row">
-          <div>
-            <label>Confirm password</label>
-            <input type="password" id="su-password2" placeholder="Retype your password">
-          </div>
-          <div></div>
-        </div>
 
-        <p class="section-label">Personal details</p>
-        <div class="field-row">
-          <div>
-            <label>Full name</label>
-            <input type="text" id="su-name" placeholder="e.g. Amaka Nwosu">
+          <!-- Step 1: Career intent -->
+          <div class="wizard-step" data-step="0">
+            <p class="wizard-step-label">Where you want to work</p>
+            <div class="field-row">
+              <div>
+                <label>Career stage</label>
+                <select id="su-level">
+                  <option>Student</option>
+                  <option>Early career (0-3 yrs)</option>
+                  <option>Mid career (4-8 yrs)</option>
+                </select>
+              </div>
+              <div>
+                <label>Open to fully remote roles abroad?</label>
+                <select id="su-remote">
+                  <option value="no">No, I'm looking within Nigeria</option>
+                  <option value="yes">Yes — show me remote roles with companies abroad</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div>
+                <label>Preferred state</label>
+                <select id="su-loc-state" onchange="updateSignupCityOptions()"></select>
+              </div>
+              <div>
+                <label>Preferred city</label>
+                <select id="su-loc"></select>
+              </div>
+            </div>
+            <p style="font-size:11.5px;color:var(--ink-soft);margin:6px 0 0;">Not sure yet? Leave the state as "Any location" to see roles from everywhere.</p>
           </div>
-          <div>
-            <label>Date of birth</label>
-            <input type="date" id="su-dob">
+
+          <!-- Step 2: Skills -->
+          <div class="wizard-step" data-step="1">
+            <p class="wizard-step-label">Your skills</p>
+            <label>Tap to select, or type your own</label>
+            <div class="chip-field" id="su-skills"></div>
+            <div class="skill-add-row">
+              <input type="text" id="su-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('su-skills', signupSkills, 'su-skill-input');}">
+              <button class="upload-btn" onclick="addCustomSkill('su-skills', signupSkills, 'su-skill-input')">Add skill</button>
+            </div>
+            <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;" id="signup-skill-count">0 skills selected</p>
           </div>
-        </div>
-        <div class="field-row">
-          <div>
-            <label>Sex</label>
-            <select id="su-sex">
-              <option>Prefer not to say</option>
-              <option>Female</option>
-              <option>Male</option>
+
+          <!-- Step 3: Background & NYSC -->
+          <div class="wizard-step" data-step="2">
+            <p class="wizard-step-label">Your background</p>
+            <div class="field-row">
+              <div>
+                <label>Highest level of education</label>
+                <select id="su-education">
+                  <option>Secondary school</option>
+                  <option>OND / HND (Polytechnic)</option>
+                  <option>NCE (College of Education)</option>
+                  <option>Bachelor's degree (B.Sc / B.A / B.Eng)</option>
+                  <option>Master's degree</option>
+                  <option>Doctorate (Ph.D)</option>
+                  <option>Professional certification</option>
+                </select>
+              </div>
+              <div>
+                <label>Field of study / background</label>
+                <input type="text" id="su-field" placeholder="e.g. Computer Science, UNILAG">
+              </div>
+            </div>
+            <label>NYSC status</label>
+            <select id="su-nysc" onchange="onSignupNyscStatusChange()">
+              <option value="">Not applicable</option>
+              <option>Not yet — still in school</option>
+              <option>Currently serving (corper)</option>
+              <option>Completed NYSC</option>
+              <option>Exempted from NYSC</option>
             </select>
-          </div>
-          <div>
-            <label>Phone number</label>
-            <div class="phone-field-row">
-              <select id="su-phone-cc"></select>
-              <input type="tel" id="su-phone" placeholder="803 123 4567">
+            <div class="field-row" id="su-ppa-row" style="display:none;margin-top:14px;">
+              <div>
+                <label>PPA state (self-declared)</label>
+                <select id="su-ppa-state"><option value="">Select state</option></select>
+              </div>
+              <div>
+                <label>PPA local government area (LGA)</label>
+                <input type="text" id="su-ppa-lga" placeholder="e.g. Ikeja">
+              </div>
             </div>
           </div>
-        </div>
-        <div class="field-row">
-          <div>
-            <label>Address</label>
-            <input type="text" id="su-address" placeholder="e.g. 14 Allen Avenue, Ikeja">
-          </div>
-          <div></div>
-        </div>
 
-        <p class="section-label">Background &amp; preferences</p>
-        <div class="field-row">
-          <div>
-            <label>Highest level of education</label>
-            <select id="su-education">
-              <option>Secondary school</option>
-              <option>OND / HND (Polytechnic)</option>
-              <option>NCE (College of Education)</option>
-              <option>Bachelor's degree (B.Sc / B.A / B.Eng)</option>
-              <option>Master's degree</option>
-              <option>Doctorate (Ph.D)</option>
-              <option>Professional certification</option>
-            </select>
-          </div>
-          <div>
-            <label>Career stage</label>
-            <select id="su-level">
-              <option>Student</option>
-              <option>Early career (0-3 yrs)</option>
-              <option>Mid career (4-8 yrs)</option>
-            </select>
-          </div>
-        </div>
-        <div class="field-row">
-          <div>
-            <label>Field of study / background</label>
-            <input type="text" id="su-field" placeholder="e.g. Computer Science, UNILAG">
-          </div>
-          <div>
-            <label>Preferred location</label>
-            <select id="su-loc"></select>
-            <p style="font-size:11.5px;color:var(--ink-soft);margin:6px 0 0;">Not sure yet? Leave it as "Any location" to see roles from every state and remote country.</p>
-          </div>
-        </div>
-        <div class="field-row">
-          <div>
-            <label>Open to fully remote roles abroad?</label>
-            <select id="su-remote">
-              <option value="no">No, I'm looking within Nigeria</option>
-              <option value="yes">Yes — show me remote roles with companies abroad</option>
-            </select>
-          </div>
-          <div></div>
-        </div>
-        <label>Your skills — tap to select, or type your own</label>
-        <div class="chip-field" id="su-skills"></div>
-        <div class="skill-add-row">
-          <input type="text" id="su-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('su-skills', signupSkills, 'su-skill-input');}">
-          <button class="upload-btn" onclick="addCustomSkill('su-skills', signupSkills, 'su-skill-input')">Add skill</button>
-        </div>
+          <!-- Step 4: Account & contact -->
+          <div class="wizard-step" data-step="3">
+            <p class="wizard-step-label">Your account</p>
+            <div class="field-row">
+              <div>
+                <label>Full name</label>
+                <input type="text" id="su-name" placeholder="e.g. Amaka Nwosu">
+              </div>
+              <div>
+                <label>Email address</label>
+                <input type="email" id="su-email" placeholder="e.g. amaka.nwosu@email.com">
+              </div>
+            </div>
+            <div class="field-row">
+              <div>
+                <label>Password</label>
+                <input type="password" id="su-password" placeholder="At least 6 characters">
+              </div>
+              <div>
+                <label>Confirm password</label>
+                <input type="password" id="su-password2" placeholder="Retype your password">
+              </div>
+            </div>
+            <div class="field-row">
+              <div>
+                <label>Date of birth</label>
+                <input type="date" id="su-dob">
+              </div>
+              <div>
+                <label>Sex</label>
+                <select id="su-sex">
+                  <option>Prefer not to say</option>
+                  <option>Female</option>
+                  <option>Male</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div>
+                <label>Phone number</label>
+                <div class="phone-field-row">
+                  <select id="su-phone-cc"></select>
+                  <input type="tel" id="su-phone" placeholder="803 123 4567">
+                </div>
+              </div>
+              <div>
+                <label>Address</label>
+                <input type="text" id="su-address" placeholder="e.g. 14 Allen Avenue, Ikeja">
+              </div>
+            </div>
 
-        <label class="consent-row">
-          <input type="checkbox" id="su-consent">
-          <span>I agree to the <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and consent to Bridge processing my personal data for job matching purposes.</span>
-        </label>
-        <button class="go-btn" onclick="doSignUp()">Create account →</button>
+            <div class="whatsapp-card">
+              <div class="whatsapp-card-head">
+                <div>
+                  <p class="whatsapp-card-title">📲 WhatsApp instant alerts</p>
+                  <p class="whatsapp-card-sub">Get high-match roles the moment they're posted.</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="su-whatsapp-enabled" onchange="syncSignupWhatsappNumber(this.checked)">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <label>WhatsApp number</label>
+              <div class="phone-field-row">
+                <select id="su-whatsapp-cc"></select>
+                <input type="tel" id="su-whatsapp-number" placeholder="803 123 4567">
+              </div>
+              <p class="ndpr-note">🔒 Encrypted at rest, used only for the alerts above — never shared with employers.</p>
+            </div>
+
+            <label class="consent-row">
+              <input type="checkbox" id="su-consent">
+              <span>I agree to the <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and consent to Bridge processing my personal data for job matching purposes.</span>
+            </label>
+            <button class="go-btn" onclick="doSignUp()">Create account →</button>
+          </div>
+
+          <div class="wizard-nav">
+            <button class="upload-btn wizard-back-btn" onclick="wizardBack('signup-wizard')">← Back</button>
+            <button class="go-btn wizard-next-btn" style="margin-top:0;" onclick="wizardNext('signup-wizard')">Next →</button>
+          </div>
+        </div>
       </div>
       <p class="auth-switch">Already registered? <a onclick="showMode('signin')">Sign in instead</a></p>
     </div>
@@ -208,14 +273,58 @@
 <script>
 let signupSkills = new Set();
 buildChips('su-skills', signupSkills);
-populateLocationSelect('su-loc', true);
 populatePhoneCountrySelect('su-phone-cc');
+populatePhoneCountrySelect('su-whatsapp-cc');
+
+// Preferred location is a real two-tier State -> City select (using the same LOCATIONS data
+// shared.js already uses for PPA state elsewhere) instead of one flat 100+-option dropdown.
+document.getElementById('su-loc-state').innerHTML =
+  '<option>Any location</option><option>Remote</option>' +
+  Object.keys(LOCATIONS).map(s => `<option>${s}</option>`).join('');
+function updateSignupCityOptions(){
+  const state = document.getElementById('su-loc-state').value;
+  const citySel = document.getElementById('su-loc');
+  citySel.innerHTML = (state === 'Any location' || state === 'Remote')
+    ? `<option>${state}</option>`
+    : (LOCATIONS[state] || []).map(c => `<option>${c}</option>`).join('');
+}
+updateSignupCityOptions();
+
+document.getElementById('su-ppa-state').innerHTML =
+  '<option value="">Select state</option>' + Object.keys(LOCATIONS).map(s => `<option>${s}</option>`).join('');
+function onSignupNyscStatusChange(){
+  document.getElementById('su-ppa-row').style.display =
+    document.getElementById('su-nysc').value === 'Currently serving (corper)' ? '' : 'none';
+}
+
+// Convenience default only, same rule as the header/dashboard version in index.html: pre-fills
+// from whatever's currently in the main phone field, never overwrites something already typed.
+function syncSignupWhatsappNumber(isChecked){
+  if(!isChecked) return;
+  const numberEl = document.getElementById('su-whatsapp-number');
+  if(numberEl.value.trim()) return;
+  const phoneNumber = document.getElementById('su-phone').value.trim();
+  if(!phoneNumber) return;
+  document.getElementById('su-whatsapp-cc').value = document.getElementById('su-phone-cc').value;
+  numberEl.value = phoneNumber;
+}
+
+// Live feedback on the skills step — no fabricated "N matching jobs" claim (this page has no
+// real job data loaded to count against honestly), just a plain count of what's selected so far.
+function updateSignupSkillCount(){
+  const el = document.getElementById('signup-skill-count');
+  if(el) el.textContent = `${signupSkills.size} skill${signupSkills.size === 1 ? '' : 's'} selected`;
+}
+function handleSkillChipToggle(containerId){
+  if(containerId === 'su-skills') updateSignupSkillCount();
+}
 
 function showMode(mode){
   document.getElementById('mode-signin').style.display = mode==='signin' ? '' : 'none';
   document.getElementById('mode-signup').style.display = mode==='signup' ? '' : 'none';
   document.getElementById('tab-signin').classList.toggle('active', mode==='signin');
   document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
+  if(mode === 'signup') wizardReset('signup-wizard');
 }
 
 const params = new URLSearchParams(location.search);
@@ -272,7 +381,12 @@ async function doSignUp(){
     fieldOfStudy: document.getElementById('su-field').value,
     preferredLocation: document.getElementById('su-loc').value,
     openToRemote: document.getElementById('su-remote').value === 'yes',
-    skills: [...signupSkills]
+    skills: [...signupSkills],
+    nyscStatus: document.getElementById('su-nysc').value,
+    ppaState: document.getElementById('su-ppa-state').value,
+    ppaLga: document.getElementById('su-ppa-lga').value,
+    whatsappNumber: formatPhoneWithCountryCode(document.getElementById('su-whatsapp-cc').value, document.getElementById('su-whatsapp-number').value),
+    whatsappAlertsEnabled: document.getElementById('su-whatsapp-enabled').checked
   };
 
   try{
