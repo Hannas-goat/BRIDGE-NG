@@ -1175,6 +1175,7 @@
     </div>
     <div class="footer-bottom">
       <span>© 2026 Bridge NG. All rights reserved.</span>
+      <button type="button" class="low-data-toggle" id="low-data-toggle" onclick="toggleLowDataMode()"></button>
       <div class="footer-social" aria-label="Bridge NG on social media">
         <a class="social-fab" href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Bridge NG on Facebook" title="Facebook">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M13.5 21v-7.5h2.5l.5-3h-3V8.5c0-.9.25-1.5 1.55-1.5H16.5V4.2c-.27-.04-1.2-.12-2.28-.12-2.26 0-3.8 1.38-3.8 3.9V10.5H8v3h2.42V21h3.08z"/></svg>
@@ -4120,6 +4121,33 @@ function playFadeIn(el){
 
 const HERO_NO_PHOTO_PAGES = ['interview', 'appointment'];
 
+// Low-data mode: user-toggleable (works everywhere, persisted in localStorage) and
+// auto-suggested on first visit via the Network Information API where the browser supports it
+// (Chrome/Edge/Android WebView — not Safari/Firefox, which don't expose navigator.connection).
+// The real bandwidth savings is skipping the hero photo swap below: each panel has its own
+// ~2MB decorative photo, so browsing through several tabs on a slow connection can pull down
+// 5-10MB+ of images that are never re-used. Skipping the swap keeps whichever one loaded first.
+function applyLowDataMode(enabled){
+  document.body.classList.toggle('low-data-mode', enabled);
+  localStorage.setItem('bridgeng_low_data', enabled ? '1' : '0');
+  const btn = document.getElementById('low-data-toggle');
+  if(btn) btn.textContent = enabled ? '📶 Low data mode: ON' : '📶 Low data mode: OFF';
+}
+
+function toggleLowDataMode(){
+  applyLowDataMode(!document.body.classList.contains('low-data-mode'));
+}
+
+function initLowDataMode(){
+  const saved = localStorage.getItem('bridgeng_low_data');
+  let enabled = saved === '1';
+  if(saved === null && navigator.connection && navigator.connection.effectiveType){
+    enabled = ['slow-2g', '2g'].includes(navigator.connection.effectiveType);
+  }
+  applyLowDataMode(enabled);
+}
+initLowDataMode();
+
 function updateHeroPhoto(page){
   const container = document.getElementById('hero-photo-single');
   const heroEl = document.querySelector('.hero');
@@ -4130,6 +4158,7 @@ function updateHeroPhoto(page){
   }
   container.style.display = '';
   heroEl.classList.remove('no-photo');
+  if(document.body.classList.contains('low-data-mode')) return; // keep whichever photo already loaded, don't fetch another
   const photo = HERO_PHOTOS[page] || HERO_PHOTOS.default;
   const img = document.getElementById('hero-photo-img');
   img.src = photo.src;
