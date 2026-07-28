@@ -16,6 +16,7 @@
 <link rel="apple-touch-icon" href="images/bridgeng-logo-icon.png">
 </head>
 <body>
+<datalist id="skill-suggestions"></datalist>
 <div class="wrap">
 
   <header class="nav site-header" id="site-header">
@@ -428,7 +429,7 @@
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="s-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-skills', seekerSkills, 's-skill-input');}">
+        <input type="text" id="s-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-skills', seekerSkills, 's-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('s-skills', seekerSkills, 's-skill-input')">Add skill</button>
       </div>
       <div id="skill-radar"></div>
@@ -568,7 +569,7 @@
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="ab-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="ab-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input');}">
+        <input type="text" id="ab-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input')">Add skill</button>
       </div>
       <button class="go-btn" onclick="findAbroadJobs()">Find remote roles →</button>
@@ -970,7 +971,7 @@
           <label>Your skills — tap to select, or type your own</label>
           <div class="chip-field" id="cm-skills"></div>
           <div class="skill-add-row">
-            <input type="text" id="cm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
+            <input type="text" id="cm-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
             <button class="upload-btn" onclick="addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input')">Add skill</button>
           </div>
 
@@ -998,7 +999,7 @@
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="jm-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="jm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input');}">
+        <input type="text" id="jm-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input')">Add skill</button>
       </div>
       <button class="go-btn" onclick="runJobMatch()">Find my best-fit job →</button>
@@ -1107,7 +1108,7 @@
       <label>Required skills — tap to select, or type your own</label>
       <div class="chip-field" id="e-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="e-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('e-skills', employerSkills, 'e-skill-input');}">
+        <input type="text" id="e-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('e-skills', employerSkills, 'e-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('e-skills', employerSkills, 'e-skill-input')">Add skill</button>
       </div>
       <div class="field-row" style="margin-top:16px;">
@@ -1333,6 +1334,13 @@ const INTL_JOBS = [
   desc:"Manage cross-functional delivery for US enterprise clients, distributed team spanning three continents."},
 ];
 INTL_JOBS.forEach((j,i)=>{ j.id = i; });
+
+let employerAccountLoggedIn = false;
+let employerPipelineStages = {};
+const PIPELINE_STAGE_DISPLAY = {
+  shortlisted: 'Shortlisted', interviewing: 'Interviewing', offer: 'Offer sent',
+  hired: 'Hired', rejected: 'Rejected',
+};
 
 let seekerSkills = new Set();
 let employerSkills = new Set();
@@ -3871,6 +3879,8 @@ async function initAccount(){
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
 initAccount();
+loadSkillSuggestions();
+initEmployerAccountState();
 initScrollReveal();
 onSalarySliderChange(); // initialize the slider fill bar + benchmark label on page load
 renderSkillRadar();
@@ -5463,7 +5473,7 @@ function shortlistMatrixHtml(matches, blinded){
     <div class="shortlist-matrix-wrap">
       <table class="shortlist-matrix">
         <thead>
-          <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th></th></tr>
+          <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th>Hiring stage</th><th></th></tr>
         </thead>
         <tbody>
           ${matches.map((m, i) => `
@@ -5473,6 +5483,7 @@ function shortlistMatrixHtml(matches, blinded){
               <td>${m.nyscStatus ? escapeHtml(m.nyscStatus) + (m.ppaState ? ' · ' + escapeHtml(m.ppaState) : '') : '—'}</td>
               <td>${escapeHtml(m.preferredLocation || '—')}</td>
               <td>${(m.verifiedBadges || []).length ? (m.verifiedBadges || []).map(b => `<span class="verified-badge" style="margin-right:4px;" onclick="showBadgeDetail('${escapeHtml(b.skill)}', ${b.score}, ${b.total}, '${escapeHtml(b.date)}')">✓ ${escapeHtml(b.skill)}</span>`).join('') : '—'}</td>
+              <td>${pipelineStageCellHtml(m.userId)}</td>
               <td><button type="button" class="ai-btn" style="white-space:nowrap;" onclick="inviteToInterview(${m.userId})">📅 Invite to Interview</button></td>
             </tr>
           `).join('')}
@@ -5480,6 +5491,57 @@ function shortlistMatrixHtml(matches, blinded){
       </table>
     </div>
   `;
+}
+
+// Only employers with a real account (see pricing.html) get persistent hiring-stage tracking —
+// the anonymous job-posting flow has no durable identity to hang stage history off of, so this
+// cell doubles as a soft nudge toward creating one rather than hiding the feature silently.
+function pipelineStageCellHtml(userId){
+  if(!employerAccountLoggedIn){
+    return `<a href="pricing.html" style="font-size:11.5px;color:var(--indigo);white-space:nowrap;">Sign in to track →</a>`;
+  }
+  const current = (employerPipelineStages[userId] || {}).stage || '';
+  const options = ['', ...Object.keys(PIPELINE_STAGE_DISPLAY)].map(s =>
+    `<option value="${s}" ${s === current ? 'selected' : ''}>${s ? PIPELINE_STAGE_DISPLAY[s] : 'No stage yet'}</option>`
+  ).join('');
+  return `<select style="height:34px;font-size:12.5px;padding:0 8px;" onchange="setPipelineStage(${userId}, this.value)">${options}</select>`;
+}
+
+async function setPipelineStage(userId, stage){
+  if(!stage) return;
+  try{
+    await apiSetPipelineStage(userId, stage);
+    employerPipelineStages[userId] = {stage};
+    showToast(stage === 'rejected'
+      ? 'Stage updated. No automated message is sent for "Rejected" — use the message composer if you want to let them know yourself.'
+      : `Stage updated — they'll get a WhatsApp/in-app notification if alerts are on.`);
+  }catch(err){
+    showToast(err.message);
+    if(lastEmployerResults) renderEmployerResultsSection(); // revert the dropdown to the real stored stage
+  }
+}
+
+async function initEmployerAccountState(){
+  try{
+    const me = await apiEmployerMe();
+    employerAccountLoggedIn = !!me.loggedIn;
+    if(employerAccountLoggedIn){
+      const pipe = await apiGetPipeline();
+      employerPipelineStages = pipe.stages || {};
+    }
+  }catch(e){
+    employerAccountLoggedIn = false;
+  }
+  if(lastEmployerResults) renderEmployerResultsSection();
+}
+
+// Real autosuggest source for every free-text skill input — built server-side from skill-challenge
+// topics plus every distinct skill tag already on a real or employer-posted job, never a fabricated list.
+async function loadSkillSuggestions(){
+  try{
+    const {skills} = await apiGetKnownSkills();
+    document.getElementById('skill-suggestions').innerHTML = skills.map(s => `<option value="${escapeAttr(s)}"></option>`).join('');
+  }catch(e){ /* best effort */ }
 }
 
 function inviteToInterview(userId){

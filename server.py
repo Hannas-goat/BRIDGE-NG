@@ -793,6 +793,20 @@ def init_db():
             UNIQUE(employer_id)
         )
     """)
+    # A real, persistent hiring pipeline — only available to employers with a real account
+    # (the employers table above), since the anonymous job-posting flow has no durable identity
+    # to hang stage history off of. One row per (employer, candidate) pair; moving a candidate
+    # through stages is what triggers the WhatsApp/in-app notification below.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS candidate_pipeline (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            stage TEXT NOT NULL DEFAULT 'shortlisted',
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(employer_id, candidate_user_id)
+        )
+    """)
     # CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists on disk from
     # an earlier version of this schema, so new columns need an explicit, safe migration.
     ensure_column(conn, "profiles", "open_to_remote", "open_to_remote INTEGER DEFAULT 0")
@@ -905,6 +919,16 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # ever happens in handle_submit_skill_challenge against this same dict, so a badge can't be earned
 # by reading the page source or replaying a guessed score from the client.
 SKILL_CHALLENGE_PASS_THRESHOLD = 4  # out of 5 (80%) to earn the verified badge
+
+# Hiring pipeline stages available to employers with a real account (see candidate_pipeline
+# table). "rejected" deliberately never triggers an automated candidate-facing notification —
+# an automated "you didn't get it" bot message is worse than silence; an employer who wants to
+# tell someone can still use the existing message composer in their own words.
+PIPELINE_STAGES = ["shortlisted", "interviewing", "offer", "hired", "rejected"]
+PIPELINE_STAGE_LABELS = {
+    "shortlisted": "shortlisted you", "interviewing": "moved you to the interview stage",
+    "offer": "extended you an offer", "hired": "marked you as hired",
+}
 
 # Employer-declared workplace infrastructure perks — real value in a market with inconsistent
 # grid power and connectivity, self-reported like everything else on the employer side (there's
@@ -1828,6 +1852,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_banks()
         if parsed.path == "/api/employer/bank/resolve":
             return self.handle_bank_resolve(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/employer/pipeline":
+            return self.handle_get_pipeline()
+        if parsed.path == "/api/skills/known":
+            return self.handle_known_skills()
         if parsed.path == "/api/appointments/ics":
             return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/messages":
@@ -1865,6 +1893,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_employer_subscribe()
         if parsed.path == "/api/employer/bank":
             return self.handle_save_bank_account()
+        if parsed.path == "/api/employer/pipeline":
+            return self.handle_set_pipeline_stage()
         if parsed.path == "/api/webhooks/paystack":
             return self.handle_paystack_webhook()
         if parsed.path == "/api/chat":
@@ -3181,6 +3211,78 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM bank_accounts WHERE employer_id = ?", (employer_id,)).fetchone()
             conn.close()
         self.send_json(200, {"ok": True, "bankAccount": bank_account_row_to_json(row)})
+
+    def handle_get_pipeline(self):
+        """Only ever available to employers with a real account — the anonymous job-posting flow
+        has no durable identity to hang stage history off of."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(200, {"loggedIn": False, "stages": {}})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT candidate_user_id, stage, updated_at FROM candidate_pipeline WHERE employer_id = ?",
+                (employer_id,),
+            ).fetchall()
+            conn.close()
+        stages = {str(r["candidate_user_id"]): {"stage": r["stage"], "updatedAt": r["updated_at"]} for r in rows}
+        self.send_json(200, {"loggedIn": True, "stages": stages})
+
+    def handle_set_pipeline_stage(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        stage = (data.get("stage") or "").strip().lower()
+        if not candidate_user_id or stage not in PIPELINE_STAGES:
+            return self.send_json(400, {"error": "A valid candidate and stage are required."})
+
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            candidate = conn.execute(
+                "SELECT whatsapp_number, whatsapp_alerts_enabled FROM profiles WHERE user_id = ?",
+                (candidate_user_id,),
+            ).fetchone()
+            if candidate is None:
+                conn.close()
+                return self.send_json(404, {"error": "Candidate not found."})
+            conn.execute(
+                """INSERT INTO candidate_pipeline (employer_id, candidate_user_id, stage, updated_at)
+                   VALUES (?, ?, ?, datetime('now'))
+                   ON CONFLICT(employer_id, candidate_user_id) DO UPDATE SET stage=excluded.stage, updated_at=datetime('now')""",
+                (employer_id, candidate_user_id, stage),
+            )
+            notif_message = None
+            if stage in PIPELINE_STAGE_LABELS:
+                notif_message = f"{employer['company_name']} has {PIPELINE_STAGE_LABELS[stage]}."
+                conn.execute(
+                    "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, '', ?)",
+                    (candidate_user_id, "pipeline_stage", notif_message, employer["company_name"]),
+                )
+            conn.commit()
+            conn.close()
+        if notif_message and candidate["whatsapp_alerts_enabled"]:
+            send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
+        self.send_json(200, {"ok": True, "stage": stage})
+
+    def handle_known_skills(self):
+        """Real autosuggest source for the free-text skill inputs — built entirely from skills
+        that already exist in the app's real data (skill-challenge topics plus every distinct
+        skill tag on a real or employer-posted job), never a fabricated master list."""
+        skills = set(SKILL_CHALLENGES.keys())
+        with db_lock:
+            conn = get_db()
+            for table in ("imported_jobs", "employer_posted_jobs"):
+                for row in conn.execute(f"SELECT skills FROM {table}").fetchall():
+                    for s in json.loads(row["skills"] or "[]"):
+                        if s:
+                            skills.add(s)
+            conn.close()
+        self.send_json(200, {"skills": sorted(skills, key=str.lower)})
 
     # ---------- employer job posting + real candidate matching ----------
 
