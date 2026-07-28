@@ -278,6 +278,15 @@ function apiSignup(payload){ return apiRequest('/api/signup', 'POST', payload); 
 function apiLogin(email, password){ return apiRequest('/api/login', 'POST', {email, password}); }
 function apiLogout(){ return apiRequest('/api/logout', 'POST', {}); }
 function apiDeleteAccount(password){ return apiRequest('/api/account/delete', 'POST', {password}); }
+
+function apiEmployerSignup(payload){ return apiRequest('/api/employer/signup', 'POST', payload); }
+function apiEmployerLogin(email, password){ return apiRequest('/api/employer/login', 'POST', {email, password}); }
+function apiEmployerLogout(){ return apiRequest('/api/employer/logout', 'POST', {}); }
+function apiEmployerMe(){ return apiRequest('/api/employer/me', 'GET'); }
+function apiEmployerSubscribe(billingCycle){ return apiRequest('/api/employer/subscribe', 'POST', {billingCycle}); }
+function apiListBanks(){ return apiRequest('/api/employer/banks', 'GET'); }
+function apiBankResolve(accountNumber, bankCode){ return apiRequest(`/api/employer/bank/resolve?accountNumber=${encodeURIComponent(accountNumber)}&bankCode=${encodeURIComponent(bankCode)}`, 'GET'); }
+function apiSaveBankAccount(payload){ return apiRequest('/api/employer/bank', 'POST', payload); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }

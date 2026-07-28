@@ -1,6 +1,7 @@
 import base64
 import datetime
 import hashlib
+import hmac
 import html
 import http.server
 import io
@@ -30,11 +31,15 @@ DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
 PORT = int(os.environ.get("PORT", 8000))
 
 STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html",
-                 "about.html", "careers.html", "support.html", "contact.html"}
+                 "about.html", "careers.html", "support.html", "contact.html", "pricing.html"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
 SESSION_COOKIE = "bridge_session"
+# Separate cookie from the candidate session — the same person could plausibly hold both a
+# candidate account and an employer account, so the two identities are kept fully independent
+# rather than trying to overload one session/cookie for both roles.
+EMPLOYER_SESSION_COOKIE = "bridge_employer_session"
 SESSION_TTL_SECONDS = 7 * 24 * 3600  # a stolen/leaked cookie shouldn't work forever
 
 # Field-level encryption for PII at rest (profile name/DOB/sex/phone/address/resume), so a raw
@@ -166,6 +171,53 @@ ZOOM_ACCOUNT_ID = os.environ.get("ZOOM_ACCOUNT_ID")
 ZOOM_CLIENT_ID = os.environ.get("ZOOM_CLIENT_ID")
 ZOOM_CLIENT_SECRET = os.environ.get("ZOOM_CLIENT_SECRET")
 ZOOM_CONFIGURED = bool(ZOOM_ACCOUNT_ID and ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET)
+
+
+# Paystack — same "closed until an operator opts in" pattern as the integrations above. Bridge NG
+# never touches a card number: PAYSTACK_SECRET_KEY only ever calls server-to-server endpoints
+# (initialize a transaction, resolve a bank account, verify a webhook signature); the actual card
+# entry happens entirely on Paystack's own hosted checkout page. PAYSTACK_PLAN_CODE_PRO_GROWTH is
+# a Plan object that has to be created once in the Paystack dashboard (or via their API) before
+# recurring billing can reference it — there's no way to fabricate a working one from here.
+PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY")
+PAYSTACK_PLAN_CODE_PRO_GROWTH = os.environ.get("PAYSTACK_PLAN_CODE_PRO_GROWTH")
+PAYSTACK_WEBHOOK_SECRET = os.environ.get("PAYSTACK_WEBHOOK_SECRET")  # Paystack signs webhooks with the secret key itself, but a separate var lets it be rotated independently
+PAYSTACK_CONFIGURED = bool(PAYSTACK_SECRET_KEY)
+PRO_GROWTH_MONTHLY_NGN = 90000
+PRO_GROWTH_ANNUAL_NGN = 864000  # 12 * 90,000 * 0.8 — two months free, same discount shown on the pricing page
+
+
+def call_paystack(method, path, data=None, timeout=20):
+    """Raw REST call to Paystack's API — no SDK, matching every other integration in this file.
+    Raises urllib.error.HTTPError on a non-2xx response; callers already handle that the same way
+    they handle every other external call here."""
+    req = urllib.request.Request(
+        f"https://api.paystack.co{path}",
+        data=json.dumps(data).encode("utf-8") if data is not None else None,
+        headers={
+            "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json",
+        },
+        method=method,
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+NIGERIAN_BANKS = [
+    {"name": "Access Bank", "code": "044"}, {"name": "Citibank Nigeria", "code": "023"},
+    {"name": "Ecobank Nigeria", "code": "050"}, {"name": "Fidelity Bank", "code": "070"},
+    {"name": "First Bank of Nigeria", "code": "011"}, {"name": "First City Monument Bank", "code": "214"},
+    {"name": "Globus Bank", "code": "00103"}, {"name": "Guaranty Trust Bank", "code": "058"},
+    {"name": "Heritage Bank", "code": "030"}, {"name": "Keystone Bank", "code": "082"},
+    {"name": "Kuda Bank", "code": "50211"}, {"name": "Moniepoint MFB", "code": "50515"},
+    {"name": "Opay", "code": "999992"}, {"name": "Palmpay", "code": "999991"},
+    {"name": "Polaris Bank", "code": "076"}, {"name": "Providus Bank", "code": "101"},
+    {"name": "Stanbic IBTC Bank", "code": "221"}, {"name": "Standard Chartered Bank", "code": "068"},
+    {"name": "Sterling Bank", "code": "232"}, {"name": "Union Bank of Nigeria", "code": "032"},
+    {"name": "United Bank for Africa", "code": "033"}, {"name": "Unity Bank", "code": "215"},
+    {"name": "Wema Bank", "code": "035"}, {"name": "Zenith Bank", "code": "057"},
+]
 
 
 def create_zoom_meeting(topic, start_iso, duration_minutes=30):
@@ -356,6 +408,19 @@ def create_session(user_id):
         conn.execute(
             "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
             (token, user_id, time.time() + SESSION_TTL_SECONDS),
+        )
+        conn.commit()
+        conn.close()
+    return token
+
+
+def create_employer_session(employer_id):
+    token = secrets.token_hex(24)
+    with db_lock:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO employer_sessions (token, employer_id, expires_at) VALUES (?, ?, ?)",
+            (token, employer_id, time.time() + SESSION_TTL_SECONDS),
         )
         conn.commit()
         conn.close()
@@ -659,6 +724,75 @@ def init_db():
             expires_at REAL NOT NULL
         )
     """)
+    # Real employer accounts — the rest of the employer side (handle_post_employer_job etc.) has
+    # deliberately never had login, since posting a job and viewing matches didn't need a durable
+    # identity. A paid subscription does: something has to persist "who is Pro Growth" across
+    # sessions, so this is the first real auth surface on the employer side of the app.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS employers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            salt TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            company_name TEXT NOT NULL,
+            corporate_domain TEXT DEFAULT '',
+            paystack_customer_code TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS employer_sessions (
+            token TEXT PRIMARY KEY,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            expires_at REAL NOT NULL
+        )
+    """)
+    # tier: 'sme_starter' | 'pro_growth' | 'enterprise'. status/billing_cycle/period fields are
+    # never set by the client — they only ever change from a verified Paystack webhook event
+    # (see handle_paystack_webhook), so "is this employer actually paying" can't be spoofed by
+    # calling the API directly.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            tier TEXT NOT NULL DEFAULT 'sme_starter',
+            status TEXT NOT NULL DEFAULT 'inactive',
+            billing_cycle TEXT DEFAULT '',
+            paystack_subscription_code TEXT DEFAULT '',
+            paystack_email_token TEXT DEFAULT '',
+            current_period_end TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(employer_id)
+        )
+    """)
+    # Tier limits are enforced by counting rows here, not by trusting a client-sent count —
+    # period_key groups usage by calendar month (e.g. "2026-07") so limits reset naturally.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS feature_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            period_key TEXT NOT NULL,
+            job_posts_count INTEGER NOT NULL DEFAULT 0,
+            whatsapp_messages_count INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(employer_id, period_key)
+        )
+    """)
+    # account_number/account_name are real bank PII (NUBAN-resolvable to a real person/company) —
+    # encrypted at rest with the exact same encrypt_field() used for candidate PII, never the
+    # client-submitted account_name, only whatever Paystack's /bank/resolve actually returned.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            bank_code TEXT NOT NULL,
+            bank_name TEXT NOT NULL,
+            account_number TEXT NOT NULL,
+            account_name TEXT NOT NULL,
+            verified_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(employer_id)
+        )
+    """)
     # CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists on disk from
     # an earlier version of this schema, so new columns need an explicit, safe migration.
     ensure_column(conn, "profiles", "open_to_remote", "open_to_remote INTEGER DEFAULT 0")
@@ -884,6 +1018,33 @@ def profile_row_to_json(row):
         "whatsappAlertsEnabled": bool(row["whatsapp_alerts_enabled"]),
         "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
         "portfolioLink": row["portfolio_link"] or "",
+    }
+
+
+def employer_row_to_json(row):
+    return {
+        "id": row["id"], "email": row["email"], "companyName": row["company_name"],
+        "corporateDomain": row["corporate_domain"] or "",
+    }
+
+
+def subscription_row_to_json(row):
+    if row is None:
+        return {"tier": "sme_starter", "status": "active", "billingCycle": "", "currentPeriodEnd": ""}
+    return {
+        "tier": row["tier"], "status": row["status"], "billingCycle": row["billing_cycle"] or "",
+        "currentPeriodEnd": row["current_period_end"] or "",
+    }
+
+
+def bank_account_row_to_json(row):
+    if row is None:
+        return None
+    return {
+        "bankCode": row["bank_code"], "bankName": row["bank_name"],
+        "accountNumber": decrypt_field(row["account_number"]),
+        "accountName": decrypt_field(row["account_name"]),
+        "verifiedAt": row["verified_at"],
     }
 
 
@@ -1553,15 +1714,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     # ---------- helpers ----------
 
-    def send_json(self, status, obj, set_cookie=None, clear_cookie=False):
+    def send_json(self, status, obj, set_cookie=None, clear_cookie=False, cookie_name=SESSION_COOKIE):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         if set_cookie:
-            self.send_header("Set-Cookie", f"{SESSION_COOKIE}={set_cookie}; Path=/; HttpOnly; SameSite=Lax")
+            self.send_header("Set-Cookie", f"{cookie_name}={set_cookie}; Path=/; HttpOnly; SameSite=Lax")
         if clear_cookie:
-            self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+            self.send_header("Set-Cookie", f"{cookie_name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
         self.end_headers()
         self.wfile.write(body)
 
@@ -1616,6 +1777,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         return row["user_id"] if row is not None else None
 
+    def current_employer_id(self):
+        token = self.get_cookie(EMPLOYER_SESSION_COOKIE)
+        if not token:
+            return None
+        with db_lock:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT employer_id, expires_at FROM employer_sessions WHERE token=?", (token,)
+            ).fetchone()
+            if row is not None and time.time() > row["expires_at"]:
+                conn.execute("DELETE FROM employer_sessions WHERE token=?", (token,))
+                conn.commit()
+                row = None
+            conn.close()
+        return row["employer_id"] if row is not None else None
+
     # ---------- routing ----------
 
     def do_GET(self):
@@ -1645,6 +1822,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_get_candidate_pitch(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/skill-challenge":
             return self.handle_get_skill_challenge(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/employer/me":
+            return self.handle_employer_me()
+        if parsed.path == "/api/employer/banks":
+            return self.handle_list_banks()
+        if parsed.path == "/api/employer/bank/resolve":
+            return self.handle_bank_resolve(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/appointments/ics":
             return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/messages":
@@ -1672,6 +1855,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_logout()
         if parsed.path == "/api/account/delete":
             return self.handle_delete_account()
+        if parsed.path == "/api/employer/signup":
+            return self.handle_employer_signup()
+        if parsed.path == "/api/employer/login":
+            return self.handle_employer_login()
+        if parsed.path == "/api/employer/logout":
+            return self.handle_employer_logout()
+        if parsed.path == "/api/employer/subscribe":
+            return self.handle_employer_subscribe()
+        if parsed.path == "/api/employer/bank":
+            return self.handle_save_bank_account()
+        if parsed.path == "/api/webhooks/paystack":
+            return self.handle_paystack_webhook()
         if parsed.path == "/api/chat":
             return self.handle_chat()
         if parsed.path == "/api/jobs/import":
@@ -2701,6 +2896,291 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if row is None:
             return self.send_json(404, {"error": "Application not found."})
         self.send_json(200, {"ok": True, "application": application_row_to_json(row)})
+
+    # ---------- employer accounts, subscriptions, bank verification ----------
+
+    def handle_employer_signup(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        email = (data.get("email") or "").strip().lower()
+        password = data.get("password") or ""
+        company_name = (data.get("companyName") or "").strip()
+
+        if not EMAIL_RE.match(email):
+            return self.send_json(400, {"error": "Enter a valid email address."})
+        if len(password) < 6:
+            return self.send_json(400, {"error": "Password must be at least 6 characters."})
+        if not company_name:
+            return self.send_json(400, {"error": "Company name is required."})
+
+        corporate_domain = email.split("@")[-1] if "@" in email else ""
+        salt, pw_hash = hash_password(password)
+
+        with db_lock:
+            conn = get_db()
+            try:
+                cur = conn.execute(
+                    "INSERT INTO employers (email, salt, password_hash, company_name, corporate_domain) VALUES (?, ?, ?, ?, ?)",
+                    (email, salt, pw_hash, company_name, corporate_domain),
+                )
+                employer_id = cur.lastrowid
+                conn.execute(
+                    "INSERT INTO subscriptions (employer_id, tier, status) VALUES (?, 'sme_starter', 'active')",
+                    (employer_id,),
+                )
+                conn.commit()
+            except Exception as e:
+                conn.close()
+                if is_duplicate_key_error(e):
+                    return self.send_json(409, {"error": "An employer account with this email already exists."})
+                raise
+            row = conn.execute("SELECT * FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer_id,)).fetchone()
+            conn.close()
+
+        token = create_employer_session(employer_id)
+        self.send_json(
+            200, {"ok": True, "employer": employer_row_to_json(row), "subscription": subscription_row_to_json(sub_row)},
+            set_cookie=token, cookie_name=EMPLOYER_SESSION_COOKIE,
+        )
+
+    def handle_employer_login(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        email = (data.get("email") or "").strip().lower()
+        password = data.get("password") or ""
+
+        if is_account_locked(email):
+            return self.send_json(423, {"error": "Too many failed sign-in attempts. This account is temporarily locked — try again in a few minutes."})
+
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT * FROM employers WHERE email = ?", (email,)).fetchone()
+            if employer is None or not verify_password(password, employer["salt"], employer["password_hash"]):
+                conn.close()
+                record_failed_login(email)
+                return self.send_json(401, {"error": "Incorrect email or password."})
+            sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer["id"],)).fetchone()
+            conn.close()
+
+        clear_failed_logins(email)
+        token = create_employer_session(employer["id"])
+        self.send_json(
+            200, {"ok": True, "employer": employer_row_to_json(employer), "subscription": subscription_row_to_json(sub_row)},
+            set_cookie=token, cookie_name=EMPLOYER_SESSION_COOKIE,
+        )
+
+    def handle_employer_logout(self):
+        token = self.get_cookie(EMPLOYER_SESSION_COOKIE)
+        if token:
+            with db_lock:
+                conn = get_db()
+                conn.execute("DELETE FROM employer_sessions WHERE token=?", (token,))
+                conn.commit()
+                conn.close()
+        self.send_json(200, {"ok": True}, clear_cookie=True, cookie_name=EMPLOYER_SESSION_COOKIE)
+
+    def handle_employer_me(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(200, {"loggedIn": False})
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT * FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            if employer is None:
+                conn.close()
+                return self.send_json(200, {"loggedIn": False})
+            sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer_id,)).fetchone()
+            bank_row = conn.execute("SELECT * FROM bank_accounts WHERE employer_id = ?", (employer_id,)).fetchone()
+            conn.close()
+        self.send_json(200, {
+            "loggedIn": True,
+            "employer": employer_row_to_json(employer),
+            "subscription": subscription_row_to_json(sub_row),
+            "bankAccount": bank_account_row_to_json(bank_row),
+        })
+
+    def handle_employer_subscribe(self):
+        """Initializes a Paystack transaction against the Pro Growth plan and returns the hosted
+        checkout URL — the employer completes payment entirely on Paystack's own page, so this
+        server never sees a card number. The subscription itself only actually activates once
+        handle_paystack_webhook receives and verifies a real charge.success/subscription.create
+        event; this endpoint just starts that process."""
+        if not PAYSTACK_CONFIGURED:
+            return self.send_json(503, {"error": "Payments aren't set up yet — please check back soon."})
+        if not PAYSTACK_PLAN_CODE_PRO_GROWTH:
+            return self.send_json(503, {"error": "The Pro Growth plan isn't configured yet — please check back soon."})
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body() or {}
+        billing_cycle = data.get("billingCycle") if data.get("billingCycle") in ("monthly", "annual") else "monthly"
+
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT * FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            conn.close()
+        if employer is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+
+        amount_kobo = (PRO_GROWTH_ANNUAL_NGN if billing_cycle == "annual" else PRO_GROWTH_MONTHLY_NGN) * 100
+        try:
+            result = call_paystack("POST", "/transaction/initialize", {
+                "email": employer["email"],
+                "amount": amount_kobo,
+                "plan": PAYSTACK_PLAN_CODE_PRO_GROWTH if billing_cycle == "monthly" else None,
+                "metadata": {"employerId": employer_id, "billingCycle": billing_cycle, "tier": "pro_growth"},
+            })
+        except urllib.error.HTTPError as e:
+            print("Paystack initialize error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": "Couldn't start checkout — please try again."})
+        except Exception as e:
+            print("Paystack initialize request failed:", e)
+            return self.send_json(502, {"error": "Couldn't start checkout — please try again."})
+
+        if not result.get("status"):
+            return self.send_json(502, {"error": result.get("message") or "Couldn't start checkout — please try again."})
+        self.send_json(200, {
+            "authorizationUrl": result["data"]["authorization_url"],
+            "reference": result["data"]["reference"],
+        })
+
+    def handle_paystack_webhook(self):
+        """The only path that is ever allowed to actually change a subscription's status — never
+        the client. Paystack signs every webhook body with HMAC-SHA512 using the secret key; a
+        request without a valid x-paystack-signature header is dropped before touching the
+        database, so a forged POST to this URL can't grant free access to Pro Growth."""
+        raw_body = self._drain_request_body() or b""
+        if not PAYSTACK_CONFIGURED:
+            return self.send_json(503, {"error": "Payments aren't set up yet."})
+
+        signing_key = PAYSTACK_WEBHOOK_SECRET or PAYSTACK_SECRET_KEY
+        expected_sig = hmac.new(signing_key.encode("utf-8"), raw_body, hashlib.sha512).hexdigest()
+        given_sig = self.headers.get("x-paystack-signature", "")
+        if not given_sig or not hmac.compare_digest(expected_sig, given_sig):
+            print("[security] Rejected a Paystack webhook with an invalid/missing signature.")
+            return self.send_json(401, {"error": "Invalid signature."})
+
+        try:
+            event = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return self.send_json(400, {"error": "Malformed payload."})
+
+        event_type = event.get("event")
+        payload = event.get("data") or {}
+
+        if event_type in ("charge.success", "subscription.create"):
+            metadata = payload.get("metadata") or {}
+            employer_id = metadata.get("employerId")
+            if not employer_id:
+                # Not one of our tagged checkout sessions (e.g. a Paystack test ping) — 200 so
+                # Paystack doesn't keep retrying, but nothing to update.
+                return self.send_json(200, {"ok": True})
+            billing_cycle = metadata.get("billingCycle", "monthly")
+            sub_code = payload.get("subscription_code") or (payload.get("plan") or {}).get("plan_code", "")
+            period_days = 365 if billing_cycle == "annual" else 30
+            period_end = (datetime.datetime.utcnow() + datetime.timedelta(days=period_days)).strftime("%Y-%m-%d %H:%M:%S")
+            with db_lock:
+                conn = get_db()
+                conn.execute(
+                    """UPDATE subscriptions SET tier='pro_growth', status='active', billing_cycle=?,
+                       paystack_subscription_code=?, current_period_end=?, updated_at=datetime('now')
+                       WHERE employer_id=?""",
+                    (billing_cycle, sub_code, period_end, employer_id),
+                )
+                conn.commit()
+                conn.close()
+            print(f"[paystack] employer {employer_id} upgraded to Pro Growth ({billing_cycle}).")
+        elif event_type in ("subscription.disable", "subscription.not_renew"):
+            metadata = payload.get("metadata") or {}
+            employer_id = metadata.get("employerId")
+            if employer_id:
+                with db_lock:
+                    conn = get_db()
+                    conn.execute(
+                        "UPDATE subscriptions SET status='cancelled', updated_at=datetime('now') WHERE employer_id=?",
+                        (employer_id,),
+                    )
+                    conn.commit()
+                    conn.close()
+
+        self.send_json(200, {"ok": True})
+
+    def handle_list_banks(self):
+        self.send_json(200, {"banks": NIGERIAN_BANKS})
+
+    def handle_bank_resolve(self, query):
+        """Read-only NUBAN lookup — no money moves, this only confirms whose name is registered
+        against an account number, the standard Nigerian anti-fraud check before saving anyone's
+        bank details."""
+        if not PAYSTACK_CONFIGURED:
+            return self.send_json(503, {"error": "Bank verification isn't set up yet — please check back soon."})
+        account_number = (query.get("accountNumber", [""])[0] or "").strip()
+        bank_code = (query.get("bankCode", [""])[0] or "").strip()
+        if not re.fullmatch(r"\d{10}", account_number):
+            return self.send_json(400, {"error": "Enter a 10-digit account number."})
+        if not bank_code:
+            return self.send_json(400, {"error": "Select a bank."})
+        try:
+            result = call_paystack("GET", f"/bank/resolve?account_number={account_number}&bank_code={bank_code}")
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            print("Paystack bank-resolve error:", e.code, detail)
+            if e.code == 422:
+                return self.send_json(422, {"error": "Couldn't verify that account — double-check the number and bank."})
+            return self.send_json(502, {"error": "Couldn't verify that account right now — please try again."})
+        except Exception as e:
+            print("Paystack bank-resolve request failed:", e)
+            return self.send_json(502, {"error": "Couldn't verify that account right now — please try again."})
+        if not result.get("status"):
+            return self.send_json(422, {"error": result.get("message") or "Couldn't verify that account."})
+        self.send_json(200, {"accountName": result["data"]["account_name"]})
+
+    def handle_save_bank_account(self):
+        """Only ever stores an account_name that Paystack itself resolved and returned in THIS
+        request — never a client-submitted name, which would defeat the entire point of NUBAN
+        verification (confirming who actually owns the account)."""
+        if not PAYSTACK_CONFIGURED:
+            return self.send_json(503, {"error": "Bank verification isn't set up yet — please check back soon."})
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        account_number = (data.get("accountNumber") or "").strip()
+        bank_code = (data.get("bankCode") or "").strip()
+        bank_name = (data.get("bankName") or "").strip()
+        if not re.fullmatch(r"\d{10}", account_number) or not bank_code:
+            return self.send_json(400, {"error": "Provide a valid 10-digit account number and bank."})
+
+        try:
+            result = call_paystack("GET", f"/bank/resolve?account_number={account_number}&bank_code={bank_code}")
+        except Exception as e:
+            print("Paystack bank-resolve (save) failed:", e)
+            return self.send_json(502, {"error": "Couldn't verify that account right now — please try again."})
+        if not result.get("status"):
+            return self.send_json(422, {"error": result.get("message") or "Couldn't verify that account."})
+        account_name = result["data"]["account_name"]
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                """INSERT INTO bank_accounts (employer_id, bank_code, bank_name, account_number, account_name, verified_at)
+                   VALUES (?, ?, ?, ?, ?, datetime('now'))
+                   ON CONFLICT(employer_id) DO UPDATE SET bank_code=excluded.bank_code, bank_name=excluded.bank_name,
+                   account_number=excluded.account_number, account_name=excluded.account_name, verified_at=datetime('now')""",
+                (employer_id, bank_code, bank_name, encrypt_field(account_number), encrypt_field(account_name)),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM bank_accounts WHERE employer_id = ?", (employer_id,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "bankAccount": bank_account_row_to_json(row)})
 
     # ---------- employer job posting + real candidate matching ----------
 

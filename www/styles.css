@@ -873,6 +873,23 @@ textarea#s-resume:disabled{background:var(--surface-3);color:var(--ink-soft);}
 .auth-switch a{color:var(--indigo);font-weight:600;cursor:pointer;text-decoration:none;}
 .auth-switch a:hover{text-decoration:underline;}
 
+.pricing-wrap{max-width:1080px;margin:0 auto 56px;padding:40px 24px 0;}
+.billing-toggle-row{display:flex;align-items:center;justify-content:center;gap:14px;margin:0 0 32px;font-size:14px;font-weight:600;color:var(--ink-soft);}
+.pricing-save-badge{font-size:11px;font-weight:700;background:var(--gold-pale);color:var(--gold-deep);padding:3px 8px;border-radius:999px;margin-left:6px;}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;align-items:stretch;}
+@media (max-width:860px){.pricing-grid{grid-template-columns:1fr;}}
+.pricing-card{display:flex;flex-direction:column;}
+.pricing-card-featured{border-color:var(--indigo);box-shadow:var(--shadow-lg);position:relative;}
+.pricing-featured-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--indigo);color:#fff;font-size:11px;font-weight:700;padding:4px 14px;border-radius:999px;}
+.pricing-tier-name{font-family:'Fraunces',serif;font-size:19px;color:var(--indigo);margin:0 0 6px;}
+.pricing-tier-price{font-family:'Fraunces',serif;font-size:34px;color:var(--ink);margin:0;}
+.pricing-tier-period{font-size:14px;font-weight:500;color:var(--ink-soft);margin-left:4px;}
+.pricing-tier-note{font-size:12px;color:var(--ink-soft);margin:4px 0 0;min-height:16px;}
+.pricing-feature-list{list-style:none;padding:0;margin:20px 0;flex:1;display:flex;flex-direction:column;gap:10px;}
+.pricing-feature-list li{font-size:13.5px;color:var(--ink-soft);padding-left:22px;position:relative;line-height:1.4;}
+.pricing-feature-list li::before{content:"✓";position:absolute;left:0;color:var(--green-deep);font-weight:700;}
+.go-btn:disabled, .upload-btn:disabled{opacity:.55;cursor:default;pointer-events:none;}
+
 @media (max-width:720px){
   .hero{grid-template-columns:1fr;}
   .field-row{grid-template-columns:1fr;}

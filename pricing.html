@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employer Pricing — Bridge NG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="images/bridgeng-logo-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a class="brand" href="index.html" style="text-decoration:none;color:inherit;">
+      <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
+    </a>
+  </div>
+</div>
+
+<div class="pricing-wrap">
+  <div class="auth-head">
+    <h2 style="color:var(--indigo);">Pricing for employers</h2>
+    <p>Free to post and match candidates. Upgrade for a verified payout account and priority as new employer tools ship.</p>
+  </div>
+
+  <div class="billing-toggle-row">
+    <span id="billing-label-monthly">Monthly</span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="billing-annual-toggle" onchange="updatePricingDisplay()">
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+    </label>
+    <span id="billing-label-annual">Annual <span class="pricing-save-badge">Save 20%</span></span>
+  </div>
+
+  <div class="pricing-grid">
+    <div class="card pricing-card">
+      <p class="pricing-tier-name">SME Starter</p>
+      <p class="pricing-tier-price">Free</p>
+      <p class="pricing-tier-note">No card required</p>
+      <ul class="pricing-feature-list">
+        <li>Post jobs and get real-time candidate matches</li>
+        <li>Message candidates directly</li>
+        <li>Blinded screening &amp; verified-badge filters</li>
+        <li>Reliability Index on every candidate</li>
+      </ul>
+      <button class="upload-btn" id="starter-cta" style="width:100%;text-align:center;margin-top:auto;" disabled>Included for every employer</button>
+    </div>
+
+    <div class="card pricing-card pricing-card-featured">
+      <span class="pricing-featured-badge">Most popular</span>
+      <p class="pricing-tier-name">Pro Growth</p>
+      <p class="pricing-tier-price"><span id="pro-growth-price">₦90,000</span><span class="pricing-tier-period">/mo</span></p>
+      <p class="pricing-tier-note" id="pro-growth-note">Billed monthly via Paystack</p>
+      <ul class="pricing-feature-list">
+        <li>Everything in SME Starter</li>
+        <li>Verified payout bank account (NUBAN-checked)</li>
+        <li>Priority access to new employer tools as they ship</li>
+        <li>Directly supports Bridge NG's development</li>
+      </ul>
+      <p class="form-msg" id="subscribe-msg"></p>
+      <button class="go-btn" id="subscribe-btn" style="width:100%;text-align:center;margin-top:auto;" onclick="handleSubscribeClick()">Subscribe →</button>
+    </div>
+
+    <div class="card pricing-card">
+      <p class="pricing-tier-name">Enterprise</p>
+      <p class="pricing-tier-price">Custom</p>
+      <p class="pricing-tier-note">For high-volume hiring</p>
+      <ul class="pricing-feature-list">
+        <li>Everything in Pro Growth</li>
+        <li>Volume hiring support</li>
+        <li>Direct line to the Bridge NG team</li>
+      </ul>
+      <a class="upload-btn" href="contact.html" style="width:100%;text-align:center;margin-top:auto;">Talk to us →</a>
+    </div>
+  </div>
+</div>
+
+<div class="auth-wrap" id="employer-account-wrap">
+  <div class="auth-toggle" id="employer-auth-toggle">
+    <button class="tab-btn" id="etab-signin" onclick="showEmployerMode('signin')">Employer sign in</button>
+    <button class="tab-btn" id="etab-signup" onclick="showEmployerMode('signup')">Create employer account</button>
+  </div>
+
+  <div id="employer-mode-signin">
+    <div class="auth-head">
+      <h2 style="color:var(--indigo);font-size:20px;">Sign in as an employer</h2>
+      <p>Separate from your candidate account — sign in here to manage your subscription and payout account.</p>
+    </div>
+    <div class="card">
+      <p class="form-msg" id="employer-signin-msg"></p>
+      <div class="field-row">
+        <div>
+          <label>Work email</label>
+          <input type="email" id="e-si-email" placeholder="e.g. hiring@yourcompany.com">
+        </div>
+        <div>
+          <label>Password</label>
+          <input type="password" id="e-si-password" placeholder="Your password">
+        </div>
+      </div>
+      <button class="go-btn" onclick="doEmployerSignIn()">Sign in →</button>
+    </div>
+    <p class="auth-switch">New employer? <a onclick="showEmployerMode('signup')">Create an account</a></p>
+  </div>
+
+  <div id="employer-mode-signup" style="display:none;">
+    <div class="auth-head">
+      <h2 style="color:var(--indigo);font-size:20px;">Create your employer account</h2>
+      <p>Used for billing and your payout bank account — not required to post jobs or message candidates.</p>
+    </div>
+    <div class="card">
+      <p class="form-msg" id="employer-signup-msg"></p>
+      <div class="field-row">
+        <div>
+          <label>Company name</label>
+          <input type="text" id="e-su-company" placeholder="e.g. Bridge NG Ltd">
+        </div>
+        <div>
+          <label>Work email</label>
+          <input type="email" id="e-su-email" placeholder="e.g. hiring@yourcompany.com">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Password</label>
+          <input type="password" id="e-su-password" placeholder="At least 6 characters">
+        </div>
+        <div></div>
+      </div>
+      <button class="go-btn" onclick="doEmployerSignUp()">Create account →</button>
+    </div>
+    <p class="auth-switch">Already have an employer account? <a onclick="showEmployerMode('signin')">Sign in</a></p>
+  </div>
+
+  <div id="employer-dashboard" style="display:none;">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div>
+          <p style="font-family:'Fraunces',serif;font-size:18px;color:var(--indigo);margin:0 0 4px;" id="employer-dash-company"></p>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;" id="employer-dash-plan"></p>
+        </div>
+        <button class="upload-btn" onclick="doEmployerLogout()">Log out</button>
+      </div>
+    </div>
+
+    <div class="card" id="bank-verify-card">
+      <p style="font-weight:700;margin:0 0 4px;">Payout bank account</p>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">We verify account ownership directly with your bank via NUBAN before saving anything — the account name shown below always comes from your bank, never typed in.</p>
+      <p class="form-msg" id="bank-msg"></p>
+
+      <div id="bank-existing-row" style="display:none;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px;">
+        <p style="margin:0;font-size:13.5px;">✅ Verified: <strong id="bank-existing-label"></strong></p>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label>Bank</label>
+          <select id="bank-select" onchange="onAccountNumberInput()"></select>
+        </div>
+        <div>
+          <label>Account number</label>
+          <input type="text" id="bank-account-number" maxlength="10" inputmode="numeric" placeholder="10-digit NUBAN" oninput="onAccountNumberInput()">
+        </div>
+      </div>
+
+      <div id="bank-resolved-row" style="display:none;">
+        <p style="font-size:13.5px;">Account name: <strong id="bank-resolved-name"></strong></p>
+        <button class="go-btn" onclick="saveBankAccount()">Save this account →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-bottom">
+    <span>© 2026 Bridge NG. All rights reserved.</span>
+    <nav class="footer-links-inline" aria-label="Legal">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="shared.js"></script>
+<script>
+let employerLoggedIn = false;
+let resolvedBankName = '';
+
+function setMsg(id, text, kind){
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'form-msg ' + kind;
+}
+
+function updatePricingDisplay(){
+  const annual = document.getElementById('billing-annual-toggle').checked;
+  document.getElementById('billing-label-monthly').style.color = annual ? '' : 'var(--indigo)';
+  document.getElementById('billing-label-annual').style.color = annual ? 'var(--indigo)' : '';
+  if(annual){
+    document.getElementById('pro-growth-price').textContent = '₦864,000';
+    document.querySelector('#pro-growth-price + .pricing-tier-period').textContent = '/yr';
+    document.getElementById('pro-growth-note').textContent = 'Billed annually via Paystack — save 20% vs monthly';
+  } else {
+    document.getElementById('pro-growth-price').textContent = '₦90,000';
+    document.querySelector('#pro-growth-price + .pricing-tier-period').textContent = '/mo';
+    document.getElementById('pro-growth-note').textContent = 'Billed monthly via Paystack';
+  }
+}
+updatePricingDisplay();
+
+function showEmployerMode(mode){
+  document.getElementById('employer-mode-signin').style.display = mode==='signin' ? '' : 'none';
+  document.getElementById('employer-mode-signup').style.display = mode==='signup' ? '' : 'none';
+  document.getElementById('etab-signin').classList.toggle('active', mode==='signin');
+  document.getElementById('etab-signup').classList.toggle('active', mode==='signup');
+}
+showEmployerMode('signin');
+
+async function doEmployerSignIn(){
+  const email = document.getElementById('e-si-email').value.trim();
+  const password = document.getElementById('e-si-password').value;
+  if(!email || !password){
+    setMsg('employer-signin-msg', 'Enter your email and password.', 'error');
+    return;
+  }
+  try{
+    await apiEmployerLogin(email, password);
+    await refreshEmployerState();
+  }catch(err){
+    setMsg('employer-signin-msg', err.message, 'error');
+  }
+}
+
+async function doEmployerSignUp(){
+  const companyName = document.getElementById('e-su-company').value.trim();
+  const email = document.getElementById('e-su-email').value.trim();
+  const password = document.getElementById('e-su-password').value;
+  if(!companyName || !email || !password){
+    setMsg('employer-signup-msg', 'Company name, email, and password are required.', 'error');
+    return;
+  }
+  try{
+    await apiEmployerSignup({companyName, email, password});
+    await refreshEmployerState();
+  }catch(err){
+    setMsg('employer-signup-msg', err.message, 'error');
+  }
+}
+
+async function doEmployerLogout(){
+  try{ await apiEmployerLogout(); }catch(err){ /* best effort */ }
+  employerLoggedIn = false;
+  document.getElementById('employer-dashboard').style.display = 'none';
+  document.getElementById('employer-auth-toggle').style.display = '';
+  document.getElementById('employer-mode-signin').style.display = '';
+  showEmployerMode('signin');
+}
+
+function planLabel(subscription){
+  if(subscription.tier === 'pro_growth' && subscription.status === 'active'){
+    const cycle = subscription.billingCycle === 'annual' ? 'annual' : 'monthly';
+    const until = subscription.currentPeriodEnd ? ` · renews ${subscription.currentPeriodEnd.slice(0,10)}` : '';
+    return `Pro Growth (${cycle})${until}`;
+  }
+  if(subscription.status === 'cancelled') return 'Pro Growth (cancelled) — back on SME Starter';
+  return 'SME Starter (free)';
+}
+
+async function refreshEmployerState(){
+  let me;
+  try{
+    me = await apiEmployerMe();
+  }catch(err){
+    return;
+  }
+  if(!me.loggedIn){
+    employerLoggedIn = false;
+    document.getElementById('employer-dashboard').style.display = 'none';
+    document.getElementById('employer-auth-toggle').style.display = '';
+    return;
+  }
+  employerLoggedIn = true;
+  document.getElementById('employer-auth-toggle').style.display = 'none';
+  document.getElementById('employer-mode-signin').style.display = 'none';
+  document.getElementById('employer-mode-signup').style.display = 'none';
+  document.getElementById('employer-dashboard').style.display = '';
+  document.getElementById('employer-dash-company').textContent = me.employer.companyName;
+  document.getElementById('employer-dash-plan').textContent = planLabel(me.subscription);
+
+  const subscribeBtn = document.getElementById('subscribe-btn');
+  if(me.subscription.tier === 'pro_growth' && me.subscription.status === 'active'){
+    subscribeBtn.disabled = true;
+    subscribeBtn.textContent = "You're subscribed ✓";
+  } else {
+    subscribeBtn.disabled = false;
+    subscribeBtn.textContent = 'Subscribe →';
+  }
+
+  if(me.bankAccount){
+    document.getElementById('bank-existing-row').style.display = '';
+    document.getElementById('bank-existing-label').textContent =
+      `${me.bankAccount.accountName} — ${me.bankAccount.bankName} (${me.bankAccount.accountNumber})`;
+  }
+}
+
+async function handleSubscribeClick(){
+  if(!employerLoggedIn){
+    setMsg('subscribe-msg', 'Sign in or create an employer account below first, then subscribe.', 'error');
+    document.getElementById('employer-account-wrap').scrollIntoView({behavior:'smooth'});
+    return;
+  }
+  const billingCycle = document.getElementById('billing-annual-toggle').checked ? 'annual' : 'monthly';
+  const btn = document.getElementById('subscribe-btn');
+  btn.disabled = true;
+  try{
+    const result = await apiEmployerSubscribe(billingCycle);
+    location.href = result.authorizationUrl;
+  }catch(err){
+    setMsg('subscribe-msg', err.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function loadBanks(){
+  try{
+    const {banks} = await apiListBanks();
+    const select = document.getElementById('bank-select');
+    select.innerHTML = '<option value="">Select your bank</option>' +
+      banks.map(b => `<option value="${b.code}">${b.name}</option>`).join('');
+  }catch(err){ /* bank list load is best-effort */ }
+}
+loadBanks();
+
+let bankResolveTimer = null;
+function onAccountNumberInput(){
+  const input = document.getElementById('bank-account-number');
+  input.value = input.value.replace(/\D/g, '').slice(0, 10);
+  document.getElementById('bank-resolved-row').style.display = 'none';
+  resolvedBankName = '';
+  const bankCode = document.getElementById('bank-select').value;
+  if(input.value.length !== 10 || !bankCode) return;
+
+  clearTimeout(bankResolveTimer);
+  bankResolveTimer = setTimeout(async () => {
+    setMsg('bank-msg', 'Verifying account…', 'success');
+    try{
+      const {accountName} = await apiBankResolve(input.value, bankCode);
+      resolvedBankName = accountName;
+      document.getElementById('bank-resolved-name').textContent = accountName;
+      document.getElementById('bank-resolved-row').style.display = '';
+      setMsg('bank-msg', '', '');
+      document.getElementById('bank-msg').className = 'form-msg';
+    }catch(err){
+      setMsg('bank-msg', err.message, 'error');
+    }
+  }, 300);
+}
+
+async function saveBankAccount(){
+  const accountNumber = document.getElementById('bank-account-number').value;
+  const bankSelect = document.getElementById('bank-select');
+  const bankCode = bankSelect.value;
+  const bankName = bankSelect.options[bankSelect.selectedIndex]?.textContent || '';
+  try{
+    const {bankAccount} = await apiSaveBankAccount({accountNumber, bankCode, bankName});
+    setMsg('bank-msg', 'Bank account saved.', 'success');
+    document.getElementById('bank-existing-row').style.display = '';
+    document.getElementById('bank-existing-label').textContent =
+      `${bankAccount.accountName} — ${bankAccount.bankName} (${bankAccount.accountNumber})`;
+    document.getElementById('bank-resolved-row').style.display = 'none';
+  }catch(err){
+    setMsg('bank-msg', err.message, 'error');
+  }
+}
+
+refreshEmployerState();
+</script>
+</body>
+</html>
