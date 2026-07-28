@@ -1662,6 +1662,18 @@ function verifiedBadgesHtml(match){
   `).join('');
 }
 
+// Real behavioral signal, not a fabricated score — computed server-side from this candidate's
+// actual message-reply history (see compute_reliability_stats in server.py). Omitted entirely
+// when there's no real reply history yet, never shown as a fake "N/A" or 0%.
+function reliabilityBadgeHtml(match){
+  const r = match.reliability;
+  if(!r) return '';
+  const label = r.avgReplyHours < 1
+    ? `⏱ Typically replies within ${Math.max(1, Math.round(r.avgReplyHours * 60))} min`
+    : `⏱ Typically replies within ${Math.round(r.avgReplyHours)}h`;
+  return `<p class="res-sub" style="margin-top:-6px;color:var(--green-deep);">${label} <em style="opacity:.7;color:var(--ink-soft);">(based on ${r.repliedCount} real repl${r.repliedCount === 1 ? 'y' : 'ies'})</em></p>`;
+}
+
 // Pitch button reuses the exact same real AI cover-letter plumbing as Resume Studio's "Write cover
 // letter" (apiGenerateResumeDoc mode:'cover' -> NVIDIA-backed handle_resume_generate on the server),
 // just surfaced as a modal directly from the job card instead of requiring a tab switch.
@@ -5383,6 +5395,7 @@ function renderEmployerResultsSection(){
             <p class="res-title">${escapeHtml(name)} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
             <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
             ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
+            ${reliabilityBadgeHtml(m)}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
             <div class="btn-row" style="margin-top:10px;">
               <button class="ai-btn" onclick="toggleMessageComposer(${m.userId})">✉ Message</button>

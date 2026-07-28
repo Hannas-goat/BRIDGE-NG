@@ -1166,6 +1166,42 @@ def match_score(required_skills, candidate_skills, req_level, cand_level, req_lo
     return max(2, min(99, round(score * 100)))
 
 
+def compute_reliability_stats(conn, user_id):
+    """Real behavioral signal, not a fabricated score: walks this candidate's actual message
+    history and measures how long they typically take to reply to an employer, in hours. Returns
+    None (not a fake 0% or "N/A") when there isn't at least one real employer->candidate reply
+    pair to measure — an untested candidate gets no badge at all rather than a misleading one."""
+    conv_ids = [r["id"] for r in conn.execute(
+        "SELECT id FROM conversations WHERE candidate_user_id=?", (user_id,)
+    ).fetchall()]
+    if not conv_ids:
+        return None
+
+    reply_hours = []
+    for conv_id in conv_ids:
+        messages = conn.execute(
+            "SELECT sender_role, created_at FROM messages WHERE conversation_id=? ORDER BY created_at ASC",
+            (conv_id,),
+        ).fetchall()
+        pending_employer_ts = None
+        for m in messages:
+            ts = None
+            try:
+                ts = datetime.datetime.strptime(m["created_at"], "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError):
+                continue
+            if m["sender_role"] == "employer":
+                pending_employer_ts = ts
+            elif m["sender_role"] == "candidate" and pending_employer_ts is not None:
+                reply_hours.append((ts - pending_employer_ts).total_seconds() / 3600)
+                pending_employer_ts = None
+
+    if not reply_hours:
+        return None
+    avg_hours = sum(reply_hours) / len(reply_hours)
+    return {"avgReplyHours": round(avg_hours, 1), "repliedCount": len(reply_hours)}
+
+
 def job_already_imported(conn, company, title, application_link):
     """True if this exact role looks already present — used so re-syncing the same
     ATS board on a schedule doesn't re-insert (and re-notify about) the same jobs."""
@@ -2723,6 +2759,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "score": score,
                     "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
                     "portfolioLink": row["portfolio_link"] or "",
+                    "reliability": compute_reliability_stats(conn, row["uid"]),
                 })
                 if score >= 60:
                     perk_note = (" (" + ", ".join(PERK_LABELS[p] for p in perks) + ")") if perks else ""
