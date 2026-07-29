@@ -155,10 +155,12 @@ function createChip(containerId, targetSet, label, startSelected){
   return c;
 }
 
-// On mobile, showing all ~40 skill chips at once is overwhelming — show just the 3 broadly
-// useful ones and let people type/add anything else via the input next to the chip field
-// (already there for every section that uses buildChips).
-const MOBILE_TOP_SKILLS = ["Data Analysis", "Customer Service", "Project Management"];
+// Showing all ~40 skill chips at once was overwhelming — show just the 5 skills that actually
+// have a real verified-badge challenge behind them (see SKILL_CHALLENGE_SKILLS in index.html),
+// so every visible chip corresponds to a skill someone can actually get verified on. Anything
+// else is still addable via the "type your own" input next to the chip field, on every section
+// that uses buildChips.
+const TOP_SKILLS = ["Python", "SQL", "Excel", "Customer Service", "JavaScript"];
 
 // The packaged Android app's WebView doesn't always report window.innerWidth as the real
 // device width (it can fall back to a desktop-style default viewport), so window width alone
@@ -169,8 +171,7 @@ function isMobileApp(){
 }
 
 function buildChips(containerId, targetSet){
-  const skillsToShow = (isMobileApp() || window.innerWidth <= 720) ? MOBILE_TOP_SKILLS : SKILLS;
-  skillsToShow.forEach(sk => createChip(containerId, targetSet, sk, false));
+  TOP_SKILLS.forEach(sk => createChip(containerId, targetSet, sk, false));
 }
 
 function addCustomSkill(containerId, targetSet, inputId){
