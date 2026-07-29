@@ -16,7 +16,6 @@
 <link rel="apple-touch-icon" href="images/bridgeng-logo-icon.png">
 </head>
 <body>
-<datalist id="skill-suggestions"></datalist>
 <div class="wrap">
 
   <header class="nav site-header" id="site-header">
@@ -429,7 +428,7 @@
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="s-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-skills', seekerSkills, 's-skill-input');}">
+        <input type="text" id="s-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-skills', seekerSkills, 's-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('s-skills', seekerSkills, 's-skill-input')">Add skill</button>
       </div>
       <div id="skill-radar"></div>
@@ -569,7 +568,7 @@
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="ab-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="ab-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input');}">
+        <input type="text" id="ab-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('ab-skills', abroadSkills, 'ab-skill-input')">Add skill</button>
       </div>
       <button class="go-btn" onclick="findAbroadJobs()">Find remote roles →</button>
@@ -971,7 +970,7 @@
           <label>Your skills — tap to select, or type your own</label>
           <div class="chip-field" id="cm-skills"></div>
           <div class="skill-add-row">
-            <input type="text" id="cm-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
+            <input type="text" id="cm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input');}">
             <button class="upload-btn" onclick="addCustomSkill('cm-skills', careerMatchSkills, 'cm-skill-input')">Add skill</button>
           </div>
 
@@ -999,7 +998,7 @@
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="jm-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="jm-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input');}">
+        <input type="text" id="jm-skill-input" placeholder="Type a skill, e.g. Data Analysis" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('jm-skills', jobMatchSkills, 'jm-skill-input')">Add skill</button>
       </div>
       <button class="go-btn" onclick="runJobMatch()">Find my best-fit job →</button>
@@ -1108,7 +1107,7 @@
       <label>Required skills — tap to select, or type your own</label>
       <div class="chip-field" id="e-skills"></div>
       <div class="skill-add-row">
-        <input type="text" id="e-skill-input" list="skill-suggestions" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('e-skills', employerSkills, 'e-skill-input');}">
+        <input type="text" id="e-skill-input" placeholder="Type a skill, e.g. Copywriting" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('e-skills', employerSkills, 'e-skill-input');}">
         <button class="upload-btn" onclick="addCustomSkill('e-skills', employerSkills, 'e-skill-input')">Add skill</button>
       </div>
       <div class="field-row" style="margin-top:16px;">
@@ -3879,7 +3878,6 @@ async function initAccount(){
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
 initAccount();
-loadSkillSuggestions();
 initEmployerAccountState();
 initScrollReveal();
 onSalarySliderChange(); // initialize the slider fill bar + benchmark label on page load
@@ -5533,15 +5531,6 @@ async function initEmployerAccountState(){
     employerAccountLoggedIn = false;
   }
   if(lastEmployerResults) renderEmployerResultsSection();
-}
-
-// Real autosuggest source for every free-text skill input — built server-side from skill-challenge
-// topics plus every distinct skill tag already on a real or employer-posted job, never a fabricated list.
-async function loadSkillSuggestions(){
-  try{
-    const {skills} = await apiGetKnownSkills();
-    document.getElementById('skill-suggestions').innerHTML = skills.map(s => `<option value="${escapeAttr(s)}"></option>`).join('');
-  }catch(e){ /* best effort */ }
 }
 
 function inviteToInterview(userId){

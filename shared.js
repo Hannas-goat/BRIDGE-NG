@@ -290,7 +290,6 @@ function apiBankResolve(accountNumber, bankCode){ return apiRequest(`/api/employ
 function apiSaveBankAccount(payload){ return apiRequest('/api/employer/bank', 'POST', payload); }
 function apiGetPipeline(){ return apiRequest('/api/employer/pipeline', 'GET'); }
 function apiSetPipelineStage(candidateUserId, stage){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage}); }
-function apiGetKnownSkills(){ return apiRequest('/api/skills/known', 'GET'); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }

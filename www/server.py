@@ -1854,8 +1854,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_bank_resolve(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/pipeline":
             return self.handle_get_pipeline()
-        if parsed.path == "/api/skills/known":
-            return self.handle_known_skills()
         if parsed.path == "/api/appointments/ics":
             return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/messages":
@@ -3268,21 +3266,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if notif_message and candidate["whatsapp_alerts_enabled"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True, "stage": stage})
-
-    def handle_known_skills(self):
-        """Real autosuggest source for the free-text skill inputs — built entirely from skills
-        that already exist in the app's real data (skill-challenge topics plus every distinct
-        skill tag on a real or employer-posted job), never a fabricated master list."""
-        skills = set(SKILL_CHALLENGES.keys())
-        with db_lock:
-            conn = get_db()
-            for table in ("imported_jobs", "employer_posted_jobs"):
-                for row in conn.execute(f"SELECT skills FROM {table}").fetchall():
-                    for s in json.loads(row["skills"] or "[]"):
-                        if s:
-                            skills.add(s)
-            conn.close()
-        self.send_json(200, {"skills": sorted(skills, key=str.lower)})
 
     # ---------- employer job posting + real candidate matching ----------
 
