@@ -219,7 +219,7 @@
                 <input type="tel" id="hdr-whatsapp-number" placeholder="803 123 4567">
               </div>
               <button class="go-btn" style="width:100%;margin-top:12px;" onclick="saveWhatsappFromHeader()">Save</button>
-              <p class="whatsapp-status-note">Requires Bridge NG to have WhatsApp alerts configured on the backend — your preference is saved either way, but delivery isn't guaranteed until then.</p>
+              <p class="whatsapp-status-note">Your preference is saved now. Delivery depends on WhatsApp alerts being turned on for Bridge NG — if nothing arrives yet, that's on our end, not a mistake on yours.</p>
             </div>
           </div>
         </div>
@@ -878,11 +878,11 @@
       <div class="field-row">
         <div>
           <label>Search title, company, or department</label>
-          <input type="text" id="explore-keyword" placeholder="e.g. designer, analyst, engineering..." oninput="renderExploreResults()">
+          <input type="text" id="explore-keyword" placeholder="e.g. designer, analyst, engineering..." oninput="searchExploreJobs()">
         </div>
         <div>
           <label>Filter by location</label>
-          <input type="text" id="explore-location" placeholder="e.g. Lagos, Remote, Berlin..." oninput="renderExploreResults()">
+          <input type="text" id="explore-location" placeholder="e.g. Lagos, Remote, Berlin..." oninput="searchExploreJobs()">
         </div>
       </div>
       <div class="btn-row">
@@ -1911,6 +1911,21 @@ function renderRemoteJobsFeed(){
 // --- Explore Jobs: instant keyword/location search + real-profile match highlighting ---
 
 let exploreMatchActive = false;
+// Real inventory can run into the hundreds of roles — rendering all of them at once would be a
+// genuinely heavy DOM, so results are capped and grown 30 at a time via "Load more" instead of
+// silently discarding everything past the first page. Reset to 30 on any new search/filter (not
+// on "Load more" itself, which is the only thing allowed to grow it).
+let exploreShownCount = 30;
+
+function searchExploreJobs(){
+  exploreShownCount = 30;
+  renderExploreResults();
+}
+
+function loadMoreExploreResults(){
+  exploreShownCount += 30;
+  renderExploreResults();
+}
 
 function toggleExploreMatch(){
   if(!exploreMatchActive && !currentAccount){
@@ -1921,6 +1936,7 @@ function toggleExploreMatch(){
   const btn = document.getElementById('explore-match-toggle');
   btn.textContent = 'Match my profile: ' + (exploreMatchActive ? 'ON' : 'OFF');
   btn.classList.toggle('following', exploreMatchActive);
+  exploreShownCount = 30;
   renderExploreResults();
 }
 
@@ -1986,7 +2002,7 @@ function renderExploreResults(){
   }
 
   const total = jobs.length;
-  jobs = jobs.slice(0, 30); // keep the DOM light with a large combined job list
+  jobs = jobs.slice(0, exploreShownCount);
 
   if(jobs.length === 0){
     el.innerHTML = '<div class="empty">No roles match your search right now.</div>';
@@ -2016,6 +2032,7 @@ function renderExploreResults(){
         </div>
       `).join('')}
     </div>
+    ${total > jobs.length ? `<button class="upload-btn" style="display:block;margin:20px auto 0;" onclick="loadMoreExploreResults()">Load ${Math.min(30, total - jobs.length)} more roles →</button>` : ''}
   `;
 }
 
@@ -4010,7 +4027,7 @@ function fillSeekerFormFromProfile(profile){
   document.getElementById('s-whatsapp-cc').value = whatsappSplit.cc;
   document.getElementById('s-whatsapp-number').value = whatsappSplit.number;
   document.getElementById('s-whatsapp-enabled').checked = !!profile.whatsappAlertsEnabled;
-  document.getElementById('whatsapp-status-note').textContent = 'Requires Bridge NG to have WhatsApp alerts configured on the backend — your preference is saved either way, but delivery isn\'t guaranteed until then.';
+  document.getElementById('whatsapp-status-note').textContent = 'Your preference is saved now. Delivery depends on WhatsApp alerts being turned on for Bridge NG — if nothing arrives yet, that\'s on our end, not a mistake on yours.';
   renderWhatsappHeaderArea();
   document.getElementById('s-portfolio-link').value = profile.portfolioLink || '';
   applySelectedSkills('s-skills', seekerSkills, profile.skills);
@@ -4513,6 +4530,7 @@ function onSalarySliderChange(){
     `₦${min.toLocaleString('en-NG')} – ₦${max.toLocaleString('en-NG')}${max >= trackMax ? '+' : ''}/mo`;
 
   renderSalaryBenchmark();
+  exploreShownCount = 30;
   renderExploreResults();
 }
 
