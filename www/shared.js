@@ -55,7 +55,8 @@ const SKILLS = ["JavaScript","Python","SQL","Data Analysis","Excel","Software De
 "Supply Chain","Procurement","Logistics","Agronomy","Nursing","Pharmacy","Medical Lab Science",
 "Human Resources","Recruiting","Networking","Cybersecurity","Petroleum Engineering","Teaching",
 "Legal Practice","Hospitality Management","Public Administration","Architecture","Quantity Surveying",
-"Insurance Underwriting","Banking Operations","Journalism","Video Editing"];
+"Insurance Underwriting","Banking Operations","Journalism","Video Editing",
+"Biology","Chemistry","Physics","Environmental Science","Laboratory Skills","Geology"];
 
 const PHONE_COUNTRY_CODES = [
   {cc:"+234", flag:"🇳🇬"},
