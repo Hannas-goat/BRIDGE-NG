@@ -62,7 +62,7 @@ _fernet = Fernet(ENCRYPTION_KEY.encode("ascii") if isinstance(ENCRYPTION_KEY, st
 ENCRYPTED_PROFILE_COLUMNS = (
     "full_name", "dob", "sex", "phone", "address",
     "resume_text", "resume_filename", "resume_file_base64",
-    "pitch_media_base64", "whatsapp_number",
+    "pitch_media_base64", "whatsapp_number", "hide_from_employer",
 )
 
 
@@ -838,6 +838,19 @@ def init_db():
     # audit an office's actual power/internet setup) — real value for candidates in a market where
     # grid power and connectivity are genuinely inconsistent, not decorative.
     ensure_column(conn, "employer_posted_jobs", "perks", "perks TEXT DEFAULT '[]'")
+    # Profile visibility: "private" removes a candidate from every employer candidate-match search;
+    # hide_from_employer (a specific company name, encrypted like other PII) removes them only from
+    # that one employer's searches — real value for someone employed and searching quietly.
+    ensure_column(conn, "profiles", "visibility", "visibility TEXT DEFAULT 'public'")
+    ensure_column(conn, "profiles", "hide_from_employer", "hide_from_employer TEXT DEFAULT ''")
+    # Granular WhatsApp preferences layered on top of the existing master whatsapp_alerts_enabled
+    # toggle (a message only ever sends if BOTH the master toggle AND the specific one are on).
+    # New columns backfill from the existing master flag ONLY at the moment they're first added,
+    # so nobody's existing on/off preference silently changes — after that this is user-controlled.
+    added_notify_matches = ensure_column(conn, "profiles", "whatsapp_notify_matches", "whatsapp_notify_matches INTEGER DEFAULT 1")
+    added_notify_messages = ensure_column(conn, "profiles", "whatsapp_notify_messages", "whatsapp_notify_messages INTEGER DEFAULT 1")
+    if added_notify_matches or added_notify_messages:
+        conn.execute("UPDATE profiles SET whatsapp_notify_matches = whatsapp_alerts_enabled, whatsapp_notify_messages = whatsapp_alerts_enabled")
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -895,9 +908,13 @@ def compute_streak(checkin_dates):
 
 
 def ensure_column(conn, table, column, add_column_ddl):
+    """Returns True only when this call is the one that actually added the column — lets a
+    migration tell "just created, needs a one-time backfill" apart from "already existed"."""
     existing = [row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
     if column not in existing:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {add_column_ddl}")
+        return True
+    return False
 
 
 def hash_password(password, salt=None):
@@ -993,6 +1010,8 @@ def profile_row_to_json(row):
             "university": "", "nyscStatus": "", "ppaState": "", "ppaLga": "", "pitchMedia": None,
             "whatsappNumber": "", "whatsappAlertsEnabled": False,
             "verifiedBadges": [], "portfolioLink": "",
+            "visibility": "public", "hideFromEmployer": "",
+            "whatsappNotifyMatches": True, "whatsappNotifyMessages": True,
         }
     resume_file_kind = row["resume_file_kind"] or ""
     resume_file = None
@@ -1042,6 +1061,10 @@ def profile_row_to_json(row):
         "whatsappAlertsEnabled": bool(row["whatsapp_alerts_enabled"]),
         "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
         "portfolioLink": row["portfolio_link"] or "",
+        "visibility": row["visibility"] or "public",
+        "hideFromEmployer": decrypt_field(row["hide_from_employer"] or ""),
+        "whatsappNotifyMatches": bool(row["whatsapp_notify_matches"]),
+        "whatsappNotifyMessages": bool(row["whatsapp_notify_messages"]),
     }
 
 
@@ -1836,6 +1859,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_followed_companies()
         if parsed.path == "/api/notifications":
             return self.handle_list_notifications()
+        if parsed.path == "/api/account/export":
+            return self.handle_export_data()
         if parsed.path == "/api/checkin":
             return self.handle_checkin_status()
         if parsed.path == "/api/campus-count":
@@ -1952,6 +1977,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/profile":
             return self.handle_save_profile()
+        if parsed.path == "/api/profile/settings":
+            return self.handle_save_settings()
         if parsed.path == "/api/profile/resume":
             return self.handle_save_resume()
         if parsed.path == "/api/profile/pitch":
@@ -2124,6 +2151,58 @@ class Handler(http.server.BaseHTTPRequestHandler):
         clear_failed_logins(email)
         self.send_json(200, {"ok": True}, clear_cookie=True)
 
+    def handle_export_data(self):
+        """NDPA-style data portability: every real row this account owns, decrypted back to plain
+        values (it's being handed back to the same person it belongs to), as one downloadable
+        JSON file — no third-party export tool, this server already holds all of it."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+
+        with db_lock:
+            conn = get_db()
+            user_row = conn.execute("SELECT email, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
+            profile_row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            applications = conn.execute(
+                "SELECT * FROM applications WHERE user_id = ? ORDER BY id", (user_id,)
+            ).fetchall()
+            appointments = conn.execute(
+                "SELECT * FROM appointments WHERE user_id = ? ORDER BY id", (user_id,)
+            ).fetchall()
+            notifications = conn.execute(
+                "SELECT * FROM notifications WHERE user_id = ? ORDER BY id", (user_id,)
+            ).fetchall()
+            convos = conn.execute(
+                "SELECT * FROM conversations WHERE candidate_user_id = ? ORDER BY id", (user_id,)
+            ).fetchall()
+            conversations_out = []
+            for c in convos:
+                messages = conn.execute(
+                    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id", (c["id"],)
+                ).fetchall()
+                conversations_out.append({
+                    "company": c["company"], "jobTitle": c["job_title"], "createdAt": c["created_at"],
+                    "messages": [message_row_to_json(m) for m in messages],
+                })
+            conn.close()
+
+        export = {
+            "exportedAt": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S") + " UTC",
+            "account": {"email": user_row["email"], "createdAt": user_row["created_at"]},
+            "profile": profile_row_to_json(profile_row),
+            "applications": [application_row_to_json(r) for r in applications],
+            "appointments": [appointment_row_to_json(r) for r in appointments],
+            "notifications": [notification_row_to_json(r) for r in notifications],
+            "conversationsWithEmployers": conversations_out,
+        }
+        body = json.dumps(export, indent=2, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", 'attachment; filename="bridge-ng-my-data.json"')
+        self.end_headers()
+        self.wfile.write(body)
+
     def handle_me(self):
         user_id = self.current_user_id()
         if user_id is None:
@@ -2227,6 +2306,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  encrypt_field((data.get("whatsappNumber") or "").strip()),
                  1 if data.get("whatsappAlertsEnabled") else 0,
                  (data.get("portfolioLink") or "").strip(), user_id),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_save_settings(self):
+        """Separate from handle_save_profile on purpose — the Settings panel is a different UI
+        surface than the big 'Build your profile' form, and shouldn't need that form's full state
+        just to flip a visibility toggle or a notification preference."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        visibility = data.get("visibility") if data.get("visibility") in ("public", "private") else "public"
+        hide_from_employer = (data.get("hideFromEmployer") or "").strip()
+
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                """UPDATE profiles SET visibility=?, hide_from_employer=?,
+                   whatsapp_notify_matches=?, whatsapp_notify_messages=?, updated_at=datetime('now')
+                   WHERE user_id=?""",
+                (visibility, encrypt_field(hide_from_employer),
+                 1 if data.get("whatsappNotifyMatches", True) else 0,
+                 1 if data.get("whatsappNotifyMessages", True) else 0,
+                 user_id),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
@@ -3242,7 +3351,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn = get_db()
             employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
             candidate = conn.execute(
-                "SELECT whatsapp_number, whatsapp_alerts_enabled FROM profiles WHERE user_id = ?",
+                "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_messages FROM profiles WHERE user_id = ?",
                 (candidate_user_id,),
             ).fetchone()
             if candidate is None:
@@ -3263,7 +3372,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
             conn.commit()
             conn.close()
-        if notif_message and candidate["whatsapp_alerts_enabled"]:
+        if notif_message and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True, "stage": stage})
 
@@ -3308,6 +3417,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 cand_skills = json.loads(row["skills"] or "[]")
                 if not cand_skills:
                     continue  # skip accounts that haven't picked any skills yet — nothing real to match on
+                if (row["visibility"] or "public") == "private":
+                    continue  # candidate opted out of every employer search, from Settings
+                hidden_from = decrypt_field(row["hide_from_employer"] or "")
+                if hidden_from and hidden_from.strip().lower() == company.strip().lower():
+                    continue  # candidate specifically asked not to be shown to this one employer
                 if ppa_state_filter and (row["ppa_state"] or "").strip().lower() != ppa_state_filter.lower():
                     continue  # employer asked for a specific (self-declared) PPA state only
                 score = match_score(skills, cand_skills, level, row["career_level"], location, row["preferred_location"])
@@ -3334,7 +3448,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (row["uid"], "employer_match", message, title, company),
                     )
                     notified += 1
-                    if row["whatsapp_alerts_enabled"]:
+                    if row["whatsapp_alerts_enabled"] and row["whatsapp_notify_matches"]:
                         send_whatsapp_alert(decrypt_field(row["whatsapp_number"]), message)
             conn.commit()
             conn.close()
@@ -3389,7 +3503,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             conn.commit()
             conn.close()
-        if candidate["whatsapp_alerts_enabled"]:
+        if candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True, "conversationId": conversation_id, "employerToken": token})
 
@@ -3444,12 +3558,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 (convo["candidate_user_id"], "employer_message", notif_message, convo["job_title"], convo["company"]),
             )
             candidate = conn.execute(
-                "SELECT whatsapp_number, whatsapp_alerts_enabled FROM profiles WHERE user_id = ?",
+                "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_messages FROM profiles WHERE user_id = ?",
                 (convo["candidate_user_id"],),
             ).fetchone()
             conn.commit()
             conn.close()
-        if candidate is not None and candidate["whatsapp_alerts_enabled"]:
+        if candidate is not None and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True})
 

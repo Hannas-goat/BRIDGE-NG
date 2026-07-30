@@ -292,6 +292,7 @@ function apiGetPipeline(){ return apiRequest('/api/employer/pipeline', 'GET'); }
 function apiSetPipelineStage(candidateUserId, stage){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage}); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
+function apiSaveSettings(payload){ return apiRequest('/api/profile/settings', 'PUT', payload); }
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }
 function apiSavePitch(payload){ return apiRequest('/api/profile/pitch', 'PUT', payload); }
 function apiGetCandidatePitch(userId){ return apiRequest('/api/candidate-pitch?userId=' + encodeURIComponent(userId), 'GET'); }

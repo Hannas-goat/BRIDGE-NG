@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bridge — Nigerian talent, matched right</title>
+<script>
+// Applied before styles.css even paints, so a saved theme choice never flashes the default
+// (Daybreak) for a frame first — synchronous, no dependency on shared.js/jQuery/anything else.
+(function(){
+  try{
+    var t = localStorage.getItem('bridgeTheme');
+    if(t) document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ /* localStorage unavailable (privacy mode etc.) — default theme is fine */ }
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -1217,6 +1227,91 @@
     </button>
   </div>
 </div>
+
+<!-- Settings widget — beside the chat widget. Themes are purely a client-side/localStorage
+     preference (no server round-trip needed); visibility, notification, and data-export controls
+     only apply to a signed-in candidate account, so that section swaps for a sign-in prompt when
+     currentAccount is null. -->
+<div class="settings-panel" id="settings-panel" style="display:none;">
+  <div class="settings-panel-head">
+    <div>
+      <p class="settings-panel-title">Settings</p>
+      <p class="settings-panel-sub">Personalize your experience</p>
+    </div>
+    <button class="settings-close-btn" onclick="toggleSettingsWidget()" aria-label="Close settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="settings-panel-body">
+
+    <div>
+      <p class="settings-section-title">Theme</p>
+      <p class="settings-section-sub">Pick a look — saved on this device.</p>
+      <div class="theme-grid" id="theme-grid"></div>
+    </div>
+
+    <div>
+      <p class="settings-section-title">Viewing as</p>
+      <div class="settings-account-toggle">
+        <button type="button" id="settings-view-seeker" onclick="settingsSwitchView('seeker')">🧑‍🎓 Job Seeker</button>
+        <button type="button" id="settings-view-employer" onclick="settingsSwitchView('employer')">🏢 Employer / Hiring</button>
+      </div>
+    </div>
+
+    <div id="settings-account-section">
+      <div id="settings-signed-out" class="settings-signed-out" style="display:none;">
+        Sign in to manage profile visibility, notifications, and your data.
+      </div>
+      <div id="settings-signed-in-sections" style="display:none;">
+
+        <div>
+          <p class="settings-section-title">Profile visibility</p>
+          <p class="settings-section-sub">Who can see your profile in employer candidate searches.</p>
+          <select id="settings-visibility">
+            <option value="public">Public — visible to all matching employers</option>
+            <option value="private">Private — hidden from every employer search</option>
+          </select>
+          <label for="settings-hide-from-employer" style="margin-top:12px;">Hide from a specific employer (optional)</label>
+          <input type="text" id="settings-hide-from-employer" placeholder="e.g. your current employer's name">
+          <p class="settings-section-sub" style="margin-top:6px;">If set, that one company's searches will never show your profile — everyone else still can. Useful if you're employed and job-hunting quietly.</p>
+        </div>
+
+        <div>
+          <p class="settings-section-title">WhatsApp notifications</p>
+          <p class="settings-section-sub">Only sends if you've already turned on WhatsApp alerts and added a number above, in your profile.</p>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">Job matches</div>
+              <div class="settings-row-sub">New roles that match your skills</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="settings-notify-matches"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+          </div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">Employer messages &amp; hiring updates</div>
+              <div class="settings-row-sub">Direct messages, interview invites, stage changes</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="settings-notify-messages"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+          </div>
+        </div>
+
+        <div>
+          <button class="go-btn" style="margin-top:0;width:100%;" onclick="saveAccountSettings()">Save settings →</button>
+          <p class="form-msg" id="settings-save-msg"></p>
+        </div>
+
+        <div>
+          <p class="settings-section-title">Data &amp; privacy</p>
+          <p class="settings-section-sub">In line with the Nigeria Data Protection Act (NDPA) — your data, on request, in one file.</p>
+          <button class="upload-btn" style="width:100%;margin-bottom:10px;" onclick="downloadMyData()">⬇ Download my data</button>
+          <button class="danger-btn" style="width:100%;" onclick="openDeleteAccountModal()">Delete my account</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
 <div class="pull-refresh-indicator" id="pull-refresh-indicator">
   <span class="pull-refresh-spinner">↻</span>
 </div>
@@ -1299,6 +1394,9 @@
   </button>
 </nav>
 
+<button class="settings-fab" id="settings-fab" onclick="toggleSettingsWidget()" aria-label="Settings">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</button>
 <button class="chat-fab" id="chat-fab" onclick="toggleChatWidget()" aria-label="Chat with Bridge AI">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
 </button>
@@ -2630,6 +2728,110 @@ document.addEventListener('click', (e)=>{
 
 let currentAccount = null; // {email, profile} when signed in, else null
 
+// ---------- Settings widget: themes, profile visibility, notification granularity, data export ----------
+
+const THEMES = [
+  {id:'daybreak', label:'Daybreak', dots:['#FBF6EA','#14213D','#D9A441']},
+  {id:'midnight', label:'Midnight', dots:['#0F1626','#EDEFF5','#E3B04B']},
+  {id:'cyberpunk', label:'Cyberpunk', dots:['#0B0D11','#8B5CF6','#22D3EE']},
+  {id:'forest', label:'Forest', dots:['#101B14','#4ADE80','#D8A24B']},
+  {id:'ocean', label:'Ocean', dots:['#071B26','#2FA8C9','#E8B34A']},
+  {id:'sunset', label:'Sunset', dots:['#2A1220','#FF6B6B','#FFB347']},
+  {id:'roseGold', label:'Rose Gold', dots:['#FBEFEF','#C97B9E','#D9A441']},
+  {id:'slateMono', label:'Slate', dots:['#F2F2F2','#333333','#808080']},
+  {id:'sepia', label:'Sepia', dots:['#F1E3C6','#3B2A1A','#C08A2E']},
+  {id:'highContrast', label:'High Contrast', dots:['#000000','#FFFF00','#00FFFF']},
+];
+const THEME_STORAGE_KEY = 'bridgeTheme';
+
+function applyTheme(themeId){
+  const valid = THEMES.some(t => t.id === themeId) ? themeId : 'daybreak';
+  document.documentElement.setAttribute('data-theme', valid);
+  localStorage.setItem(THEME_STORAGE_KEY, valid);
+  renderThemeGrid();
+}
+
+function renderThemeGrid(){
+  const grid = document.getElementById('theme-grid');
+  if(!grid) return;
+  const current = localStorage.getItem(THEME_STORAGE_KEY) || 'daybreak';
+  grid.innerHTML = THEMES.map(t => `
+    <div class="theme-swatch${t.id === current ? ' active' : ''}" onclick="applyTheme('${t.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'){applyTheme('${t.id}');}">
+      <div class="theme-swatch-dots">${t.dots.map(c => `<span class="theme-swatch-dot" style="background:${c};"></span>`).join('')}</div>
+      <span class="theme-swatch-label">${t.label}</span>
+    </div>
+  `).join('');
+}
+
+function initTheme(){
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'daybreak');
+}
+
+let settingsOpen = false;
+function toggleSettingsWidget(){
+  settingsOpen = !settingsOpen;
+  document.getElementById('settings-panel').style.display = settingsOpen ? 'flex' : 'none';
+  if(settingsOpen){
+    renderThemeGrid();
+    refreshSettingsAccountSection();
+    const employerShowing = document.getElementById('panel-employer').style.display !== 'none';
+    document.getElementById('settings-view-seeker').classList.toggle('active', !employerShowing);
+    document.getElementById('settings-view-employer').classList.toggle('active', employerShowing);
+  }
+}
+
+// Mirrors whichever seeker/employer panel is actually showing right now, so this stays in sync
+// even when someone switches views from the main nav instead of from here.
+function settingsSwitchView(view){
+  showPage(view);
+  document.getElementById('settings-view-seeker').classList.toggle('active', view === 'seeker');
+  document.getElementById('settings-view-employer').classList.toggle('active', view === 'employer');
+}
+
+function refreshSettingsAccountSection(){
+  const signedOut = document.getElementById('settings-signed-out');
+  const signedInSections = document.getElementById('settings-signed-in-sections');
+  if(!currentAccount){
+    signedOut.style.display = '';
+    signedInSections.style.display = 'none';
+    return;
+  }
+  signedOut.style.display = 'none';
+  signedInSections.style.display = '';
+  const p = currentAccount.profile;
+  document.getElementById('settings-visibility').value = p.visibility || 'public';
+  document.getElementById('settings-hide-from-employer').value = p.hideFromEmployer || '';
+  document.getElementById('settings-notify-matches').checked = p.whatsappNotifyMatches !== false;
+  document.getElementById('settings-notify-messages').checked = p.whatsappNotifyMessages !== false;
+}
+
+async function saveAccountSettings(){
+  try{
+    const {profile} = await apiSaveSettings({
+      visibility: document.getElementById('settings-visibility').value,
+      hideFromEmployer: document.getElementById('settings-hide-from-employer').value.trim(),
+      whatsappNotifyMatches: document.getElementById('settings-notify-matches').checked,
+      whatsappNotifyMessages: document.getElementById('settings-notify-messages').checked,
+    });
+    if(currentAccount) currentAccount.profile = profile;
+    setMsg('settings-save-msg', 'Settings saved.', 'success');
+  }catch(err){
+    setMsg('settings-save-msg', err.message, 'error');
+  }
+}
+
+// index.html has no shared setMsg() helper (unlike auth.html/pricing.html, which each define
+// their own page-local one) — adding the same small helper here for the settings panel.
+function setMsg(id, text, kind){
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'form-msg ' + kind;
+}
+
+function downloadMyData(){
+  window.location.href = '/api/account/export';
+}
+
 // Mock interview simulator — real webcam self-view (getUserMedia, never recorded/uploaded/
 // saved — the stream stays local and is torn down on End Session or on leaving this tab) plus
 // a real countdown timer and the browser's own SpeechSynthesis API to read questions aloud
@@ -3877,6 +4079,7 @@ async function initAccount(){
   if(currentAccount) startNotifPolling();
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
+initTheme();
 initAccount();
 initEmployerAccountState();
 initScrollReveal();
