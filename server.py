@@ -1180,9 +1180,28 @@ def application_row_to_json(row):
     }
 
 
+def notify_candidate_of_match(conn, user_id, kind, message, job_title, company):
+    """Shared by every "new role matches you" path (saved search, followed company, single or
+    bulk sync): writes the in-app notification, then also sends WhatsApp if the candidate has
+    both the master whatsapp_alerts_enabled toggle AND the granular whatsapp_notify_matches
+    preference on — the same two-flag gate handle_post_employer_job already uses, so a saved
+    search behaves identically to an employer posting a job directly on Bridge NG."""
+    conn.execute(
+        "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
+        (user_id, kind, message, job_title, company),
+    )
+    candidate = conn.execute(
+        "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_matches FROM profiles WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    if candidate and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_matches"]:
+        send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), message)
+
+
 def generate_notifications_for_job(conn, job):
-    """Insert notification rows for any saved search or followed company the given
-    (already-inserted) imported job matches. Does not commit — caller commits once."""
+    """Insert notification rows (and WhatsApp-alert, where opted in) for any saved search or
+    followed company the given (already-inserted) imported job matches. Does not commit —
+    caller commits once."""
     job_skills = {s.lower() for s in job["skills"]}
 
     for row in conn.execute("SELECT * FROM saved_searches").fetchall():
@@ -1193,19 +1212,13 @@ def generate_notifications_for_job(conn, job):
         loc_ok = not row["location"] or row["location"] in ("Any location", "Any region") or row["location"] == job["location"]
         if level_ok and loc_ok:
             message = f'New role matching your saved search "{row["label"] or "Untitled search"}": {job["title"]} at {job["company"]}.'
-            conn.execute(
-                "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
-                (row["user_id"], "saved_search", message, job["title"], job["company"]),
-            )
+            notify_candidate_of_match(conn, row["user_id"], "saved_search", message, job["title"], job["company"])
 
     for row in conn.execute(
         "SELECT * FROM followed_companies WHERE lower(company) = lower(?)", (job["company"],)
     ).fetchall():
         message = f'{job["company"]} just posted a new role: {job["title"]}.'
-        conn.execute(
-            "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
-            (row["user_id"], "followed_company", message, job["title"], job["company"]),
-        )
+        notify_candidate_of_match(conn, row["user_id"], "followed_company", message, job["title"], job["company"])
 
 
 def call_nvidia(messages, max_tokens=1400, model=None, timeout=45):
@@ -1518,10 +1531,7 @@ def generate_bulk_notifications(conn, company, inserted_jobs):
     for row in conn.execute("SELECT * FROM followed_companies WHERE lower(company) = lower(?)", (company,)).fetchall():
         message = (f'{company} just posted {count} new roles — including "{example}".' if count > 1
                    else f'{company} just posted a new role: {example}.')
-        conn.execute(
-            "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
-            (row["user_id"], "followed_company", message, example, company),
-        )
+        notify_candidate_of_match(conn, row["user_id"], "followed_company", message, example, company)
 
     for row in conn.execute("SELECT * FROM saved_searches").fetchall():
         saved_skills = {s.lower() for s in json.loads(row["skills"] or "[]")}
@@ -1542,10 +1552,7 @@ def generate_bulk_notifications(conn, company, inserted_jobs):
         message = (f'{match_count} new roles match your saved search "{label}" — including "{match_example}" at {company}.'
                    if match_count > 1 else
                    f'New role matching your saved search "{label}": {match_example} at {company}.')
-        conn.execute(
-            "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
-            (row["user_id"], "saved_search", message, match_example, company),
-        )
+        notify_candidate_of_match(conn, row["user_id"], "saved_search", message, match_example, company)
 
 
 TAG_RE = re.compile(r"<[^>]+>")

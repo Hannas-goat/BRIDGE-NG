@@ -205,7 +205,7 @@
             <div class="whatsapp-card">
               <div class="whatsapp-card-head">
                 <div>
-                  <p class="whatsapp-card-title">📲 WhatsApp instant alerts</p>
+                  <p class="whatsapp-card-title"><span aria-hidden="true">📲</span> WhatsApp instant alerts</p>
                   <p class="whatsapp-card-sub">Get high-match roles and employer messages the moment they happen.</p>
                 </div>
                 <label class="toggle-switch">
@@ -433,7 +433,7 @@
           <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567">
         </div>
         <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
-        <p class="ndpr-note">🔒 Your phone number is encrypted at rest and used only to send you the alerts above — never shared with employers or anyone else, and you can remove it any time by clearing this field and saving.</p>
+        <p class="ndpr-note"><span aria-hidden="true">🔒</span> Your phone number is encrypted at rest and used only to send you the alerts above — never shared with employers or anyone else, and you can remove it any time by clearing this field and saving.</p>
       </div>
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
@@ -3901,7 +3901,7 @@ function renderStreakWidget(streak, checkedInToday){
   if(!el) return;
   el.innerHTML = `
     <div class="streak-card fade-up-in">
-      <span class="streak-flame">🔥</span>
+      <span class="streak-flame" aria-hidden="true">🔥</span>
       <div class="streak-body">
         <p class="streak-count">${streak} day${streak === 1 ? '' : 's'} streak</p>
         <p class="streak-sub">${checkedInToday ? "You've checked in today — come back tomorrow to keep it going." : 'Check in today to keep your streak alive.'}</p>
@@ -4564,6 +4564,11 @@ function toggleBridgeGap(btn){
       ${missing.map(skill => `
         <div class="bridge-gap-skill">
           <p class="bridge-gap-skill-name">${escapeHtml(skill)}</p>
+          ${SKILL_CHALLENGE_SKILLS.includes(skill) ? `
+            <p class="skill-challenge-nudge">✓ This is one of Bridge NG's verified-challenge skills — faster than a course: add it to your profile and take the real 5-question challenge to earn a badge employers can see.
+              <button type="button" class="upload-btn" onclick="addMissingSkillAndPromptChallenge('${escapeAttr(skill)}')">+ Add &amp; unlock challenge</button>
+            </p>
+          ` : ''}
           <div class="bridge-gap-courses">
             ${trainingResourcesFor(skill).slice(0, 3).map(r => `
               <a class="bridge-gap-course" href="${r.url}" target="_blank" rel="noopener noreferrer">
@@ -4577,6 +4582,25 @@ function toggleBridgeGap(btn){
     `;
     panel.dataset.rendered = '1';
   }
+}
+
+// The skill is already a default chip (Python/SQL/Excel/Customer Service/JavaScript always are),
+// just not selected yet since it's a "missing" skill — select the existing chip rather than
+// creating a duplicate, mirroring addCustomSkill's own existing-chip check.
+function addMissingSkillAndPromptChallenge(skill){
+  const container = document.getElementById('s-skills');
+  const existing = [...container.children].find(c => c.textContent.toLowerCase() === skill.toLowerCase());
+  if(existing){
+    if(!seekerSkills.has(existing.textContent)){
+      seekerSkills.add(existing.textContent);
+      existing.classList.add('selected');
+      existing.setAttribute('aria-pressed', 'true');
+    }
+  }else{
+    createChip('s-skills', seekerSkills, skill, true);
+  }
+  onSkillChipToggle('s-skills');
+  showToast(`Added ${skill} to your skills — scroll down to "Verified skill challenges" to take the real test.`);
 }
 
 function skillPills(allSkills, highlightSet){
