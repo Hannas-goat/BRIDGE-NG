@@ -4203,11 +4203,6 @@ function computeProfileNudges(dob, careerLevel, education){
   return nudges;
 }
 
-let profileNudgeAcknowledged = false;
-['s-dob', 's-level', 's-education'].forEach(id=>{
-  document.getElementById(id).addEventListener('change', ()=>{ profileNudgeAcknowledged = false; });
-});
-
 async function saveProfile(){
   if(!currentAccount) return;
   const msg = document.getElementById('profile-save-msg');
@@ -4215,16 +4210,10 @@ async function saveProfile(){
   const careerLevel = document.getElementById('s-level').value;
   const education = document.getElementById('s-education').value;
 
-  if(!profileNudgeAcknowledged){
-    const nudges = computeProfileNudges(dob, careerLevel, education);
-    if(nudges.length){
-      msg.innerHTML = nudges.join('<br>') + '<br><em>Click "Save my profile" again to save anyway.</em>';
-      msg.className = 'form-msg';
-      profileNudgeAcknowledged = true;
-      return;
-    }
-  }
-  profileNudgeAcknowledged = false;
+  // Nudges are an informational heads-up only — they must never block the actual save. This
+  // used to require a second click to "confirm" past a nudge, which silently discarded the edit
+  // if that second click never happened (easy to miss the "click again" text and just refresh).
+  const nudges = computeProfileNudges(dob, careerLevel, education);
 
   const payload = {
     fullName: document.getElementById('s-name').value,
@@ -4247,7 +4236,7 @@ async function saveProfile(){
   try{
     const res = await apiSaveProfile(payload);
     currentAccount.profile = res.profile;
-    msg.textContent = 'Profile saved.';
+    msg.innerHTML = nudges.length ? ('Profile saved. ' + nudges.join(' ')) : 'Profile saved.';
     msg.className = 'form-msg success';
     renderRemoteJobsFeed();
     renderProfileCompletion();
