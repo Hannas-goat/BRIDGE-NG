@@ -1570,10 +1570,10 @@ function renderMyApplications(){
           <div class="kanban-col-body" data-stage="${stage}">
             ${byStage[stage].map(a => `
               <div class="kanban-card" data-id="${a.id}" data-stage="${stage}">
-                <p class="kanban-card-title">${a.jobTitle}</p>
-                <p class="kanban-card-sub">${a.company}</p>
+                <p class="kanban-card-title">${escapeHtml(a.jobTitle)}</p>
+                <p class="kanban-card-sub">${escapeHtml(a.company)}</p>
                 <p class="kanban-card-date">Applied ${(a.createdAt || '').slice(0, 10)}</p>
-                ${a.applicationLink ? `<a class="kanban-card-link" href="${a.applicationLink}" target="_blank" rel="noopener noreferrer" onpointerdown="event.stopPropagation()">View posting ↗</a>` : ''}
+                ${a.applicationLink ? `<a class="kanban-card-link" href="${escapeAttr(safeUrl(a.applicationLink))}" target="_blank" rel="noopener noreferrer" onpointerdown="event.stopPropagation()">View posting ↗</a>` : ''}
                 <select class="kanban-move-select" onpointerdown="event.stopPropagation()" onchange="moveApplication(${a.id}, this.value)">
                   ${KANBAN_STAGES.map(s => `<option value="${s}" ${s === stage ? 'selected' : ''}>${KANBAN_LABELS[s]}</option>`).join('')}
                 </select>
@@ -1674,7 +1674,7 @@ async function applyToJob(title, company, applicationLink, btn){
   }
   const key = applicationKey(company, title);
   if(appliedKeys.has(key)){
-    if(applicationLink) window.open(applicationLink, '_blank', 'noopener');
+    if(applicationLink) window.open(safeUrl(applicationLink), '_blank', 'noopener');
     return;
   }
   try{
@@ -1686,7 +1686,7 @@ async function applyToJob(title, company, applicationLink, btn){
     }
     celebrate();
     if(applicationLink){
-      window.open(applicationLink, '_blank', 'noopener');
+      window.open(safeUrl(applicationLink), '_blank', 'noopener');
     }else{
       showToast(`Application recorded for ${title} at ${company}. This is a sample listing, so there's no real employer inbox behind it yet — but it's saved to your account and you can find it again anytime.`);
     }
@@ -1700,17 +1700,15 @@ function applyButtonHtml(job){
   const company = job.company || '';
   const link = job.applicationLink || '';
   const applied = appliedKeys.has(applicationKey(company, title));
-  const safeTitle = title.replace(/'/g, "\\'");
-  const safeCompany = company.replace(/'/g, "\\'");
-  const safeLink = link.replace(/'/g, "\\'");
+  const onclickJs = `applyToJob('${jsStr(title)}', '${jsStr(company)}', '${jsStr(link)}', this)`;
   const label = applied ? '✓ Applied' : (link ? 'Apply via Company Site' : 'Apply');
-  return `<button class="apply-btn${applied ? ' applied' : ''}" onclick="applyToJob('${safeTitle}', '${safeCompany}', '${safeLink}', this)">${label}</button>`;
+  return `<button class="apply-btn${applied ? ' applied' : ''}" onclick="${escapeAttr(onclickJs)}">${label}</button>`;
 }
 
 function followButtonHtml(company){
-  const safe = company.replace(/'/g, "\\'");
   const following = isFollowingCompany(company);
-  return `<button class="follow-btn${following ? ' following' : ''}" title="You'll get alerts when this company posts new roles." onclick="toggleFollowCompany('${safe}', this)">${following ? '✓ Following' : '+ Follow ' + company}</button>`;
+  const onclickJs = `toggleFollowCompany('${jsStr(company)}', this)`;
+  return `<button class="follow-btn${following ? ' following' : ''}" title="You'll get alerts when this company posts new roles." onclick="${escapeAttr(onclickJs)}">${following ? '✓ Following' : '+ Follow ' + escapeHtml(company)}</button>`;
 }
 
 // Deterministic skill-overlap badge — same intersection math as matchScore()'s skill component,
@@ -1734,9 +1732,9 @@ function skillOverlapBadgeHtml(job){
       <span class="overlap-popover">
         <span class="overlap-popover-title">Why you match</span>
         <span class="overlap-skill-group">
-          ${matched.length ? matched.map(s => `<span class="skill-pill match">${s}</span>`).join('') : '<span class="overlap-popover-empty">No overlapping skills yet.</span>'}
+          ${matched.length ? matched.map(s => `<span class="skill-pill match">${escapeHtml(s)}</span>`).join('') : '<span class="overlap-popover-empty">No overlapping skills yet.</span>'}
         </span>
-        ${missing.length ? `<span class="overlap-popover-title">Missing</span><span class="overlap-skill-group">${missing.map(s => `<span class="skill-pill miss">${s}</span>`).join('')}</span>` : ''}
+        ${missing.length ? `<span class="overlap-popover-title">Missing</span><span class="overlap-skill-group">${missing.map(s => `<span class="skill-pill miss">${escapeHtml(s)}</span>`).join('')}</span>` : ''}
       </span>
     </span>`;
 }
@@ -1766,7 +1764,7 @@ function verifiedBadgesHtml(match){
       <span class="overlap-popover">
         <span class="overlap-popover-title">Skill challenge result</span>
         <span class="verified-badge-detail">${b.score}/${b.total} correct · ${escapeHtml(b.date)}</span>
-        ${match.portfolioLink ? `<span class="overlap-popover-title">Portfolio (self-declared)</span><a class="verified-badge-link" href="${escapeAttr(match.portfolioLink)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${escapeHtml(match.portfolioLink)}</a>` : ''}
+        ${match.portfolioLink ? `<span class="overlap-popover-title">Portfolio (self-declared)</span><a class="verified-badge-link" href="${escapeAttr(safeUrl(match.portfolioLink))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${escapeHtml(match.portfolioLink)}</a>` : ''}
       </span>
     </span>
   `).join('');
@@ -1861,10 +1859,10 @@ function renderRecentJobsFeed(){
       ${recent.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title} <span class="new-badge">New</span> ${skillOverlapBadgeHtml(j)}</p>
-            <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
+            <p class="res-title">${escapeHtml(j.title)} <span class="new-badge">New</span> ${skillOverlapBadgeHtml(j)}</p>
+            <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
             <span class="pay-pill">${payLabel(j)}</span>
-            <div class="skill-row">${j.skills.map(s => `<span class="skill-pill">${s}</span>`).join('')}</div>
+            <div class="skill-row">${skillPills(j.skills, new Set())}</div>
             <div class="btn-row">
               ${followButtonHtml(j.company)}
               ${applyButtonHtml(j)}
@@ -1892,8 +1890,8 @@ function renderRemoteJobsFeed(){
       ${remoteJobs.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
-            <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
+            <p class="res-title">${escapeHtml(j.title)}${j.imported ? ' <span class="new-badge">New</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
+            <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, seekerSkills)}</div>
             <div class="btn-row">
@@ -2017,8 +2015,8 @@ function renderExploreResults(){
       ${jobs.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
-            <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
+            <p class="res-title">${escapeHtml(j.title)}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
+            <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, mySkills)}</div>
             <div class="btn-row">
@@ -2228,11 +2226,11 @@ function renderAppointments(){
     <div class="grid">
       ${myAppointments.map(a => `
         <div class="appt-card">
-          <p class="res-title">${a.company}</p>
-          <p class="res-sub">${a.role || 'Role not specified'}</p>
+          <p class="res-title">${escapeHtml(a.company)}</p>
+          <p class="res-sub">${escapeHtml(a.role || 'Role not specified')}</p>
           <p class="appt-datetime">${formatApptDate(a.date)}${a.time ? ' · ' + a.time : ''}</p>
           ${apptTimelineHtml(a.status)}
-          ${a.notes ? `<p class="appt-notes">${a.notes.replace(/</g,'&lt;')}</p>` : ''}
+          ${a.notes ? `<p class="appt-notes">${escapeHtml(a.notes)}</p>` : ''}
           ${a.status !== 'requested' ? `
             <div class="appt-actions">
               <a class="upload-btn" href="/api/appointments/ics?id=${a.id}" download="interview-${a.id}.ics">📅 Add to calendar</a>
@@ -2313,7 +2311,7 @@ function renderPerfectMatchBanner(){
     <div class="perfect-match-banner">
       <div>
         <span class="perfect-match-badge">${best.score}% match</span>
-        <p><b>${best.jobTitle}</b> at ${best.company}</p>
+        <p><b>${escapeHtml(best.jobTitle)}</b> at ${escapeHtml(best.company)}</p>
       </div>
       <button class="ai-btn" onclick="markAllNotificationsRead()">View in notifications</button>
     </div>`;
@@ -2328,8 +2326,8 @@ function renderNotifDropdown(){
   }
   el.innerHTML = notifications.map(n => `
     <div class="notif-item${n.read ? '' : ' unread'}">
-      <p>${n.message}</p>
-      <span>${n.createdAt}</span>
+      <p>${escapeHtml(n.message)}</p>
+      <span>${escapeHtml(n.createdAt)}</span>
     </div>
   `).join('');
 }
@@ -3048,8 +3046,8 @@ function renderQuickMatchCard(){
           ${quickMatchInterested.map(j => `
             <div class="res-card">
               <div class="res-body">
-                <p class="res-title">${j.title}</p>
-                <p class="res-sub">${companyHoverSpan(j.company)} · ${j.loc} · ${j.level}</p>
+                <p class="res-title">${escapeHtml(j.title)}</p>
+                <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
                 <div class="btn-row">${applyButtonHtml(j)}</div>
               </div>
             </div>`).join('')}
@@ -3064,11 +3062,11 @@ function renderQuickMatchCard(){
       <div class="quick-match-card" id="qm-card">
         <div class="quick-match-stamp quick-match-stamp-like" id="qm-stamp-like">INTERESTED</div>
         <div class="quick-match-stamp quick-match-stamp-skip" id="qm-stamp-skip">SKIP</div>
-        <p class="res-title">${job.title}</p>
-        <p class="res-sub">${job.company} · ${job.loc} · ${job.level}</p>
+        <p class="res-title">${escapeHtml(job.title)}</p>
+        <p class="res-sub">${escapeHtml(job.company)} · ${escapeHtml(job.loc)} · ${escapeHtml(job.level)}</p>
         <span class="pay-pill">${payLabel(job)}</span>
         <div class="skill-row">${skillPills(job.skills, mySkills)}</div>
-        <p class="quick-match-desc">${(job.desc || 'No description provided.').slice(0, 220)}${(job.desc || '').length > 220 ? '…' : ''}</p>
+        <p class="quick-match-desc">${escapeHtml((job.desc || 'No description provided.').slice(0, 220))}${(job.desc || '').length > 220 ? '…' : ''}</p>
       </div>
       <p class="quick-match-remaining">${quickMatchQueue.length} left · ${quickMatchInterested.length} interested</p>
       <div class="quick-match-actions">
@@ -4285,20 +4283,20 @@ function renderTrainResources(skill){
   const resources = trainingResourcesFor(skill);
   const el = document.getElementById('train-resources');
   el.innerHTML = `
-    <div class="results-head"><h2>Learning paths for ${skill}</h2><span>${resources.length} platforms</span></div>
+    <div class="results-head"><h2>Learning paths for ${escapeHtml(skill)}</h2><span>${resources.length} platforms</span></div>
     <div class="grid">
       ${resources.map(r => `
         <div class="train-res-card">
-          <span class="train-badge">${r.badge}</span>
-          <h4>${r.platform}</h4>
-          <p>${r.desc}</p>
-          <a class="ai-btn" href="${r.url}" target="_blank" rel="noopener noreferrer">Open on ${r.platform} ↗</a>
+          <span class="train-badge">${escapeHtml(r.badge)}</span>
+          <h4>${escapeHtml(r.platform)}</h4>
+          <p>${escapeHtml(r.desc)}</p>
+          <a class="ai-btn" href="${escapeAttr(r.url)}" target="_blank" rel="noopener noreferrer">Open on ${escapeHtml(r.platform)} ↗</a>
         </div>
       `).join('')}
     </div>
     <div class="card" style="margin-top:20px;">
-      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;"><b style="color:var(--ink);">Suggested path —</b> start with a few free YouTube videos to see if ${skill} clicks for you, then commit to a structured Udemy or Coursera course for a certificate, using Khan Academy for extra practice on the fundamentals.</p>
-      <button class="go-btn" style="margin-top:0;" onclick="addSkillToProfileFromTraining('${skill.replace(/'/g,"\\'")}')">Add ${skill} to my profile skills →</button>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;"><b style="color:var(--ink);">Suggested path —</b> start with a few free YouTube videos to see if ${escapeHtml(skill)} clicks for you, then commit to a structured Udemy or Coursera course for a certificate, using Khan Academy for extra practice on the fundamentals.</p>
+      <button class="go-btn" style="margin-top:0;" onclick="${escapeAttr(`addSkillToProfileFromTraining('${jsStr(skill)}')`)}">Add ${escapeHtml(skill)} to my profile skills →</button>
       <p class="form-msg" id="train-add-msg"></p>
     </div>
   `;
@@ -4595,7 +4593,7 @@ function addMissingSkillAndPromptChallenge(skill){
 function skillPills(allSkills, highlightSet){
   return allSkills.map(s=>{
     const cls = highlightSet.has(s) ? 'skill-pill match' : 'skill-pill';
-    return `<span class="${cls}">${s}</span>`;
+    return `<span class="${cls}">${escapeHtml(s)}</span>`;
   }).join('');
 }
 
@@ -4633,8 +4631,8 @@ function findJobs(){
             <span class="lbl">match</span>
           </div>
           <div class="res-body">
-            <p class="res-title">${job.title}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
-            <p class="res-sub">${companyHoverSpan(job.company)} · ${job.loc} · ${job.level}</p>
+            <p class="res-title">${escapeHtml(job.title)}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-sub">${companyHoverSpan(job.company)} · ${escapeHtml(job.loc)} · ${escapeHtml(job.level)}</p>
             <span class="pay-pill">${payLabel(job)}</span>
             <div class="skill-row">${skillPills(job.skills, seekerSkills)}</div>
             <div class="btn-row">
@@ -4682,10 +4680,10 @@ function findAbroadJobs(){
             <span class="lbl">match</span>
           </div>
           <div class="res-body">
-            <p class="res-title">${job.title}</p>
-            <p class="res-sub">${companyHoverSpan(job.company)} · ${job.region} · ${job.level}</p>
+            <p class="res-title">${escapeHtml(job.title)}</p>
+            <p class="res-sub">${companyHoverSpan(job.company)} · ${escapeHtml(job.region)} · ${escapeHtml(job.level)}</p>
             <span class="pay-pill">$${job.payMin.toLocaleString('en-US')} – $${job.payMax.toLocaleString('en-US')}/mo</span>
-            <p style="font-size:12px;color:var(--ink-soft);margin:2px 0 10px;">${job.timezone}</p>
+            <p style="font-size:12px;color:var(--ink-soft);margin:2px 0 10px;">${escapeHtml(job.timezone)}</p>
             <div class="skill-row">${skillPills(job.skills, abroadSkills)}</div>
             <div class="btn-row">
               ${applyButtonHtml(job)}
@@ -4810,7 +4808,7 @@ function loadSavedResume(profile){
 let lastWorkbenchRawText = '';
 
 function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function parseInlineRuns(line){
@@ -4946,7 +4944,7 @@ function renderWorkbenchResult(title, subtitle, text, baseFilename, jobInfo){
     if(jobInfo.isRemote) tags.push('<span class="skill-pill match">Remote-friendly</span>');
     let linkHtml;
     if(jobInfo.applicationLink){
-      linkHtml = `<a class="apply-btn" href="${jobInfo.applicationLink}" target="_blank" rel="noopener noreferrer">Apply to this role ↗</a>`;
+      linkHtml = `<a class="apply-btn" href="${escapeAttr(safeUrl(jobInfo.applicationLink))}" target="_blank" rel="noopener noreferrer">Apply to this role ↗</a>`;
     }else{
       const q = encodeURIComponent([jobInfo.title, jobInfo.company, 'careers apply'].filter(Boolean).join(' '));
       linkHtml = `<a class="apply-btn" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener noreferrer">Search for this role & apply ↗</a>
@@ -5040,7 +5038,7 @@ function openTailoredResumeDoc(company){
     win.document.body.innerHTML = `
       <div style="max-width:480px;margin:72px auto;text-align:center;">
         <h2 style="margin-bottom:6px;color:#1b2a4a;">Tailored resume</h2>
-        <p style="color:#6b6558;margin-bottom:24px;">${company || ''}</p>
+        <p style="color:#6b6558;margin-bottom:24px;">${escapeHtml(company || '')}</p>
         <a id="dl" href="${url}" download="${filename}" style="display:inline-block;padding:12px 22px;background:#1b2a4a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Download ${filename}</a>
       </div>`;
     win.document.getElementById('dl').click();
@@ -5313,8 +5311,8 @@ function renderJobMatchResults(resolved){
       ${resolved.map(({job, reason})=>`
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${job.title}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
-            <p class="res-sub">${companyHoverSpan(job.company)} · ${job.loc} · ${job.level}</p>
+            <p class="res-title">${escapeHtml(job.title)}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-sub">${companyHoverSpan(job.company)} · ${escapeHtml(job.loc)} · ${escapeHtml(job.level)}</p>
             <span class="pay-pill">${payLabel(job)}</span>
             <p class="fit-skill-label" style="margin-top:10px;">Why this fits</p>
             <p style="font-size:13px;color:var(--ink-soft);margin:2px 0 10px;">${escapeHtml(reason)}</p>
@@ -5437,7 +5435,7 @@ function jobInfoFromKnownJob(job){
 }
 
 function jobInfoSubtitle(jobInfo){
-  const bits = [jobInfo.title, jobInfo.company].filter(Boolean);
+  const bits = [jobInfo.title, jobInfo.company].filter(Boolean).map(escapeHtml);
   let sub = bits.join(' · ') || 'this role';
   const tags = [];
   if(jobInfo.isNigeria) tags.push('Nigeria');
@@ -5512,13 +5510,14 @@ function computeResumeFit(resumeText, job){
   const matched = job.skills.filter(s => text.includes(s.toLowerCase()));
   const missing = job.skills.filter(s => !matched.includes(s));
   const score = job.skills.length === 0 ? 0 : Math.round(matched.length / job.skills.length * 100);
+  const safeCompany = escapeHtml(job.company);
   let verdict;
   if(score >= 75){
-    verdict = `Strong fit — your resume already covers most of what ${job.company} is looking for in this role.`;
+    verdict = `Strong fit — your resume already covers most of what ${safeCompany} is looking for in this role.`;
   }else if(score >= 40){
     verdict = `Moderate fit — you cover some key skills, but a few important ones for this role are missing from your resume.`;
   }else{
-    verdict = `Limited fit — most of the skills ${job.company} is asking for aren't showing up in your resume yet. Consider adding relevant experience or projects before applying.`;
+    verdict = `Limited fit — most of the skills ${safeCompany} is asking for aren't showing up in your resume yet. Consider adding relevant experience or projects before applying.`;
   }
   return {score, matched, missing, verdict};
 }
@@ -5545,7 +5544,7 @@ function renderResumeFit(job, fit){
   const c = gaugeColor(fit.score);
   document.getElementById('ai-workbench').innerHTML = `
     <div class="workbench-card">
-      <div class="workbench-head"><h3>Resume fit check</h3><span>${job.title} · ${job.company}</span></div>
+      <div class="workbench-head"><h3>Resume fit check</h3><span>${escapeHtml(job.title)} · ${escapeHtml(job.company)}</span></div>
       <div class="fit-score-row">
         <div class="gauge">
           <svg width="60" height="42" viewBox="0 0 60 42">
@@ -5560,11 +5559,11 @@ function renderResumeFit(job, fit){
       </div>
       <div class="fit-skill-block">
         <p class="fit-skill-label">Matched skills</p>
-        <div class="skill-row">${fit.matched.length ? fit.matched.map(s => `<span class="skill-pill match">${s}</span>`).join('') : '<span class="fit-none">None found</span>'}</div>
+        <div class="skill-row">${fit.matched.length ? fit.matched.map(s => `<span class="skill-pill match">${escapeHtml(s)}</span>`).join('') : '<span class="fit-none">None found</span>'}</div>
       </div>
       <div class="fit-skill-block">
         <p class="fit-skill-label">Missing skills</p>
-        <div class="skill-row">${fit.missing.length ? fit.missing.map(s => `<span class="skill-pill missing">${s}</span>`).join('') : '<span class="fit-none">None — great coverage!</span>'}</div>
+        <div class="skill-row">${fit.missing.length ? fit.missing.map(s => `<span class="skill-pill missing">${escapeHtml(s)}</span>`).join('') : '<span class="fit-none">None — great coverage!</span>'}</div>
       </div>
     </div>`;
   document.getElementById('ai-workbench').scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -5668,7 +5667,7 @@ function renderEmployerResultsSection(){
           </div>
           <div class="res-body">
             <p class="res-title">${escapeHtml(name)} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
-            <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${m.preferredLocation || 'Location not specified'} · ${m.careerLevel || 'Level not specified'}</p>
+            <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${escapeHtml(m.preferredLocation || 'Location not specified')} · ${escapeHtml(m.careerLevel || 'Level not specified')}</p>
             ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
             ${reliabilityBadgeHtml(m)}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
@@ -5859,8 +5858,28 @@ function inviteToInterview(userId){
 function escapeAttr(s){
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// For untrusted text embedded as a single-quoted JS string literal INSIDE an onclick="..."
+// HTML attribute — two layers of escaping are both required. jsStr() escapes backslashes and
+// quotes so the JS string literal itself can't be broken out of (a lone backslash before the
+// closing quote would otherwise turn it into an escaped quote and swallow the rest of the call);
+// escapeAttr() must still be applied to the whole onclick value afterward, since a literal `"`
+// would otherwise close the double-quoted HTML attribute early regardless of what the JS itself
+// says, letting arbitrary attributes/markup be injected onto the element.
+function jsStr(s){
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
+}
+// Any URL that reaches an href here (portfolio link, application link, a course URL) can
+// originate from a self-declared candidate field or an anonymous, unauthenticated job posting —
+// HTML-escaping alone doesn't stop a "javascript:" URI from executing when clicked. Only http(s)
+// links are ever allowed through; anything else (javascript:, data:, vbscript:, a bare "alert(1)"
+// with no scheme, etc.) is neutralized to "#" instead.
+function safeUrl(url){
+  const trimmed = String(url || '').trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '#';
+}
 function companyHoverSpan(name){
-  return `<span class="company-hover" data-company="${escapeAttr(name)}">${name}</span>`;
+  return `<span class="company-hover" data-company="${escapeAttr(name)}">${escapeHtml(name)}</span>`;
 }
 
 let companyCardHideTimer = null;
