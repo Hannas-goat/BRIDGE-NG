@@ -1155,6 +1155,38 @@
     </div>
     <div id="employer-results"></div>
     <div id="employer-sent-messages"></div>
+
+    <!-- Employer Workspace: only for employers with a real account (see pricing.html) — the
+         anonymous "type any company name" flow above has no durable identity for a shared team
+         to log into. Owner-only controls (add/remove) are hidden client-side AND enforced
+         server-side (handle_add_team_member/handle_remove_team_member 403 a team member). -->
+    <div class="card" id="employer-team-card" style="display:none;margin-top:20px;">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">Workspace team</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Everyone below shares this workspace's candidate pipeline, notes, and votes. No email-sending is set up yet, so adding someone creates their login directly — share the password with them yourself.</p>
+      <div id="employer-team-list"></div>
+      <p id="employer-team-upgrade-note" style="display:none;font-size:13px;color:var(--ink-soft);margin-top:16px;">Adding teammates is a <a href="pricing.html" style="color:var(--indigo);">Pro Growth</a> feature.</p>
+      <div id="employer-team-add-form" style="margin-top:16px;display:none;">
+        <p class="section-label">Add a team member</p>
+        <div class="field-row">
+          <div><label>Name</label><input type="text" id="team-add-name" placeholder="e.g. Ada Eze"></div>
+          <div><label>Work email</label><input type="email" id="team-add-email" placeholder="e.g. ada@yourcompany.com"></div>
+        </div>
+        <div class="field-row">
+          <div><label>Password</label><input type="password" id="team-add-password" placeholder="At least 6 characters"></div>
+          <div>
+            <label>Role</label>
+            <select id="team-add-role">
+              <option value="hiring_manager">Hiring Manager</option>
+              <option value="hr">HR</option>
+              <option value="technical_lead">Technical Lead</option>
+              <option value="member">Member</option>
+            </select>
+          </div>
+        </div>
+        <button class="go-btn" style="margin-top:0;" onclick="addTeamMemberSubmit()">Add to workspace →</button>
+        <p class="form-msg" id="team-add-msg"></p>
+      </div>
+    </div>
   </div>
 
   <footer class="site-footer">
@@ -1301,6 +1333,25 @@
         </div>
 
         <div>
+          <p class="settings-section-title">Public profile</p>
+          <p class="settings-section-sub">A shareable read-only page with your verified badges, skills, and portfolio link — never your phone, address, or email. Good for a LinkedIn/Twitter bio.</p>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">Make my profile public</div>
+              <div class="settings-row-sub" id="public-profile-url-preview">Off</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="settings-public-enabled" onchange="onPublicProfileToggle()"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+          </div>
+          <label for="settings-public-slug" style="margin-top:10px;">Your link</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">/p/</span>
+            <input type="text" id="settings-public-slug" placeholder="amaka-nwosu" oninput="updatePublicProfilePreview()">
+          </div>
+          <button class="go-btn" style="width:100%;margin-top:10px;" onclick="savePublicProfile()">Save public profile →</button>
+          <p class="form-msg" id="public-profile-msg"></p>
+        </div>
+
+        <div>
           <p class="settings-section-title">Data &amp; privacy</p>
           <p class="settings-section-sub">In line with the Nigeria Data Protection Act (NDPA) — your data, on request, in one file.</p>
           <button class="upload-btn" style="width:100%;margin-bottom:10px;" onclick="downloadMyData()">⬇ Download my data</button>
@@ -1434,6 +1485,10 @@ INTL_JOBS.forEach((j,i)=>{ j.id = i; });
 
 let employerAccountLoggedIn = false;
 let employerPipelineStages = {};
+let employerIsOwner = false;
+let employerTeamMembers = [];
+let employerAccountInfo = null;
+let employerSubscription = null;
 const PIPELINE_STAGE_DISPLAY = {
   shortlisted: 'Shortlisted', interviewing: 'Interviewing', offer: 'Offer sent',
   hired: 'Hired', rejected: 'Rejected',
@@ -2818,6 +2873,43 @@ function refreshSettingsAccountSection(){
   document.getElementById('settings-hide-from-employer').value = p.hideFromEmployer || '';
   document.getElementById('settings-notify-matches').checked = p.whatsappNotifyMatches !== false;
   document.getElementById('settings-notify-messages').checked = p.whatsappNotifyMessages !== false;
+  document.getElementById('settings-public-enabled').checked = !!p.publicProfileEnabled;
+  document.getElementById('settings-public-slug').value = p.publicSlug || '';
+  updatePublicProfilePreview();
+}
+
+function onPublicProfileToggle(){
+  const enabled = document.getElementById('settings-public-enabled').checked;
+  const slugInput = document.getElementById('settings-public-slug');
+  if(enabled && !slugInput.value.trim() && currentAccount){
+    // Suggest a starting slug from the candidate's own name so the field is never blank the
+    // first time they flip this on — still fully editable before they hit save.
+    const name = (currentAccount.profile.fullName || '').toLowerCase().trim();
+    slugInput.value = name.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'me';
+  }
+  updatePublicProfilePreview();
+}
+
+function updatePublicProfilePreview(){
+  const enabled = document.getElementById('settings-public-enabled').checked;
+  const slug = document.getElementById('settings-public-slug').value.trim();
+  document.getElementById('public-profile-url-preview').textContent = enabled
+    ? (slug ? `${location.origin}/p/${slug}` : 'Pick a link below, then save')
+    : 'Off';
+}
+
+async function savePublicProfile(){
+  try{
+    const {profile} = await apiSavePublicProfile({
+      enabled: document.getElementById('settings-public-enabled').checked,
+      slug: document.getElementById('settings-public-slug').value.trim().toLowerCase(),
+    });
+    if(currentAccount) currentAccount.profile = profile;
+    updatePublicProfilePreview();
+    setMsg('public-profile-msg', profile.publicProfileEnabled ? `Live at ${location.origin}/p/${profile.publicSlug}` : 'Saved — profile is private.', 'success');
+  }catch(err){
+    setMsg('public-profile-msg', err.message, 'error');
+  }
 }
 
 async function saveAccountSettings(){
@@ -5693,6 +5785,9 @@ function renderEmployerResultsSection(){
   `);
 
   results.innerHTML = realSection;
+  if(employerAccountLoggedIn && realMatches.length){
+    realMatches.forEach(m => loadCandidateVotes(m.userId));
+  }
 }
 
 // AI Shortlist Matrix — a fast-scan ranked table above the detailed cards below, using the exact
@@ -5704,7 +5799,7 @@ function shortlistMatrixHtml(matches, blinded){
     <div class="shortlist-matrix-wrap">
       <table class="shortlist-matrix">
         <thead>
-          <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th>Hiring stage</th><th></th></tr>
+          <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th>Hiring stage</th><th>Team</th><th></th></tr>
         </thead>
         <tbody>
           ${matches.map((m, i) => `
@@ -5715,13 +5810,106 @@ function shortlistMatrixHtml(matches, blinded){
               <td>${escapeHtml(m.preferredLocation || '—')}</td>
               <td>${(m.verifiedBadges || []).length ? (m.verifiedBadges || []).map(b => `<span class="verified-badge" style="margin-right:4px;" onclick="showBadgeDetail('${escapeHtml(b.skill)}', ${b.score}, ${b.total}, '${escapeHtml(b.date)}')">✓ ${escapeHtml(b.skill)}</span>`).join('') : '—'}</td>
               <td>${pipelineStageCellHtml(m.userId)}</td>
+              <td>${teamCellHtml(m.userId)}</td>
               <td><button type="button" class="ai-btn" style="white-space:nowrap;" onclick="inviteToInterview(${m.userId})">📅 Invite to Interview</button></td>
+            </tr>
+            <tr id="notes-row-${m.userId}" style="display:none;">
+              <td colspan="8"><div class="candidate-notes-panel" id="notes-panel-${m.userId}"></div></td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>
   `;
+}
+
+// Team collaboration (votes + shared notes) — only for employers with a real workspace account;
+// the anonymous "type any company name" flow has no durable identity for a team to share.
+function teamCellHtml(userId){
+  if(!employerAccountLoggedIn){
+    return `<a href="pricing.html" style="font-size:11.5px;color:var(--indigo);white-space:nowrap;">Sign in →</a>`;
+  }
+  return `
+    <div class="team-vote-row" id="vote-row-${userId}">
+      <button type="button" class="vote-btn up" onclick="castVote(${userId}, 'up')">👍 <span id="vote-up-${userId}">·</span></button>
+      <button type="button" class="vote-btn down" onclick="castVote(${userId}, 'down')">👎 <span id="vote-down-${userId}">·</span></button>
+      <button type="button" class="upload-btn" style="font-size:11px;padding:4px 8px;" onclick="toggleCandidateNotes(${userId})">📝 Notes</button>
+    </div>
+  `;
+}
+
+async function loadCandidateVotes(userId){
+  try{
+    const data = await apiGetCandidateVotes(userId);
+    const upEl = document.getElementById(`vote-up-${userId}`);
+    const downEl = document.getElementById(`vote-down-${userId}`);
+    if(upEl) upEl.textContent = data.upCount;
+    if(downEl) downEl.textContent = data.downCount;
+    const row = document.getElementById(`vote-row-${userId}`);
+    if(row){
+      const upBtn = row.querySelector('.vote-btn.up');
+      const downBtn = row.querySelector('.vote-btn.down');
+      if(upBtn) upBtn.classList.toggle('voted', data.myVote === 'up');
+      if(downBtn) downBtn.classList.toggle('voted', data.myVote === 'down');
+    }
+  }catch(e){ /* best effort — leave the "·" placeholder rather than blocking the whole row */ }
+}
+
+async function castVote(userId, vote){
+  const row = document.getElementById(`vote-row-${userId}`);
+  const alreadyVoted = row && row.querySelector(`.vote-btn.${vote}`).classList.contains('voted');
+  try{
+    await apiSetCandidateVote(userId, alreadyVoted ? null : vote);
+    await loadCandidateVotes(userId);
+  }catch(err){
+    showToast(err.message);
+  }
+}
+
+function toggleCandidateNotes(userId){
+  const tr = document.getElementById(`notes-row-${userId}`);
+  if(!tr) return;
+  const opening = tr.style.display === 'none';
+  tr.style.display = opening ? '' : 'none';
+  if(opening) loadCandidateNotes(userId);
+}
+
+async function loadCandidateNotes(userId){
+  const panel = document.getElementById(`notes-panel-${userId}`);
+  if(!panel) return;
+  panel.innerHTML = '<p style="font-size:11.5px;color:var(--ink-soft);margin:4px 0;">Loading notes…</p>';
+  try{
+    const {notes} = await apiListCandidateNotes(userId);
+    panel.innerHTML = `
+      <div style="max-height:160px;overflow-y:auto;margin:6px 0;">
+        ${notes.length ? notes.map(n => `
+          <div style="padding:6px 0;border-bottom:1px solid var(--line);">
+            <p style="font-size:12px;margin:0 0 2px;">${escapeHtml(n.note)}</p>
+            <span style="font-size:10.5px;color:var(--ink-soft);">${escapeHtml(n.authorLabel)} · ${escapeHtml((n.createdAt || '').slice(0, 16))}</span>
+          </div>
+        `).join('') : '<p style="font-size:11.5px;color:var(--ink-soft);">No notes yet — add one below.</p>'}
+      </div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="note-input-${userId}" placeholder="Add a note for the team…" style="flex:1;height:34px;font-size:12px;" onkeydown="if(event.key==='Enter'){event.preventDefault();submitCandidateNote(${userId});}">
+        <button class="upload-btn" onclick="submitCandidateNote(${userId})">Add</button>
+      </div>
+    `;
+  }catch(err){
+    panel.innerHTML = `<p style="font-size:11.5px;color:var(--red);">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function submitCandidateNote(userId){
+  const input = document.getElementById(`note-input-${userId}`);
+  const note = input.value.trim();
+  if(!note) return;
+  try{
+    await apiAddCandidateNote(userId, note);
+    input.value = '';
+    loadCandidateNotes(userId);
+  }catch(err){
+    showToast(err.message);
+  }
 }
 
 // Only employers with a real account (see pricing.html) get persistent hiring-stage tracking —
@@ -5756,14 +5944,79 @@ async function initEmployerAccountState(){
   try{
     const me = await apiEmployerMe();
     employerAccountLoggedIn = !!me.loggedIn;
+    employerIsOwner = !!me.isOwner;
+    employerAccountInfo = me.employer || null;
+    employerSubscription = me.subscription || null;
     if(employerAccountLoggedIn){
       const pipe = await apiGetPipeline();
       employerPipelineStages = pipe.stages || {};
+      await loadEmployerTeam();
     }
   }catch(e){
     employerAccountLoggedIn = false;
   }
+  document.getElementById('employer-team-card').style.display = employerAccountLoggedIn ? '' : 'none';
   if(lastEmployerResults) renderEmployerResultsSection();
+}
+
+async function loadEmployerTeam(){
+  try{
+    const {members} = await apiListTeamMembers();
+    employerTeamMembers = members || [];
+  }catch(e){
+    employerTeamMembers = [];
+  }
+  renderEmployerTeam();
+}
+
+const TEAM_ROLE_LABELS = {hiring_manager: 'Hiring Manager', hr: 'HR', technical_lead: 'Technical Lead', member: 'Member'};
+
+function renderEmployerTeam(){
+  const list = document.getElementById('employer-team-list');
+  if(!list) return;
+  const ownerRow = `<div class="settings-row"><div><div class="settings-row-label">${escapeHtml(employerAccountInfo ? employerAccountInfo.companyName : 'You')}</div><div class="settings-row-sub">Owner</div></div></div>`;
+  const memberRows = employerTeamMembers.map(m => `
+    <div class="settings-row">
+      <div>
+        <div class="settings-row-label">${escapeHtml(m.name || m.email)}</div>
+        <div class="settings-row-sub">${escapeHtml(TEAM_ROLE_LABELS[m.role] || m.role)} · ${escapeHtml(m.email)}</div>
+      </div>
+      ${employerIsOwner ? `<button class="upload-btn" onclick="removeTeamMemberSubmit(${m.id})">Remove</button>` : ''}
+    </div>
+  `).join('');
+  list.innerHTML = ownerRow + memberRows;
+  const addForm = document.getElementById('employer-team-add-form');
+  const upgradeNote = document.getElementById('employer-team-upgrade-note');
+  const isProGrowth = employerSubscription && employerSubscription.tier === 'pro_growth' && employerSubscription.status === 'active';
+  if(addForm) addForm.style.display = (employerIsOwner && isProGrowth) ? '' : 'none';
+  if(upgradeNote) upgradeNote.style.display = (employerIsOwner && !isProGrowth) ? '' : 'none';
+}
+
+async function addTeamMemberSubmit(){
+  try{
+    await apiAddTeamMember({
+      name: document.getElementById('team-add-name').value.trim(),
+      email: document.getElementById('team-add-email').value.trim(),
+      password: document.getElementById('team-add-password').value,
+      role: document.getElementById('team-add-role').value,
+    });
+    document.getElementById('team-add-name').value = '';
+    document.getElementById('team-add-email').value = '';
+    document.getElementById('team-add-password').value = '';
+    setMsg('team-add-msg', 'Added — share the password with them directly.', 'success');
+    await loadEmployerTeam();
+  }catch(err){
+    setMsg('team-add-msg', err.message, 'error');
+  }
+}
+
+async function removeTeamMemberSubmit(memberId){
+  try{
+    await apiRemoveTeamMember(memberId);
+    await loadEmployerTeam();
+  }catch(err){
+    showToast(err.message);
+  }
 }
 
 function inviteToInterview(userId){

@@ -31,7 +31,7 @@ DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
 PORT = int(os.environ.get("PORT", 8000))
 
 STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html",
-                 "about.html", "careers.html", "support.html", "contact.html", "pricing.html"}
+                 "about.html", "careers.html", "support.html", "contact.html", "pricing.html", "profile.html"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
@@ -414,13 +414,13 @@ def create_session(user_id):
     return token
 
 
-def create_employer_session(employer_id):
+def create_employer_session(employer_id, team_member_id=None):
     token = secrets.token_hex(24)
     with db_lock:
         conn = get_db()
         conn.execute(
-            "INSERT INTO employer_sessions (token, employer_id, expires_at) VALUES (?, ?, ?)",
-            (token, employer_id, time.time() + SESSION_TTL_SECONDS),
+            "INSERT INTO employer_sessions (token, employer_id, team_member_id, expires_at) VALUES (?, ?, ?, ?)",
+            (token, employer_id, team_member_id, time.time() + SESSION_TTL_SECONDS),
         )
         conn.commit()
         conn.close()
@@ -807,6 +807,52 @@ def init_db():
             UNIQUE(employer_id, candidate_user_id)
         )
     """)
+    # Employer Workspaces: additional logins that all resolve to the SAME employer_id (the
+    # workspace), so every existing employer-authenticated endpoint (subscriptions, pipeline,
+    # bank account) keeps working completely unchanged — a team member session just carries an
+    # extra team_member_id alongside the shared employer_id, used only for attributing notes/votes.
+    # No email-sending exists on this app, so "inviting" someone is the owner directly setting
+    # their login here and sharing the password out of band — never a fake email-invite flow.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS employer_team_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            email TEXT UNIQUE NOT NULL,
+            salt TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT 'member',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    ensure_column(conn, "employer_sessions", "team_member_id", "team_member_id INTEGER REFERENCES employer_team_members(id)")
+    # Shared across a workspace (owner + every team member), never visible to the candidate or
+    # any other employer — author_label is captured at write-time rather than joined at read-time
+    # so a note still shows who wrote it even after that team member is later removed.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS candidate_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            author_label TEXT NOT NULL,
+            note TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    # voter_key ('owner' or 'member:<id>') identifies WHO cast the vote so they can change their
+    # own vote later (UNIQUE below) without it being confused with a teammate's vote on the same candidate.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS candidate_votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            voter_key TEXT NOT NULL,
+            voter_label TEXT NOT NULL,
+            vote TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(employer_id, candidate_user_id, voter_key)
+        )
+    """)
     # CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists on disk from
     # an earlier version of this schema, so new columns need an explicit, safe migration.
     ensure_column(conn, "profiles", "open_to_remote", "open_to_remote INTEGER DEFAULT 0")
@@ -851,6 +897,12 @@ def init_db():
     added_notify_messages = ensure_column(conn, "profiles", "whatsapp_notify_messages", "whatsapp_notify_messages INTEGER DEFAULT 1")
     if added_notify_matches or added_notify_messages:
         conn.execute("UPDATE profiles SET whatsapp_notify_matches = whatsapp_alerts_enabled, whatsapp_notify_messages = whatsapp_alerts_enabled")
+    # Public shareable profile — opt-in only (public_slug stays empty/unclaimed until the
+    # candidate explicitly sets one in Settings), and only ever a hand-picked safe subset of
+    # fields is ever served back for it (see handle_public_profile) — never phone/address/dob/
+    # sex/resume/email, regardless of what's in the row.
+    ensure_column(conn, "profiles", "public_slug", "public_slug TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "public_profile_enabled", "public_profile_enabled INTEGER DEFAULT 0")
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -947,6 +999,8 @@ PIPELINE_STAGE_LABELS = {
     "offer": "extended you an offer", "hired": "marked you as hired",
 }
 
+TEAM_MEMBER_ROLES = ["hiring_manager", "hr", "technical_lead", "member"]
+
 # Employer-declared workplace infrastructure perks — real value in a market with inconsistent
 # grid power and connectivity, self-reported like everything else on the employer side (there's
 # no employer login/verification system to audit these against).
@@ -1012,6 +1066,7 @@ def profile_row_to_json(row):
             "verifiedBadges": [], "portfolioLink": "",
             "visibility": "public", "hideFromEmployer": "",
             "whatsappNotifyMatches": True, "whatsappNotifyMessages": True,
+            "publicSlug": "", "publicProfileEnabled": False,
         }
     resume_file_kind = row["resume_file_kind"] or ""
     resume_file = None
@@ -1065,6 +1120,8 @@ def profile_row_to_json(row):
         "hideFromEmployer": decrypt_field(row["hide_from_employer"] or ""),
         "whatsappNotifyMatches": bool(row["whatsapp_notify_matches"]),
         "whatsappNotifyMessages": bool(row["whatsapp_notify_messages"]),
+        "publicSlug": row["public_slug"] or "",
+        "publicProfileEnabled": bool(row["public_profile_enabled"]),
     }
 
 
@@ -1082,6 +1139,12 @@ def subscription_row_to_json(row):
         "tier": row["tier"], "status": row["status"], "billingCycle": row["billing_cycle"] or "",
         "currentPeriodEnd": row["current_period_end"] or "",
     }
+
+
+def team_member_row_to_json(row):
+    if row is None:
+        return None
+    return {"id": row["id"], "email": row["email"], "name": row["name"], "role": row["role"], "createdAt": row["created_at"]}
 
 
 def bank_account_row_to_json(row):
@@ -1847,6 +1910,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         return row["employer_id"] if row is not None else None
 
+    def current_team_member_info(self):
+        """None means this session belongs to the workspace owner (the original employers row)
+        directly, not an invited team member — same distinction handle_add_team_member and
+        handle_remove_team_member use to restrict those two actions to the owner only."""
+        token = self.get_cookie(EMPLOYER_SESSION_COOKIE)
+        if not token:
+            return None
+        with db_lock:
+            conn = get_db()
+            session_row = conn.execute(
+                "SELECT team_member_id FROM employer_sessions WHERE token=?", (token,)
+            ).fetchone()
+            if session_row is None or session_row["team_member_id"] is None:
+                conn.close()
+                return None
+            member = conn.execute(
+                "SELECT * FROM employer_team_members WHERE id=?", (session_row["team_member_id"],)
+            ).fetchone()
+            conn.close()
+        if member is None:
+            return None
+        return {"id": member["id"], "name": member["name"], "role": member["role"], "email": member["email"]}
+
+    def current_actor_label(self, employer_row):
+        """Human-readable attribution for a note/vote — the workspace owner shows as the company
+        name (there's no separate "owner" account name), a team member shows as their own name/role."""
+        team_member = self.current_team_member_info()
+        if team_member is None:
+            return f"{employer_row['company_name']} (Owner)"
+        role_label = team_member["role"].replace("_", " ").title()
+        return f"{team_member['name'] or team_member['email']} ({role_label})"
+
+    def current_voter_key(self):
+        team_member = self.current_team_member_info()
+        return f"member:{team_member['id']}" if team_member else "owner"
+
     # ---------- routing ----------
 
     def do_GET(self):
@@ -1886,6 +1985,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_bank_resolve(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/pipeline":
             return self.handle_get_pipeline()
+        if parsed.path == "/api/employer/team":
+            return self.handle_list_team_members()
+        if parsed.path == "/api/employer/candidate-notes":
+            return self.handle_list_candidate_notes(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/employer/candidate-votes":
+            return self.handle_get_candidate_votes(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/appointments/ics":
             return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/messages":
@@ -1898,8 +2003,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_applications()
         if parsed.path.startswith("/api/download-relay/"):
             return self.handle_download_relay_fetch(parsed.path.rsplit("/", 1)[-1])
+        if parsed.path == "/api/public-profile":
+            return self.handle_public_profile(urllib.parse.parse_qs(parsed.query))
         if parsed.path.startswith("/api/"):
             return self.send_json(404, {"error": "Not found"})
+        # Clean shareable profile links (bridge-ng.onrender.com/p/some-slug) — always serve the
+        # same static page regardless of what follows /p/; the page itself reads the slug from
+        # location.pathname and fetches /api/public-profile client-side. No routing framework
+        # needed for a single dynamic path prefix like this.
+        if parsed.path.startswith("/p/") or parsed.path == "/p":
+            return self.serve_static("/profile.html")
         return self.serve_static(parsed.path)
 
     def do_POST(self):
@@ -1925,6 +2038,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_save_bank_account()
         if parsed.path == "/api/employer/pipeline":
             return self.handle_set_pipeline_stage()
+        if parsed.path == "/api/employer/team/add":
+            return self.handle_add_team_member()
+        if parsed.path == "/api/employer/team/remove":
+            return self.handle_remove_team_member()
+        if parsed.path == "/api/employer/candidate-notes":
+            return self.handle_add_candidate_note()
+        if parsed.path == "/api/employer/candidate-votes":
+            return self.handle_set_candidate_vote()
         if parsed.path == "/api/webhooks/paystack":
             return self.handle_paystack_webhook()
         if parsed.path == "/api/chat":
@@ -1986,6 +2107,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_save_profile()
         if parsed.path == "/api/profile/settings":
             return self.handle_save_settings()
+        if parsed.path == "/api/profile/public-profile":
+            return self.handle_save_public_profile()
         if parsed.path == "/api/profile/resume":
             return self.handle_save_resume()
         if parsed.path == "/api/profile/pitch":
@@ -2348,6 +2471,66 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
         self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_save_public_profile(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        enabled = bool(data.get("enabled"))
+        slug = (data.get("slug") or "").strip().lower()
+        if enabled and not re.fullmatch(r"[a-z0-9-]{3,30}", slug):
+            return self.send_json(400, {"error": "Your public link can only use lowercase letters, numbers, and hyphens (3-30 characters)."})
+
+        with db_lock:
+            conn = get_db()
+            if slug:
+                taken = conn.execute(
+                    "SELECT user_id FROM profiles WHERE public_slug = ? AND user_id != ?", (slug, user_id)
+                ).fetchone()
+                if taken is not None:
+                    conn.close()
+                    return self.send_json(409, {"error": "That link is already taken — try another."})
+            conn.execute(
+                "UPDATE profiles SET public_slug=?, public_profile_enabled=?, updated_at=datetime('now') WHERE user_id=?",
+                (slug, 1 if enabled else 0, user_id),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_public_profile(self, query):
+        """The one place in this whole file that serves profile data with NO login check — the
+        response is hand-built from a fixed allow-list of harmless fields (never phone/address/
+        dob/sex/whatsapp/resume/email), and only for a slug that was explicitly opted in via
+        handle_save_public_profile. A slug that's disabled or never existed 404s identically,
+        so this can't be used to probe which usernames exist."""
+        slug = (query.get("slug", [""])[0] or "").strip().lower()
+        if not slug:
+            return self.send_json(400, {"error": "Missing profile link."})
+        with db_lock:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT * FROM profiles WHERE public_slug = ? AND public_profile_enabled = 1", (slug,)
+            ).fetchone()
+            conn.close()
+        if row is None:
+            return self.send_json(404, {"error": "This profile isn't available — it may be private, or the link may be wrong."})
+        self.send_json(200, {
+            "fullName": decrypt_field(row["full_name"]) or "Bridge NG member",
+            "fieldOfStudy": row["field_of_study"] or "",
+            "careerLevel": row["career_level"] or "",
+            "preferredLocation": row["preferred_location"] or "",
+            "university": row["university"] or "",
+            "nyscStatus": row["nysc_status"] or "",
+            "skills": json.loads(row["skills"] or "[]"),
+            "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
+            "portfolioLink": row["portfolio_link"] or "",
+        })
 
     def handle_save_resume(self):
         """Persists whatever resume (pasted text or uploaded file) the candidate currently has in
@@ -3091,6 +3274,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def handle_employer_login(self):
+        """Checks the employers table (workspace owners) first, then employer_team_members —
+        the same "Employer sign in" form works for both, since a team member is just a second
+        kind of login into the exact same workspace, not a separate account type in the UI."""
         data = self.read_json_body()
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
@@ -3104,17 +3290,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with db_lock:
             conn = get_db()
             employer = conn.execute("SELECT * FROM employers WHERE email = ?", (email,)).fetchone()
-            if employer is None or not verify_password(password, employer["salt"], employer["password_hash"]):
-                conn.close()
-                record_failed_login(email)
-                return self.send_json(401, {"error": "Incorrect email or password."})
-            sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer["id"],)).fetchone()
+            team_member = None
+            if employer is not None:
+                if not verify_password(password, employer["salt"], employer["password_hash"]):
+                    conn.close()
+                    record_failed_login(email)
+                    return self.send_json(401, {"error": "Incorrect email or password."})
+                workspace_employer_id = employer["id"]
+            else:
+                team_member = conn.execute("SELECT * FROM employer_team_members WHERE email = ?", (email,)).fetchone()
+                if team_member is None or not verify_password(password, team_member["salt"], team_member["password_hash"]):
+                    conn.close()
+                    record_failed_login(email)
+                    return self.send_json(401, {"error": "Incorrect email or password."})
+                workspace_employer_id = team_member["employer_id"]
+                employer = conn.execute("SELECT * FROM employers WHERE id = ?", (workspace_employer_id,)).fetchone()
+            sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (workspace_employer_id,)).fetchone()
             conn.close()
 
         clear_failed_logins(email)
-        token = create_employer_session(employer["id"])
+        token = create_employer_session(workspace_employer_id, team_member["id"] if team_member else None)
         self.send_json(
-            200, {"ok": True, "employer": employer_row_to_json(employer), "subscription": subscription_row_to_json(sub_row)},
+            200, {
+                "ok": True, "employer": employer_row_to_json(employer), "subscription": subscription_row_to_json(sub_row),
+                "teamMember": team_member_row_to_json(team_member) if team_member else None,
+            },
             set_cookie=token, cookie_name=EMPLOYER_SESSION_COOKIE,
         )
 
@@ -3141,11 +3341,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer_id,)).fetchone()
             bank_row = conn.execute("SELECT * FROM bank_accounts WHERE employer_id = ?", (employer_id,)).fetchone()
             conn.close()
+        team_member = self.current_team_member_info()
         self.send_json(200, {
             "loggedIn": True,
             "employer": employer_row_to_json(employer),
             "subscription": subscription_row_to_json(sub_row),
             "bankAccount": bank_account_row_to_json(bank_row),
+            "teamMember": team_member,
+            "isOwner": team_member is None,
         })
 
     def handle_employer_subscribe(self):
@@ -3161,6 +3364,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         employer_id = self.current_employer_id()
         if employer_id is None:
             return self.send_json(401, {"error": "Sign in as an employer first."})
+        if self.current_team_member_info() is not None:
+            return self.send_json(403, {"error": "Only the workspace owner can manage billing."})
         data = self.read_json_body() or {}
         billing_cycle = data.get("billingCycle") if data.get("billingCycle") in ("monthly", "annual") else "monthly"
 
@@ -3293,6 +3498,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         employer_id = self.current_employer_id()
         if employer_id is None:
             return self.send_json(401, {"error": "Sign in as an employer first."})
+        if self.current_team_member_info() is not None:
+            return self.send_json(403, {"error": "Only the workspace owner can manage the payout bank account."})
         data = self.read_json_body()
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
@@ -3382,6 +3589,198 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if notif_message and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True, "stage": stage})
+
+    # ---------- employer workspaces: team members, candidate notes, votes ----------
+
+    def handle_list_team_members(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(200, {"loggedIn": False, "members": []})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM employer_team_members WHERE employer_id = ? ORDER BY id", (employer_id,)
+            ).fetchall()
+            conn.close()
+        self.send_json(200, {"loggedIn": True, "members": [team_member_row_to_json(r) for r in rows]})
+
+    def handle_add_team_member(self):
+        """Owner-only — there's no email-sending on this app, so this directly creates the login
+        (email + password the owner sets) rather than a fake "invite link" flow; the owner shares
+        the password with that person out of band (WhatsApp, Slack, in person)."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        if self.current_team_member_info() is not None:
+            return self.send_json(403, {"error": "Only the workspace owner can add team members."})
+        with db_lock:
+            conn = get_db()
+            sub_row = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer_id,)).fetchone()
+            conn.close()
+        sub = subscription_row_to_json(sub_row)
+        if not (sub["tier"] == "pro_growth" and sub["status"] == "active"):
+            return self.send_json(402, {"error": "Team workspaces are a Pro Growth feature — subscribe on the pricing page to add teammates."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        email = (data.get("email") or "").strip().lower()
+        password = data.get("password") or ""
+        name = (data.get("name") or "").strip()
+        role = data.get("role") if data.get("role") in TEAM_MEMBER_ROLES else "member"
+        if not EMAIL_RE.match(email):
+            return self.send_json(400, {"error": "Enter a valid email address."})
+        if len(password) < 6:
+            return self.send_json(400, {"error": "Password must be at least 6 characters."})
+        if not name:
+            return self.send_json(400, {"error": "Name is required."})
+
+        salt, pw_hash = hash_password(password)
+        with db_lock:
+            conn = get_db()
+            try:
+                cur = conn.execute(
+                    "INSERT INTO employer_team_members (employer_id, email, salt, password_hash, name, role) VALUES (?, ?, ?, ?, ?, ?)",
+                    (employer_id, email, salt, pw_hash, name, role),
+                )
+                conn.commit()
+            except Exception as e:
+                conn.close()
+                if is_duplicate_key_error(e):
+                    return self.send_json(409, {"error": "Someone with this email is already a team member somewhere."})
+                raise
+            row = conn.execute("SELECT * FROM employer_team_members WHERE id = ?", (cur.lastrowid,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "member": team_member_row_to_json(row)})
+
+    def handle_remove_team_member(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        if self.current_team_member_info() is not None:
+            return self.send_json(403, {"error": "Only the workspace owner can remove team members."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        member_id = data.get("memberId")
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                "DELETE FROM employer_team_members WHERE id = ? AND employer_id = ?", (member_id, employer_id)
+            )
+            conn.execute(
+                "DELETE FROM employer_sessions WHERE team_member_id = ?", (member_id,)
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    def handle_list_candidate_notes(self, query):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        candidate_user_id = query.get("candidateUserId", [None])[0]
+        if not candidate_user_id:
+            return self.send_json(400, {"error": "candidateUserId is required."})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM candidate_notes WHERE employer_id = ? AND candidate_user_id = ? ORDER BY id DESC",
+                (employer_id, candidate_user_id),
+            ).fetchall()
+            conn.close()
+        notes = [{"id": r["id"], "authorLabel": r["author_label"], "note": r["note"], "createdAt": r["created_at"]} for r in rows]
+        self.send_json(200, {"notes": notes})
+
+    def handle_add_candidate_note(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        note = (data.get("note") or "").strip()[:2000]
+        if not candidate_user_id or not note:
+            return self.send_json(400, {"error": "A candidate and note text are required."})
+
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            conn.close()
+        author_label = self.current_actor_label(employer)
+        with db_lock:
+            conn = get_db()
+            cur = conn.execute(
+                "INSERT INTO candidate_notes (employer_id, candidate_user_id, author_label, note) VALUES (?, ?, ?, ?)",
+                (employer_id, candidate_user_id, author_label, note),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM candidate_notes WHERE id = ?", (cur.lastrowid,)).fetchone()
+            conn.close()
+        self.send_json(200, {"ok": True, "note": {"id": row["id"], "authorLabel": row["author_label"], "note": row["note"], "createdAt": row["created_at"]}})
+
+    def handle_get_candidate_votes(self, query):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        candidate_user_id = query.get("candidateUserId", [None])[0]
+        if not candidate_user_id:
+            return self.send_json(400, {"error": "candidateUserId is required."})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM candidate_votes WHERE employer_id = ? AND candidate_user_id = ? ORDER BY id",
+                (employer_id, candidate_user_id),
+            ).fetchall()
+            conn.close()
+        votes = [{"voterLabel": r["voter_label"], "vote": r["vote"]} for r in rows]
+        my_key = self.current_voter_key()
+        my_vote = next((r["vote"] for r in rows if r["voter_key"] == my_key), None)
+        self.send_json(200, {
+            "votes": votes,
+            "upCount": sum(1 for v in votes if v["vote"] == "up"),
+            "downCount": sum(1 for v in votes if v["vote"] == "down"),
+            "myVote": my_vote,
+        })
+
+    def handle_set_candidate_vote(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        vote = data.get("vote")
+        if not candidate_user_id or vote not in ("up", "down", None):
+            return self.send_json(400, {"error": "A candidate and a vote of 'up', 'down', or null are required."})
+
+        voter_key = self.current_voter_key()
+        voter_label = None
+        if vote is not None:
+            with db_lock:
+                conn = get_db()
+                employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+                conn.close()
+            voter_label = self.current_actor_label(employer)
+        with db_lock:
+            conn = get_db()
+            if vote is None:
+                conn.execute(
+                    "DELETE FROM candidate_votes WHERE employer_id = ? AND candidate_user_id = ? AND voter_key = ?",
+                    (employer_id, candidate_user_id, voter_key),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO candidate_votes (employer_id, candidate_user_id, voter_key, voter_label, vote, updated_at)
+                       VALUES (?, ?, ?, ?, ?, datetime('now'))
+                       ON CONFLICT(employer_id, candidate_user_id, voter_key)
+                       DO UPDATE SET vote=excluded.vote, voter_label=excluded.voter_label, updated_at=datetime('now')""",
+                    (employer_id, candidate_user_id, voter_key, voter_label, vote),
+                )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
 
     # ---------- employer job posting + real candidate matching ----------
 

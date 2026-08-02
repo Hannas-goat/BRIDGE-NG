@@ -286,16 +286,21 @@ async function refreshEmployerState(){
   document.getElementById('employer-mode-signup').style.display = 'none';
   document.getElementById('employer-dashboard').style.display = '';
   document.getElementById('employer-dash-company').textContent = me.employer.companyName;
-  document.getElementById('employer-dash-plan').textContent = planLabel(me.subscription);
+  document.getElementById('employer-dash-plan').textContent = planLabel(me.subscription)
+    + (me.isOwner ? '' : ` · Signed in as ${me.teamMember.name || me.teamMember.email} (${me.teamMember.role.replace('_',' ')})`);
 
   const subscribeBtn = document.getElementById('subscribe-btn');
-  if(me.subscription.tier === 'pro_growth' && me.subscription.status === 'active'){
+  if(!me.isOwner){
+    subscribeBtn.disabled = true;
+    subscribeBtn.textContent = 'Only the workspace owner can subscribe';
+  } else if(me.subscription.tier === 'pro_growth' && me.subscription.status === 'active'){
     subscribeBtn.disabled = true;
     subscribeBtn.textContent = "You're subscribed ✓";
   } else {
     subscribeBtn.disabled = false;
     subscribeBtn.textContent = 'Subscribe →';
   }
+  document.getElementById('bank-verify-card').style.display = me.isOwner ? '' : 'none';
 
   if(me.bankAccount){
     document.getElementById('bank-existing-row').style.display = '';

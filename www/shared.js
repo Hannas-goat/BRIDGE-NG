@@ -292,9 +292,17 @@ function apiBankResolve(accountNumber, bankCode){ return apiRequest(`/api/employ
 function apiSaveBankAccount(payload){ return apiRequest('/api/employer/bank', 'POST', payload); }
 function apiGetPipeline(){ return apiRequest('/api/employer/pipeline', 'GET'); }
 function apiSetPipelineStage(candidateUserId, stage){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage}); }
+function apiListTeamMembers(){ return apiRequest('/api/employer/team', 'GET'); }
+function apiAddTeamMember(payload){ return apiRequest('/api/employer/team/add', 'POST', payload); }
+function apiRemoveTeamMember(memberId){ return apiRequest('/api/employer/team/remove', 'POST', {memberId}); }
+function apiListCandidateNotes(candidateUserId){ return apiRequest(`/api/employer/candidate-notes?candidateUserId=${encodeURIComponent(candidateUserId)}`, 'GET'); }
+function apiAddCandidateNote(candidateUserId, note){ return apiRequest('/api/employer/candidate-notes', 'POST', {candidateUserId, note}); }
+function apiGetCandidateVotes(candidateUserId){ return apiRequest(`/api/employer/candidate-votes?candidateUserId=${encodeURIComponent(candidateUserId)}`, 'GET'); }
+function apiSetCandidateVote(candidateUserId, vote){ return apiRequest('/api/employer/candidate-votes', 'POST', {candidateUserId, vote}); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
 function apiSaveSettings(payload){ return apiRequest('/api/profile/settings', 'PUT', payload); }
+function apiSavePublicProfile(payload){ return apiRequest('/api/profile/public-profile', 'PUT', payload); }
 function apiSaveResume(payload){ return apiRequest('/api/profile/resume', 'PUT', payload); }
 function apiSavePitch(payload){ return apiRequest('/api/profile/pitch', 'PUT', payload); }
 function apiGetCandidatePitch(userId){ return apiRequest('/api/candidate-pitch?userId=' + encodeURIComponent(userId), 'GET'); }

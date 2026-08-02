@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile — Bridge NG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" type="image/png" href="/images/bridgeng-logo-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a class="brand" href="/index.html" style="text-decoration:none;color:inherit;">
+      <img class="brand-logo" src="/images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
+    </a>
+  </div>
+</div>
+
+<div class="auth-wrap" style="max-width:640px;">
+  <div id="profile-loading" style="text-align:center;padding:60px 0;color:var(--ink-soft);">Loading profile…</div>
+
+  <div id="profile-error" style="display:none;text-align:center;padding:60px 0;">
+    <h2 style="color:var(--indigo);margin-bottom:10px;">Profile not available</h2>
+    <p style="color:var(--ink-soft);" id="profile-error-msg">This profile isn't available — it may be private, or the link may be wrong.</p>
+    <a class="auth-btn filled" href="/index.html" style="margin-top:16px;display:inline-block;">Go to Bridge NG</a>
+  </div>
+
+  <div id="profile-content" style="display:none;">
+    <div class="card" style="text-align:center;">
+      <h2 style="color:var(--indigo);margin-bottom:4px;" id="p-name"></h2>
+      <p style="color:var(--ink-soft);font-size:14px;margin:0 0 4px;" id="p-headline"></p>
+      <p style="color:var(--ink-soft);font-size:13px;margin:0;" id="p-nysc"></p>
+      <div id="p-badges" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <p class="section-label" style="margin-top:0;">Skills</p>
+      <div class="skill-row" id="p-skills"></div>
+    </div>
+
+    <div class="card" id="p-portfolio-card" style="margin-top:16px;display:none;">
+      <p class="section-label" style="margin-top:0;">Portfolio</p>
+      <a id="p-portfolio-link" href="#" target="_blank" rel="noopener noreferrer" class="verified-badge-link"></a>
+    </div>
+
+    <p style="text-align:center;font-size:12px;color:var(--ink-soft);margin-top:20px;">
+      Skills marked ✓ Verified were earned via a real, server-scored challenge on
+      <a href="/index.html" style="color:var(--indigo);">Bridge NG</a> — not self-reported.
+    </p>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-bottom">
+    <span>© 2026 Bridge NG. All rights reserved.</span>
+    <nav class="footer-links-inline" aria-label="Legal">
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="/terms.html">Terms of Service</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/shared.js"></script>
+<script>
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function safeUrl(url){
+  const trimmed = String(url || '').trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '#';
+}
+
+function slugFromPath(){
+  // Supports both /p/some-slug (clean shareable link) and profile.html?u=some-slug (fallback,
+  // e.g. if opened directly from disk during development).
+  const m = location.pathname.match(/\/p\/([^/]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  return new URLSearchParams(location.search).get('u') || '';
+}
+
+async function loadPublicProfile(){
+  const slug = slugFromPath();
+  if(!slug){
+    document.getElementById('profile-loading').style.display = 'none';
+    document.getElementById('profile-error-msg').textContent = 'No profile link was given.';
+    document.getElementById('profile-error').style.display = '';
+    return;
+  }
+  try{
+    const p = await apiRequest(`/api/public-profile?slug=${encodeURIComponent(slug)}`, 'GET');
+    document.title = `${p.fullName} — Bridge NG`;
+    document.getElementById('p-name').textContent = p.fullName;
+    const headline = [p.fieldOfStudy, p.careerLevel, p.preferredLocation].filter(Boolean).join(' · ');
+    document.getElementById('p-headline').textContent = headline || 'Bridge NG member';
+    if(p.nyscStatus){
+      document.getElementById('p-nysc').textContent = `📋 ${p.nyscStatus} (self-declared)`;
+    }
+    const badges = p.verifiedBadges || [];
+    document.getElementById('p-badges').innerHTML = badges.length
+      ? badges.map(b => `<span class="verified-badge">✓ Verified ${escapeHtml(b.skill)}</span>`).join('')
+      : '';
+    const skills = p.skills || [];
+    document.getElementById('p-skills').innerHTML = skills.length
+      ? skills.map(s => `<span class="skill-pill">${escapeHtml(s)}</span>`).join('')
+      : '<span class="fit-none">No skills listed yet.</span>';
+    if(p.portfolioLink){
+      const link = document.getElementById('p-portfolio-link');
+      link.href = safeUrl(p.portfolioLink);
+      link.textContent = p.portfolioLink;
+      document.getElementById('p-portfolio-card').style.display = '';
+    }
+    document.getElementById('profile-loading').style.display = 'none';
+    document.getElementById('profile-content').style.display = '';
+  }catch(err){
+    document.getElementById('profile-loading').style.display = 'none';
+    document.getElementById('profile-error-msg').textContent = err.message;
+    document.getElementById('profile-error').style.display = '';
+  }
+}
+loadPublicProfile();
+</script>
+</body>
+</html>
