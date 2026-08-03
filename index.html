@@ -312,6 +312,7 @@ if('serviceWorker' in navigator){
     <div class="milestone-badges" id="milestone-badges"></div>
     <div class="milestone-badges" id="nysc-badge"></div>
     <div id="profile-completion"></div>
+    <div id="profile-insights"></div>
     <div class="card">
       <h3 style="margin-bottom:4px;color:var(--indigo);">Build your profile</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Personal details</p>
@@ -4235,6 +4236,49 @@ function renderProfileCompletion(){
   `;
 }
 
+// Real recruiter-interest signal (profile_views, logged server-side only for genuinely relevant
+// >=60% employer matches) and real percentile rankings on verified skill badges — never fabricated
+// "N recruiters viewed you" or "top X%" numbers; see handle_profile_insights in server.py.
+async function loadProfileInsights(){
+  const el = document.getElementById('profile-insights');
+  if(!el) return;
+  try{
+    const data = await apiGetProfileInsights();
+    renderProfileInsights(data);
+  }catch(e){
+    el.innerHTML = '';
+  }
+}
+
+function renderProfileInsights(data){
+  const el = document.getElementById('profile-insights');
+  if(!el) return;
+  const hasViews = data.viewCount7d > 0 || (data.viewingCompanies || []).length > 0;
+  const hasPercentiles = (data.skillPercentiles || []).length > 0;
+  if(!hasViews && !hasPercentiles){ el.innerHTML = ''; return; }
+
+  const companies = data.viewingCompanies || [];
+  const shownCompanies = companies.slice(0, 3);
+  const restCount = companies.length - shownCompanies.length;
+  const viewLine = hasViews
+    ? `Your profile appeared in ${data.viewCount7d} real recruiter search${data.viewCount7d === 1 ? '' : 'es'} this week${
+        companies.length ? ` — viewed by ${shownCompanies.map(c => escapeHtml(c)).join(', ')}${restCount > 0 ? ` and ${restCount} other${restCount === 1 ? '' : 's'}` : ''}.` : '.'
+      }`
+    : '';
+
+  const percentileLines = (data.skillPercentiles || []).map(p =>
+    `<p class="insights-line">Your <b>${escapeHtml(p.skill)}</b> badge (${p.score}/${p.total}) beats ${p.beatsPercent}% of the ${p.sampleSize} candidates with that verified badge — top ${p.topPercent}%.</p>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="completion-card fade-up-in" style="display:block;">
+      <p class="completion-title" style="margin-bottom:6px;">📈 Recruiter interest</p>
+      ${viewLine ? `<p class="insights-line">${viewLine}</p>` : ''}
+      ${percentileLines}
+    </div>
+  `;
+}
+
 function focusProfileField(id){
   const target = document.getElementById(id);
   if(!target) return;
@@ -4331,6 +4375,7 @@ async function initAccount(){
   await loadApplications();
   await loadCheckinStatus();
   await loadConversations();
+  if(currentAccount) await loadProfileInsights();
   if(currentAccount) startNotifPolling();
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
@@ -4379,6 +4424,7 @@ async function signOut(){
   await loadApplications();
   await loadCheckinStatus();
   await loadConversations();
+  if(currentAccount) await loadProfileInsights();
   renderRecentJobsFeed();
   renderRemoteJobsFeed();
 }

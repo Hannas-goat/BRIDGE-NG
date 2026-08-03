@@ -809,6 +809,9 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .completion-body{flex:1;min-width:200px;}
 .completion-title{font-family:'Fraunces',serif;font-size:15px;color:var(--ink);margin:0 0 4px;}
 .completion-sub{font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;}
+.insights-line{font-size:13px;color:var(--ink-soft);margin:0 0 6px;line-height:1.5;}
+.insights-line:last-child{margin-bottom:0;}
+.insights-line b{color:var(--ink);}
 .completion-badges{display:flex;flex-wrap:wrap;gap:8px;}
 .completion-badge{border:1px dashed var(--gold);background:var(--gold-pale);color:var(--gold-deep);font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:999px;cursor:pointer;transition:transform .15s ease,background .15s ease;}
 .completion-badge:hover{background:var(--gold-deep);color:#fff;transform:translateY(-2px);}

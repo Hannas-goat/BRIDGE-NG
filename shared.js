@@ -344,6 +344,7 @@ function apiListJobs(){ return apiRequest('/api/jobs', 'GET'); }
 function apiCreateSavedSearch(payload){ return apiRequest('/api/saved-searches', 'POST', payload); }
 function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'POST', payload); }
 function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', payload); }
+function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GET'); }
 function apiListSavedSearches(){ return apiRequest('/api/saved-searches', 'GET'); }
 function apiDeleteSavedSearch(id){ return apiRequest('/api/saved-searches/delete', 'POST', {id}); }
 function apiFollowCompany(company){ return apiRequest('/api/follow-company', 'POST', {company}); }

@@ -620,6 +620,14 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS profile_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            company TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS job_reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_title TEXT NOT NULL,
@@ -2025,6 +2033,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_followed_companies()
         if parsed.path == "/api/notifications":
             return self.handle_list_notifications()
+        if parsed.path == "/api/profile/insights":
+            return self.handle_profile_insights()
         if parsed.path == "/api/account/export":
             return self.handle_export_data()
         if parsed.path == "/api/checkin":
@@ -2748,6 +2758,60 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
 
         self.send_json(200, {"score": correct, "total": len(bank), "passed": passed, "badges": badges})
+
+    def handle_profile_insights(self):
+        """Real recruiter-interest signal (profile_views, logged only for genuinely relevant
+        >=60% matches — see handle_post_employer_job) and a real percentile ranking on each of
+        the candidate's own verified skill badges, computed against every other candidate who has
+        a verified badge for that same skill. Never shown for a skill with too few other real data
+        points to make a percentile claim meaningful, rather than reporting a misleading "top 100%
+        of 1" for an early adopter."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        with db_lock:
+            conn = get_db()
+            view_count_7d = conn.execute(
+                "SELECT COUNT(*) AS c FROM profile_views WHERE candidate_user_id = ? "
+                "AND created_at >= datetime('now', '-7 days')",
+                (user_id,),
+            ).fetchone()["c"]
+            companies = [r["company"] for r in conn.execute(
+                "SELECT DISTINCT company FROM profile_views WHERE candidate_user_id = ? ORDER BY company",
+                (user_id,),
+            ).fetchall()]
+
+            my_row = conn.execute("SELECT verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            my_badges = json.loads(my_row["verified_badges"] or "[]") if my_row else []
+            percentiles = []
+            if my_badges:
+                all_rows = conn.execute(
+                    "SELECT verified_badges FROM profiles WHERE verified_badges != '[]'"
+                ).fetchall()
+                skill_scores = {}
+                for r in all_rows:
+                    for b in json.loads(r["verified_badges"] or "[]"):
+                        skill_scores.setdefault(b.get("skill"), []).append(b.get("score", 0))
+                for b in my_badges:
+                    scores = skill_scores.get(b["skill"], [])
+                    if len(scores) < 5:
+                        continue  # not enough other real candidates with this badge yet
+                    beats = sum(1 for s in scores if s < b["score"])
+                    beats_percent = round(beats / len(scores) * 100)
+                    percentiles.append({
+                        "skill": b["skill"],
+                        "score": b["score"],
+                        "total": b["total"],
+                        "sampleSize": len(scores),
+                        "beatsPercent": beats_percent,
+                        "topPercent": max(1, 100 - beats_percent),
+                    })
+            conn.close()
+        self.send_json(200, {
+            "viewCount7d": view_count_7d,
+            "viewingCompanies": companies,
+            "skillPercentiles": percentiles,
+        })
 
     def handle_get_candidate_pitch(self, query):
         """Employer-side lookup of one candidate's pitch by user id — same unauthenticated trust
@@ -4001,6 +4065,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     notified += 1
                     if row["whatsapp_alerts_enabled"] and row["whatsapp_notify_matches"]:
                         send_whatsapp_alert(decrypt_field(row["whatsapp_number"]), message)
+                    # Real "a recruiter's search surfaced you" signal, at the same score bar
+                    # already used to decide a match is worth notifying the candidate about —
+                    # not logged for every low-relevance match, which would make the count
+                    # meaningless noise instead of a genuine interest signal.
+                    conn.execute(
+                        "INSERT INTO profile_views (candidate_user_id, company) VALUES (?, ?)",
+                        (row["uid"], company),
+                    )
             conn.commit()
             conn.close()
 
