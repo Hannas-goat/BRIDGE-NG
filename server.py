@@ -1077,6 +1077,7 @@ PERK_LABELS = {
     "power": "⚡ 24/7 power backup",
     "internet": "📶 Fiber internet",
     "transport": "🚌 Company transport",
+    "visa": "🌍 Visa sponsorship available",
 }
 SKILL_CHALLENGES = {
     "Python": [
