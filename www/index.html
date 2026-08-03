@@ -91,6 +91,10 @@ if('serviceWorker' in navigator){
                 <span class="mega-link-title">Train Yourself</span>
                 <span class="mega-link-sub">Skill-building resources</span>
               </button>
+              <button class="tab-btn mega-link" id="tab-sqlplayground" onclick="showPage('sqlplayground')">
+                <span class="mega-link-title">SQL Playground</span>
+                <span class="mega-link-sub">Write real queries, auto-graded</span>
+              </button>
             </div>
             <div class="mega-col">
               <p class="mega-col-title">AI matching</p>
@@ -561,6 +565,24 @@ if('serviceWorker' in navigator){
     </div>
     <div id="train-resources">
       <div class="empty">Pick a skill above to see curated courses from YouTube, Udemy, Khan Academy, and Coursera.</div>
+    </div>
+  </div>
+
+  <!-- SQL PLAYGROUND PAGE -->
+  <div class="panel" id="panel-sqlplayground" style="display:none;">
+    <div class="card">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">SQL Playground</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px;">Write a real query against a real (practice) database — no multiple choice. Graded server-side by comparing your query's actual result set against the correct answer, so any correct approach passes, not just one exact query.</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 16px;font-family:monospace;white-space:pre-line;background:var(--surface-2);padding:10px 12px;border-radius:8px;" id="sqlpg-schema">Loading schema…</p>
+      <div id="sqlpg-challenge-list"></div>
+    </div>
+    <div class="card" id="sqlpg-editor-card" style="display:none;margin-top:16px;">
+      <p class="completion-title" id="sqlpg-active-prompt" style="margin-bottom:10px;"></p>
+      <textarea class="form-textarea" id="sqlpg-query-input" style="min-height:110px;font-family:monospace;" placeholder="SELECT ..."></textarea>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="go-btn" style="margin-top:0;" onclick="submitSqlPlaygroundQuery()">Run query →</button>
+      </div>
+      <div id="sqlpg-result" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -4663,6 +4685,70 @@ function searchTrainTopic(){
   selectTrainSkill(query);
 }
 
+// --- SQL Playground: real query practice, graded server-side (see handle_sql_playground_submit
+// / sql_playground_grade in server.py — the reference answer never reaches this page). ---
+
+let sqlPlaygroundChallenges = [];
+let sqlPlaygroundActiveChallenge = null;
+
+async function loadSqlPlaygroundChallenges(){
+  if(sqlPlaygroundChallenges.length) return; // static challenge set — no need to re-fetch every visit
+  try{
+    const data = await apiGetSqlPlaygroundChallenges();
+    document.getElementById('sqlpg-schema').textContent = data.schema;
+    sqlPlaygroundChallenges = data.challenges || [];
+    renderSqlPlaygroundChallengeList();
+  }catch(e){
+    document.getElementById('sqlpg-schema').textContent = "Couldn't load the practice database schema — try again in a moment.";
+  }
+}
+
+function renderSqlPlaygroundChallengeList(){
+  const el = document.getElementById('sqlpg-challenge-list');
+  el.innerHTML = `
+    <label>Pick a challenge</label>
+    <div class="chip-field">
+      ${sqlPlaygroundChallenges.map((c, i) => `<button type="button" class="chip${sqlPlaygroundActiveChallenge === c.id ? ' selected' : ''}" onclick="selectSqlPlaygroundChallenge('${jsStr(c.id)}')">Challenge ${i + 1}</button>`).join('')}
+    </div>
+  `;
+}
+
+function selectSqlPlaygroundChallenge(id){
+  const challenge = sqlPlaygroundChallenges.find(c => c.id === id);
+  if(!challenge) return;
+  sqlPlaygroundActiveChallenge = id;
+  renderSqlPlaygroundChallengeList();
+  document.getElementById('sqlpg-editor-card').style.display = '';
+  document.getElementById('sqlpg-active-prompt').textContent = challenge.prompt;
+  document.getElementById('sqlpg-query-input').value = '';
+  document.getElementById('sqlpg-result').innerHTML = '';
+  document.getElementById('sqlpg-editor-card').scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
+async function submitSqlPlaygroundQuery(){
+  const query = document.getElementById('sqlpg-query-input').value.trim();
+  const resultEl = document.getElementById('sqlpg-result');
+  if(!query){
+    resultEl.innerHTML = '<div class="form-msg error">Write a query first.</div>';
+    return;
+  }
+  resultEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Running…</p>';
+  try{
+    const data = await apiSubmitSqlPlaygroundQuery({challengeId: sqlPlaygroundActiveChallenge, query});
+    if(data.error){
+      resultEl.innerHTML = `<div class="form-msg error">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+    const previewRows = (data.preview || []).map(r => `<tr>${r.map(v => `<td style="padding:4px 8px;border-top:1px solid var(--line);">${escapeHtml(String(v))}</td>`).join('')}</tr>`).join('');
+    resultEl.innerHTML = `
+      <div class="form-msg ${data.correct ? 'success' : 'error'}">${data.correct ? '✓ Correct — that matches the expected result.' : `✗ Not quite — your query returned ${data.rowCount} row${data.rowCount === 1 ? '' : 's'}, but that's not the expected result. Try again.`}</div>
+      ${data.preview && data.preview.length ? `<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;"><tbody>${previewRows}</tbody></table>` : ''}
+    `;
+  }catch(e){
+    resultEl.innerHTML = '<div class="form-msg error">Something went wrong running that query — try again.</div>';
+  }
+}
+
 function renderTrainResources(skill){
   const resources = trainingResourcesFor(skill);
   const el = document.getElementById('train-resources');
@@ -4781,7 +4867,7 @@ function updateHeroLeft(page){
   });
 }
 
-const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch', 'messages', 'salary'];
+const TAB_PANELS = ['seeker', 'employer', 'resume', 'train', 'sqlplayground', 'abroad', 'interview', 'appointment', 'explore', 'career', 'jobmatch', 'messages', 'salary'];
 
 function showPage(page){
   if(page !== 'interview' && mockInterviewStream) stopMockInterviewCamera();
@@ -4794,6 +4880,7 @@ function showPage(page){
   });
   updateHeroPhoto(page);
   updateHeroLeft(page);
+  if(page === 'sqlplayground') loadSqlPlaygroundChallenges();
   if(page === 'explore') renderExploreResults();
   if(page === 'jobmatch') updateJobMatchResumeNote();
   if(page === 'employer') renderEmployerSentMessages();

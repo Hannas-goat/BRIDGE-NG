@@ -1090,6 +1090,107 @@ SKILL_CHALLENGES = {
     ],
 }
 
+# ---------- SQL Playground: real queries against a real (throwaway, in-memory) practice
+# database, graded by comparing actual result sets — not multiple choice. Reference query answers
+# never reach the client (see handle_sql_playground_challenges), and grading always re-runs the
+# candidate's own query server-side against a freshly-seeded DB, the same "never trust a client-
+# submitted score" principle as the multiple-choice SKILL_CHALLENGES above.
+SQL_PLAYGROUND_SCHEMA_SQL = """
+    CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT, budget INTEGER);
+    CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT, department_id INTEGER, salary INTEGER, hire_date TEXT);
+"""
+SQL_PLAYGROUND_SEED_SQL = """
+    INSERT INTO departments (id, name, budget) VALUES
+        (1, 'Engineering', 50000000), (2, 'Sales', 20000000), (3, 'Marketing', 12000000), (4, 'Legal', 8000000);
+    INSERT INTO employees (id, name, department_id, salary, hire_date) VALUES
+        (1, 'Amaka Nwosu', 1, 950000, '2022-03-01'),
+        (2, 'Tunde Bakare', 1, 1200000, '2021-07-15'),
+        (3, 'Chinedu Okafor', 1, 800000, '2023-01-10'),
+        (4, 'Bola Adeyemi', 2, 650000, '2022-11-20'),
+        (5, 'Ifeoma Eze', 2, 700000, '2020-05-05'),
+        (6, 'Femi Ogundipe', 3, 600000, '2023-06-18'),
+        (7, 'Ngozi Chukwu', 1, 1400000, '2019-09-09');
+"""
+SQL_PLAYGROUND_SCHEMA_DOC = (
+    "departments(id, name, budget)\n"
+    "employees(id, name, department_id, salary, hire_date)"
+)
+SQL_PLAYGROUND_CHALLENGES = [
+    {
+        "id": "eng-names",
+        "prompt": "List the names of everyone in the Engineering department.",
+        "orderMatters": False,
+        "answerSql": "SELECT e.name FROM employees e JOIN departments d ON e.department_id = d.id WHERE d.name = 'Engineering'",
+    },
+    {
+        "id": "salary-desc",
+        "prompt": "List every employee's name and department name, ordered by salary from highest to lowest.",
+        "orderMatters": True,
+        "answerSql": "SELECT e.name, d.name FROM employees e JOIN departments d ON e.department_id = d.id ORDER BY e.salary DESC",
+    },
+    {
+        "id": "avg-salary-per-dept",
+        "prompt": "Find the average salary for each department — return the department name and the average salary.",
+        "orderMatters": False,
+        "answerSql": "SELECT d.name, AVG(e.salary) FROM employees e JOIN departments d ON e.department_id = d.id GROUP BY d.name",
+    },
+    {
+        "id": "above-company-avg",
+        "prompt": "List the names of employees who earn more than the average salary across the whole company.",
+        "orderMatters": False,
+        "answerSql": "SELECT name FROM employees WHERE salary > (SELECT AVG(salary) FROM employees)",
+    },
+    {
+        "id": "headcount-per-dept",
+        "prompt": "Count how many employees are in each department, including departments with zero employees. Return department name and the count.",
+        "orderMatters": False,
+        "answerSql": "SELECT d.name, COUNT(e.id) FROM departments d LEFT JOIN employees e ON e.department_id = d.id GROUP BY d.name",
+    },
+]
+SQL_PLAYGROUND_FORBIDDEN_RE = re.compile(
+    r"\b(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|replace)\b", re.IGNORECASE
+)
+
+
+def sql_playground_run(query):
+    """Executes `query` read-only against a fresh, seeded, in-memory copy of the practice
+    database. Defense in depth against a malicious/destructive query: a keyword blocklist first,
+    then SQLite's own PRAGMA query_only (engine-enforced, not just a string match) on top, plus a
+    progress handler that aborts anything that runs away (e.g. a pathological cartesian product)."""
+    if SQL_PLAYGROUND_FORBIDDEN_RE.search(query):
+        raise ValueError("Only SELECT queries are allowed here.")
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.executescript(SQL_PLAYGROUND_SCHEMA_SQL)
+        conn.executescript(SQL_PLAYGROUND_SEED_SQL)
+        conn.execute("PRAGMA query_only = ON")
+        conn.set_progress_handler(lambda: 1, 100000)  # abort after ~100k VM steps — plenty for this schema, not enough to hang
+        cur = conn.execute(query)
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return rows
+
+
+def sql_playground_grade(challenge, candidate_query):
+    try:
+        got = sql_playground_run(candidate_query)
+    except sqlite3.OperationalError as e:
+        return {"correct": False, "error": f"SQL error: {e}"}
+    except ValueError as e:
+        return {"correct": False, "error": str(e)}
+    except Exception:
+        return {"correct": False, "error": "That query couldn't be run — check your syntax."}
+    expected = sql_playground_run(challenge["answerSql"])
+    got_norm = [tuple(r) for r in got]
+    expected_norm = [tuple(r) for r in expected]
+    if not challenge["orderMatters"]:
+        got_norm = sorted(got_norm, key=repr)
+        expected_norm = sorted(expected_norm, key=repr)
+    correct = got_norm == expected_norm
+    return {"correct": correct, "rowCount": len(got), "preview": got[:10]}
+
+
 PROFILE_FIELDS = ["fullName", "dob", "sex", "phone", "address", "education",
                    "careerLevel", "fieldOfStudy", "preferredLocation"]
 PROFILE_COLUMNS = ["full_name", "dob", "sex", "phone", "address", "education",
@@ -2244,6 +2345,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_get_candidate_pitch(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/skill-challenge":
             return self.handle_get_skill_challenge(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/sql-playground/challenges":
+            return self.handle_sql_playground_challenges()
         if parsed.path == "/api/employer/me":
             return self.handle_employer_me()
         if parsed.path == "/api/employer/banks":
@@ -2376,6 +2479,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_download_relay_create()
         if parsed.path == "/api/skill-challenge/submit":
             return self.handle_submit_skill_challenge()
+        if parsed.path == "/api/sql-playground/submit":
+            return self.handle_sql_playground_submit()
         return self.send_json(404, {"error": "Not found"})
 
     def do_PUT(self):
@@ -2957,6 +3062,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             conn.close()
         self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
+
+    def handle_sql_playground_challenges(self):
+        """Reference query answers never reach the client — only prompts and the schema doc."""
+        challenges = [{"id": c["id"], "prompt": c["prompt"]} for c in SQL_PLAYGROUND_CHALLENGES]
+        self.send_json(200, {"schema": SQL_PLAYGROUND_SCHEMA_DOC, "challenges": challenges})
+
+    def handle_sql_playground_submit(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        challenge_id = (data.get("challengeId") or "").strip()
+        query = (data.get("query") or "").strip()[:2000]
+        challenge = next((c for c in SQL_PLAYGROUND_CHALLENGES if c["id"] == challenge_id), None)
+        if challenge is None:
+            return self.send_json(404, {"error": "Unknown challenge."})
+        if not query:
+            return self.send_json(400, {"error": "Write a query first."})
+        result = sql_playground_grade(challenge, query)
+        self.send_json(200, result)
 
     def handle_get_skill_challenge(self, query):
         """Returns the 5 questions for a skill with the correct-answer index stripped out — the

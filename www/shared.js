@@ -345,6 +345,8 @@ function apiCreateSavedSearch(payload){ return apiRequest('/api/saved-searches',
 function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'POST', payload); }
 function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', payload); }
 function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GET'); }
+function apiGetSqlPlaygroundChallenges(){ return apiRequest('/api/sql-playground/challenges', 'GET'); }
+function apiSubmitSqlPlaygroundQuery(payload){ return apiRequest('/api/sql-playground/submit', 'POST', payload); }
 
 // Mirrors server.py's slugify() exactly, so a link built here resolves to the same job the
 // server would generate the URL for — only the leading numeric id is ever actually used to look
