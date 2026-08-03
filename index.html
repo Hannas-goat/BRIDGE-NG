@@ -6031,6 +6031,7 @@ function renderEmployerResultsSection(){
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
             <div class="btn-row" style="margin-top:10px;">
               <button class="ai-btn" onclick="toggleMessageComposer(${m.userId})">✉ Message</button>
+              <button class="ai-btn" onclick="suggestOutreachMessage(${m.userId})">✨ Suggest message</button>
               ${m.hasPitch ? `<button class="ai-btn" onclick="watchCandidatePitch(${m.userId}, this)">▶ Watch pitch</button>` : ''}
             </div>
             <div class="pitch-watch-panel" id="pitch-watch-${m.userId}" style="display:none;"></div>
@@ -6288,6 +6289,31 @@ async function removeTeamMemberSubmit(memberId){
   }catch(err){
     showToast(err.message);
   }
+}
+
+// Real personalization from this specific match's own data (name, actual verified badge score,
+// actual matched skill, actual overall match %) — never a generic "Dear candidate" template.
+// Sends through the SAME in-app messaging pipeline as every other employer message; deliberately
+// not a raw wa.me/<number> deep link, since that would require exposing a candidate's WhatsApp
+// number to employers, which Bridge NG has never done anywhere else.
+function buildOutreachTemplate(m, jobTitle){
+  const firstName = (m.fullName || 'there').trim().split(' ')[0];
+  const verified = (m.verifiedBadges || [])[0];
+  const skillLine = verified
+    ? `we saw your ${verified.score}/${verified.total} verified ${verified.skill} skill badge on Bridge NG`
+    : ((m.skills || []).length ? `we saw your ${m.skills[0]} skills on Bridge NG` : 'we saw your profile on Bridge NG');
+  return `Hi ${firstName}, ${skillLine} and think you'd be a great fit for our ${jobTitle || 'open role'} (${m.score}% match). Would you be open to a quick chat?`;
+}
+
+function suggestOutreachMessage(userId){
+  if(!lastEmployerResults) return;
+  const m = lastEmployerResults.matches.find(x => x.userId === userId);
+  const composer = document.getElementById('msg-composer-' + userId);
+  if(!m || !composer) return;
+  composer.style.display = '';
+  const textarea = composer.querySelector('textarea');
+  if(textarea) textarea.value = buildOutreachTemplate(m, lastEmployerResults.title);
+  composer.scrollIntoView({behavior: 'smooth', block: 'center'});
 }
 
 function inviteToInterview(userId){
