@@ -1169,10 +1169,36 @@ def profile_row_to_json(row):
     }
 
 
+FREE_EMAIL_DOMAINS = {
+    "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com",
+    "protonmail.com", "proton.me", "live.com", "yandex.com", "mail.com", "gmx.com", "zoho.com",
+}
+
+
+def is_verified_employer_domain(domain):
+    """The actual, honest signal behind the "Verified Employer" checkmark: the account was
+    signed up with an email at the company's own domain, not a free consumer email provider.
+    Real but imperfect — same domain-based identity check many B2B products use — and only ever
+    applies to companies with a real Bridge NG employer account; never fabricated for
+    imported_jobs listings (Greenhouse/Lever-sourced companies that never signed up or proved
+    domain ownership here at all)."""
+    domain = (domain or "").strip().lower()
+    return bool(domain) and domain not in FREE_EMAIL_DOMAINS
+
+
+def verified_company_names(conn):
+    """Lowercased company names with at least one verified (see is_verified_employer_domain)
+    Bridge NG employer account — used to badge a company name wherever it's shown to a candidate
+    from a source tied to a real employer account (currently: the Messages/conversations list)."""
+    rows = conn.execute("SELECT DISTINCT company_name, corporate_domain FROM employers").fetchall()
+    return {r["company_name"].strip().lower() for r in rows if is_verified_employer_domain(r["corporate_domain"])}
+
+
 def employer_row_to_json(row):
     return {
         "id": row["id"], "email": row["email"], "companyName": row["company_name"],
         "corporateDomain": row["corporate_domain"] or "",
+        "verified": is_verified_employer_domain(row["corporate_domain"]),
     }
 
 
@@ -4422,6 +4448,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"conversations": []})
         with db_lock:
             conn = get_db()
+            verified = verified_company_names(conn)
             convos = conn.execute(
                 "SELECT * FROM conversations WHERE candidate_user_id = ? ORDER BY id DESC", (user_id,)
             ).fetchall()
@@ -4432,6 +4459,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ).fetchall()
                 result.append({
                     "id": c["id"], "company": c["company"], "jobTitle": c["job_title"], "createdAt": c["created_at"],
+                    "companyVerified": c["company"].strip().lower() in verified,
                     "messages": [message_row_to_json(m) for m in messages],
                     "unread": sum(1 for m in messages if m["sender_role"] == "employer" and not m["read_by_candidate"]),
                 })

@@ -2911,7 +2911,7 @@ function renderConversations(){
     ${conversations.map(c => `
       <div class="message-thread-card" data-convo-id="${c.id}">
         <div class="message-thread-head" onclick="toggleConversation(${c.id})">
-          <p class="res-title">${escapeHtml(c.company)}${c.jobTitle ? ' · ' + escapeHtml(c.jobTitle) : ''} ${c.unread ? `<span class="new-badge">${c.unread} new</span>` : ''}</p>
+          <p class="res-title">${escapeHtml(c.company)}${c.companyVerified ? `<span class="company-verified-badge" title="Verified — this employer signed up with an email at their own company's domain, not a free personal email provider.">✓</span>` : ''}${c.jobTitle ? ' · ' + escapeHtml(c.jobTitle) : ''} ${c.unread ? `<span class="new-badge">${c.unread} new</span>` : ''}</p>
           <span class="message-thread-date">${(c.createdAt || '').slice(0, 10)}</span>
         </div>
         <div class="message-thread-body" id="convo-body-${c.id}" style="display:none;">
@@ -6240,7 +6240,12 @@ const TEAM_ROLE_LABELS = {hiring_manager: 'Hiring Manager', hr: 'HR', technical_
 function renderEmployerTeam(){
   const list = document.getElementById('employer-team-list');
   if(!list) return;
-  const ownerRow = `<div class="settings-row"><div><div class="settings-row-label">${escapeHtml(employerAccountInfo ? employerAccountInfo.companyName : 'You')}</div><div class="settings-row-sub">Owner</div></div></div>`;
+  const isVerified = employerAccountInfo && employerAccountInfo.verified;
+  const verifiedBadge = isVerified ? `<span class="company-verified-badge" title="Verified — you signed up with an email at your company's own domain, not a free personal email provider.">✓</span>` : '';
+  const unverifiedNote = employerAccountInfo && !isVerified
+    ? `<p class="settings-section-sub" style="margin-top:4px;">Sign up with your company's own email domain (not Gmail/Yahoo/Outlook) to get a Verified badge candidates see when you message them.</p>`
+    : '';
+  const ownerRow = `<div class="settings-row"><div><div class="settings-row-label">${escapeHtml(employerAccountInfo ? employerAccountInfo.companyName : 'You')}${verifiedBadge}</div><div class="settings-row-sub">Owner</div>${unverifiedNote}</div></div>`;
   const memberRows = employerTeamMembers.map(m => `
     <div class="settings-row">
       <div>

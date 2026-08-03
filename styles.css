@@ -477,6 +477,7 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .challenge-row:last-child{border-bottom:none;}
 .challenge-skill{font-size:13px;font-weight:600;color:var(--ink);}
 .verified-badge{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(16,185,129,0.16);color:var(--green-deep);cursor:pointer;animation:verified-badge-glow 2.4s ease-in-out infinite;}
+.company-verified-badge{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#1D9BF0;color:#fff;font-size:9px;font-weight:700;margin-left:5px;vertical-align:middle;line-height:1;}
 .challenge-question{margin-bottom:16px;}
 .challenge-question-text{font-size:13.5px;font-weight:600;color:var(--ink);margin:0 0 8px;}
 .challenge-option{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;font-size:13px;color:var(--ink-soft);cursor:pointer;transition:background .15s ease;}
