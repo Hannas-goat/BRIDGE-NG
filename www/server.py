@@ -629,6 +629,23 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS hire_checkins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            job_title TEXT DEFAULT '',
+            company TEXT DEFAULT '',
+            skills TEXT DEFAULT '[]',
+            level TEXT DEFAULT '',
+            location TEXT DEFAULT '',
+            hired_at TEXT NOT NULL DEFAULT (datetime('now')),
+            day30_status TEXT NOT NULL DEFAULT 'pending',
+            day60_status TEXT NOT NULL DEFAULT 'pending',
+            day90_status TEXT NOT NULL DEFAULT 'pending',
+            backup_candidates TEXT DEFAULT '[]'
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS referral_links (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             referrer_user_id INTEGER NOT NULL REFERENCES users(id),
@@ -1088,6 +1105,8 @@ PIPELINE_STAGE_LABELS = {
 }
 
 TEAM_MEMBER_ROLES = ["hiring_manager", "hr", "technical_lead", "member"]
+
+HIRE_CHECKIN_DAYS = (30, 60, 90)
 
 # Employer-declared workplace infrastructure perks — real value in a market with inconsistent
 # grid power and connectivity, self-reported like everything else on the employer side (there's
@@ -2266,6 +2285,84 @@ def run_auto_sync_loop():
         time.sleep(interval_seconds)
 
 
+def surface_backup_candidates(conn, checkin):
+    """Re-runs the exact same real matching (match_score) this hire's original job criteria would
+    have used, against every current candidate, and returns the top 3 — real data, not a canned
+    "here are some other people" placeholder. Only called once a check-in actually comes back
+    'failed'; the result is stored on the hire_checkins row for the employer to see next time they
+    load their check-ins list (there's no employer push-notification channel in this app, unlike
+    candidates — employers already visit their own dashboard regularly for the shortlist matrix,
+    team, etc., so this is surfaced there rather than invented as a new push mechanism)."""
+    required_skills = json.loads(checkin["skills"] or "[]")
+    if not required_skills:
+        return []
+    rows = conn.execute(
+        "SELECT p.*, u.id AS uid FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id != ?",
+        (checkin["candidate_user_id"],),
+    ).fetchall()
+    scored = []
+    for row in rows:
+        cand_skills = json.loads(row["skills"] or "[]")
+        if not cand_skills or (row["visibility"] or "public") == "private":
+            continue
+        cand_locations = json.loads(row["preferred_locations"] or "[]")
+        score = match_score(required_skills, cand_skills, checkin["level"], row["career_level"], checkin["location"], cand_locations)
+        if score >= 60:
+            scored.append({
+                "userId": row["uid"],
+                "fullName": decrypt_field(row["full_name"]) or "Bridge NG member",
+                "score": score,
+                "skills": cand_skills,
+            })
+    scored.sort(key=lambda m: m["score"], reverse=True)
+    return scored[:3]
+
+
+def scan_hire_checkins_once():
+    """One pass over every hire_checkins row, sending a real notification (+ WhatsApp, if opted
+    in) for any checkpoint that just became due. Split out from run_hire_checkin_loop so it's
+    directly callable (and testable) without waiting for the hourly sleep."""
+    with db_lock:
+        conn = get_db()
+        rows = conn.execute("SELECT * FROM hire_checkins").fetchall()
+        now = datetime.datetime.utcnow()
+        for row in rows:
+            try:
+                hired_at = datetime.datetime.strptime(row["hired_at"], "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError):
+                continue
+            for day in HIRE_CHECKIN_DAYS:
+                col = f"day{day}_status"
+                if row[col] != "pending" or now < hired_at + datetime.timedelta(days=day):
+                    continue
+                candidate = conn.execute(
+                    "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_matches FROM profiles WHERE user_id = ?",
+                    (row["candidate_user_id"],),
+                ).fetchone()
+                message = f"Quick day-{day} check-in from {row['company']}: are you still working there? Let us know in the app."
+                conn.execute(
+                    "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
+                    (row["candidate_user_id"], "hire_checkin", message, row["job_title"], row["company"]),
+                )
+                conn.execute(f"UPDATE hire_checkins SET {col} = 'awaiting_response' WHERE id = ?", (row["id"],))
+                conn.commit()
+                if candidate and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_matches"]:
+                    send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), message)
+                print(f"[hire-checkin] day{day} check-in sent for hire_checkins#{row['id']}")
+        conn.close()
+
+
+def run_hire_checkin_loop():
+    """Background thread: real day-30/60/90 check-ins on each hire. Runs hourly; a 30/60/90-day-
+    granularity feature has no need to poll more often than that."""
+    while True:
+        try:
+            scan_hire_checkins_once()
+        except Exception as e:
+            print("[hire-checkin] loop crashed:", e)
+        time.sleep(3600)
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     # HTTP/1.0 (no keep-alive): each request gets its own fresh connection, closed immediately
     # after the response. HTTP/1.1 keep-alive reuses one connection for many requests, and in
@@ -2474,6 +2571,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_get_pipeline()
         if parsed.path == "/api/async-interview/mine":
             return self.handle_list_my_async_interviews()
+        if parsed.path == "/api/employer/hire-checkins":
+            return self.handle_list_hire_checkins()
+        if parsed.path == "/api/my-hire-checkins":
+            return self.handle_list_my_hire_checkins()
         if parsed.path == "/api/async-interview/detail":
             return self.handle_get_async_interview_detail(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/team":
@@ -2544,6 +2645,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_set_pipeline_stage()
         if parsed.path == "/api/async-interview/create":
             return self.handle_create_async_interview()
+        if parsed.path == "/api/hire-checkin/respond":
+            return self.handle_respond_hire_checkin()
         if parsed.path == "/api/async-interview/answer":
             return self.handle_submit_async_interview_answer()
         if parsed.path == "/api/employer/team/add":
@@ -4391,11 +4494,104 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "UPDATE referral_claims SET hired_at = datetime('now') WHERE referred_user_id = ? AND hired_at IS NULL",
                     (candidate_user_id,),
                 )
+                # 90-day check-in tracker (see run_hire_checkin_loop) — job context is optional
+                # and only used to re-run real matching for backup candidates if this hire doesn't
+                # work out; harmless to have none if the frontend didn't have it on hand.
+                job_title = (data.get("jobTitle") or "").strip()[:200]
+                skills = data.get("skills") if isinstance(data.get("skills"), list) else []
+                level = (data.get("level") or "").strip()
+                location = (data.get("location") or "").strip()
+                conn.execute(
+                    """INSERT INTO hire_checkins (employer_id, candidate_user_id, job_title, company, skills, level, location)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (employer_id, candidate_user_id, job_title, employer["company_name"], json.dumps(skills), level, location),
+                )
             conn.commit()
             conn.close()
         if notif_message and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True, "stage": stage})
+
+    # ---------- 90-day hire check-ins: real day-30/60/90 pings, and if one comes back "no longer
+    # there", real backup candidates re-surfaced from the exact same original job criteria ----------
+
+    def handle_list_hire_checkins(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(200, {"checkins": []})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM hire_checkins WHERE employer_id = ? ORDER BY id DESC", (employer_id,)
+            ).fetchall()
+            result = []
+            for r in rows:
+                candidate = conn.execute("SELECT full_name FROM profiles WHERE user_id = ?", (r["candidate_user_id"],)).fetchone()
+                checkpoints = [
+                    {"day": day, "status": r[f"day{day}_status"]} for day in HIRE_CHECKIN_DAYS
+                ]
+                result.append({
+                    "id": r["id"], "candidateUserId": r["candidate_user_id"],
+                    "candidateName": (decrypt_field(candidate["full_name"]) if candidate else None) or "Bridge NG member",
+                    "jobTitle": r["job_title"], "hiredAt": r["hired_at"], "checkpoints": checkpoints,
+                    "backupCandidates": json.loads(r["backup_candidates"] or "[]"),
+                })
+            conn.close()
+        self.send_json(200, {"checkins": result})
+
+    def handle_list_my_hire_checkins(self):
+        """Candidate-facing mirror of handle_list_hire_checkins — lets them see and respond to
+        their own day-30/60/90 check-ins (the notification alone has no interactive buttons)."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(200, {"checkins": []})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM hire_checkins WHERE candidate_user_id = ? ORDER BY id DESC", (user_id,)
+            ).fetchall()
+            result = [{
+                "id": r["id"], "company": r["company"], "jobTitle": r["job_title"], "hiredAt": r["hired_at"],
+                "checkpoints": [{"day": day, "status": r[f"day{day}_status"]} for day in HIRE_CHECKIN_DAYS],
+            } for r in rows]
+            conn.close()
+        self.send_json(200, {"checkins": result})
+
+    def handle_respond_hire_checkin(self):
+        """Either the employer or the candidate can be first to answer a given checkpoint —
+        whoever responds first sets it; the other side just sees the resolved status. A "no
+        longer there" answer immediately re-runs real matching for backup candidates."""
+        checkin_id = None
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        checkin_id = data.get("checkinId")
+        day = data.get("day")
+        still_employed = data.get("stillEmployed")
+        if not checkin_id or day not in HIRE_CHECKIN_DAYS or not isinstance(still_employed, bool):
+            return self.send_json(400, {"error": "Missing check-in, day, or answer."})
+
+        employer_id = self.current_employer_id()
+        candidate_user_id = self.current_user_id()
+        if employer_id is None and candidate_user_id is None:
+            return self.send_json(401, {"error": "Sign in first."})
+
+        col = f"day{day}_status"
+        with db_lock:
+            conn = get_db()
+            checkin = conn.execute("SELECT * FROM hire_checkins WHERE id = ?", (checkin_id,)).fetchone()
+            if checkin is None or (employer_id is not None and checkin["employer_id"] != employer_id) or \
+               (employer_id is None and checkin["candidate_user_id"] != candidate_user_id):
+                conn.close()
+                return self.send_json(404, {"error": "Check-in not found."})
+            new_status = "confirmed" if still_employed else "failed"
+            conn.execute(f"UPDATE hire_checkins SET {col} = ? WHERE id = ?", (new_status, checkin_id))
+            if not still_employed:
+                backups = surface_backup_candidates(conn, checkin)
+                conn.execute("UPDATE hire_checkins SET backup_candidates = ? WHERE id = ?", (json.dumps(backups), checkin_id))
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True, "status": new_status})
 
     # ---------- asynchronous video Q&A: employer asks 3 questions once, candidate has 48h to
     # record a reply to each on their own time — no scheduling, no timezone coordination for a
@@ -5499,6 +5695,7 @@ def main():
         threading.Thread(target=run_auto_sync_loop, daemon=True).start()
     else:
         print("Auto-sync has no companies configured.")
+    threading.Thread(target=run_hire_checkin_loop, daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

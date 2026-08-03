@@ -321,7 +321,7 @@ function apiListBanks(){ return apiRequest('/api/employer/banks', 'GET'); }
 function apiBankResolve(accountNumber, bankCode){ return apiRequest(`/api/employer/bank/resolve?accountNumber=${encodeURIComponent(accountNumber)}&bankCode=${encodeURIComponent(bankCode)}`, 'GET'); }
 function apiSaveBankAccount(payload){ return apiRequest('/api/employer/bank', 'POST', payload); }
 function apiGetPipeline(){ return apiRequest('/api/employer/pipeline', 'GET'); }
-function apiSetPipelineStage(candidateUserId, stage){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage}); }
+function apiSetPipelineStage(candidateUserId, stage, jobContext){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage, ...(jobContext || {})}); }
 function apiListTeamMembers(){ return apiRequest('/api/employer/team', 'GET'); }
 function apiAddTeamMember(payload){ return apiRequest('/api/employer/team/add', 'POST', payload); }
 function apiRemoveTeamMember(memberId){ return apiRequest('/api/employer/team/remove', 'POST', {memberId}); }
@@ -348,6 +348,9 @@ function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GE
 function apiGetCertificateUrl(skill){ return apiRequest(`/api/certificate-url?skill=${encodeURIComponent(skill)}`, 'GET'); }
 function apiCreateReferralLink(payload){ return apiRequest('/api/referrals/create', 'POST', payload); }
 function apiListMyReferrals(){ return apiRequest('/api/referrals/mine', 'GET'); }
+function apiListHireCheckins(){ return apiRequest('/api/employer/hire-checkins', 'GET'); }
+function apiListMyHireCheckins(){ return apiRequest('/api/my-hire-checkins', 'GET'); }
+function apiRespondHireCheckin(payload){ return apiRequest('/api/hire-checkin/respond', 'POST', payload); }
 function apiGetSqlPlaygroundChallenges(){ return apiRequest('/api/sql-playground/challenges', 'GET'); }
 function apiSubmitSqlPlaygroundQuery(payload){ return apiRequest('/api/sql-playground/submit', 'POST', payload); }
 function apiCreateAsyncInterview(payload){ return apiRequest('/api/async-interview/create', 'POST', payload); }

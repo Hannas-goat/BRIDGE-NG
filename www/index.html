@@ -1132,6 +1132,7 @@ if('serviceWorker' in navigator){
       <p style="font-size:13px;color:var(--ink-soft);margin:0;">Employers can message you directly when your profile matches a role they've posted. Sign in to see and reply to your conversations.</p>
     </div>
     <div id="async-interviews-list"></div>
+    <div id="my-hire-checkins-list"></div>
     <div id="conversations-list"></div>
   </div>
 
@@ -1239,6 +1240,12 @@ if('serviceWorker' in navigator){
          anonymous "type any company name" flow above has no durable identity for a shared team
          to log into. Owner-only controls (add/remove) are hidden client-side AND enforced
          server-side (handle_add_team_member/handle_remove_team_member 403 a team member). -->
+    <div class="card" id="hire-checkins-card" style="display:none;margin-top:20px;">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">Hire check-ins</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Real day-30/60/90 check-ins on people you've hired through Bridge NG. If one doesn't work out, real backup candidates from the same original search are surfaced right here.</p>
+      <div id="hire-checkins-list"></div>
+    </div>
+
     <div class="card" id="employer-team-card" style="display:none;margin-top:20px;">
       <h3 style="margin-bottom:6px;color:var(--indigo);">Workspace team</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Everyone below shares this workspace's candidate pipeline, notes, and votes. No email-sending is set up yet, so adding someone creates their login directly — share the password with them yourself.</p>
@@ -3009,6 +3016,37 @@ async function loadConversations(){
   renderConversations();
   updateMessagesUnreadBadge();
   loadAsyncInterviews(); // same "refresh the Messages page" trigger points as conversations
+  loadMyHireCheckins();
+}
+
+async function loadMyHireCheckins(){
+  const el = document.getElementById('my-hire-checkins-list');
+  if(!el) return;
+  if(!currentAccount){ el.innerHTML = ''; return; }
+  try{
+    const data = await apiListMyHireCheckins();
+    renderMyHireCheckins(data.checkins || []);
+  }catch(e){
+    el.innerHTML = '';
+  }
+}
+
+function renderMyHireCheckins(checkins){
+  const el = document.getElementById('my-hire-checkins-list');
+  const due = checkins.filter(c => c.checkpoints.some(cp => cp.status === 'awaiting_response'));
+  if(due.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Quick check-in</h2><span>${due.length}</span></div>
+    ${due.map(c => c.checkpoints.filter(cp => cp.status === 'awaiting_response').map(cp => `
+      <div class="message-thread-card">
+        <p class="res-title">Day ${cp.day} check-in: still at ${escapeHtml(c.company)}${c.jobTitle ? ' (' + escapeHtml(c.jobTitle) + ')' : ''}?</p>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="ai-btn" onclick="respondHireCheckin(${c.id}, ${cp.day}, true)">Yes, still there</button>
+          <button class="upload-btn" onclick="respondHireCheckin(${c.id}, ${cp.day}, false)">No, I left</button>
+        </div>
+      </div>
+    `).join('')).join('')}
+  `;
 }
 
 // --- Asynchronous video Q&A: employer asks up to 3 questions once, candidate has 48h to record
@@ -6741,7 +6779,20 @@ function pipelineStageCellHtml(userId){
 async function setPipelineStage(userId, stage){
   if(!stage) return;
   try{
-    await apiSetPipelineStage(userId, stage);
+    // Marking someone "hired" starts their real 90-day check-in tracker — pass along the job
+    // criteria this hire actually happened under (if we still have it in memory from the last
+    // search) so a failed check-in can re-run real matching against the SAME requirements.
+    let jobContext = null;
+    if(stage === 'hired' && lastEmployerResults){
+      const m = lastEmployerResults.matches.find(x => x.userId === userId);
+      jobContext = {
+        jobTitle: lastEmployerResults.title,
+        skills: m ? [...employerSkills] : [],
+        level: document.getElementById('e-level') ? document.getElementById('e-level').value : '',
+        location: document.getElementById('e-loc') ? document.getElementById('e-loc').value : '',
+      };
+    }
+    await apiSetPipelineStage(userId, stage, jobContext);
     employerPipelineStages[userId] = {stage};
     showToast(stage === 'rejected'
       ? 'Stage updated. No automated message is sent for "Rejected" — use the message composer if you want to let them know yourself.'
@@ -6763,12 +6814,65 @@ async function initEmployerAccountState(){
       const pipe = await apiGetPipeline();
       employerPipelineStages = pipe.stages || {};
       await loadEmployerTeam();
+      await loadHireCheckins();
     }
   }catch(e){
     employerAccountLoggedIn = false;
   }
   document.getElementById('employer-team-card').style.display = employerAccountLoggedIn ? '' : 'none';
+  document.getElementById('hire-checkins-card').style.display = employerAccountLoggedIn ? '' : 'none';
   if(lastEmployerResults) renderEmployerResultsSection();
+}
+
+async function loadHireCheckins(){
+  try{
+    const data = await apiListHireCheckins();
+    renderHireCheckins(data.checkins || []);
+  }catch(e){
+    document.getElementById('hire-checkins-list').innerHTML = '';
+  }
+}
+
+const HIRE_CHECKPOINT_LABELS = {pending: 'Not due yet', awaiting_response: 'Awaiting response', confirmed: '✓ Still there', failed: '✗ No longer there'};
+
+function renderHireCheckins(checkins){
+  const el = document.getElementById('hire-checkins-list');
+  if(checkins.length === 0){ el.innerHTML = '<p class="fit-none">No hires tracked yet — mark someone "Hired" in a shortlist to start their check-in timeline.</p>'; return; }
+  el.innerHTML = checkins.map(c => `
+    <div class="settings-row" style="align-items:flex-start;flex-direction:column;gap:8px;padding:14px 0;">
+      <div style="display:flex;justify-content:space-between;width:100%;">
+        <div class="settings-row-label">${escapeHtml(c.candidateName)}${c.jobTitle ? ' · ' + escapeHtml(c.jobTitle) : ''}</div>
+        <div class="settings-row-sub">Hired ${(c.hiredAt || '').slice(0, 10)}</div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        ${c.checkpoints.map(cp => `
+          <div style="font-size:12.5px;">
+            <b>Day ${cp.day}:</b> ${HIRE_CHECKPOINT_LABELS[cp.status]}
+            ${cp.status === 'awaiting_response' ? `
+              <button class="upload-btn" style="padding:2px 8px;font-size:11px;margin-left:4px;" onclick="respondHireCheckin(${c.id}, ${cp.day}, true)">Still there</button>
+              <button class="danger-btn" style="padding:2px 8px;font-size:11px;" onclick="respondHireCheckin(${c.id}, ${cp.day}, false)">Left</button>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+      ${c.backupCandidates.length ? `
+        <div style="font-size:12.5px;color:var(--ink-soft);">Backup candidates from the same search: ${c.backupCandidates.map(b => `${escapeHtml(b.fullName)} (${b.score}%)`).join(', ')}</div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+async function respondHireCheckin(checkinId, day, stillEmployed){
+  try{
+    await apiRespondHireCheckin({checkinId, day, stillEmployed});
+    showToast(stillEmployed ? 'Marked as still there.' : 'Thanks for letting us know.');
+    // Shared between the employer's and the candidate's own check-in views — whichever one
+    // is actually on screen refreshes; the other silently no-ops (wrong session for that call).
+    if(document.getElementById('hire-checkins-list')) loadHireCheckins();
+    if(document.getElementById('my-hire-checkins-list')) loadMyHireCheckins();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
 }
 
 async function loadEmployerTeam(){
