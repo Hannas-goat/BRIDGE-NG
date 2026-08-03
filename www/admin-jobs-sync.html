@@ -26,6 +26,14 @@
       <h2 style="color:var(--indigo);">Job board sync</h2>
       <p>Internal tool — pull live listings from a company's public Greenhouse or Lever job board straight into Bridge NG. Synced jobs are saved to the platform and trigger alerts for any matching saved search or followed company. Requires the server's import token.</p>
     </div>
+    <div class="card" style="margin-bottom:24px;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Real applicant stats</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px;">Real, already-tracked counts from the applications table — every "Apply via Company Site" click is a signed-in, attributed applicant, not an estimate.</p>
+      <button class="upload-btn" onclick="loadApplicationStats()">Load stats →</button>
+      <p class="form-msg" id="stats-msg"></p>
+      <div id="stats-results" style="margin-top:14px;"></div>
+    </div>
+
     <div class="card">
       <p class="form-msg" id="sync-msg"></p>
       <div class="field-row">
@@ -78,6 +86,49 @@
 <script src="shared.js"></script>
 <script>
 let lastSyncedJobs = [];
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+async function loadApplicationStats(){
+  const msg = document.getElementById('stats-msg');
+  const token = document.getElementById('sync-token').value.trim();
+  const results = document.getElementById('stats-results');
+  if(!token){
+    msg.textContent = 'Enter the import token above first.';
+    msg.className = 'form-msg error';
+    return;
+  }
+  msg.textContent = 'Loading…';
+  msg.className = 'form-msg success';
+  try{
+    const data = await apiRequest(`/api/admin/application-stats?token=${encodeURIComponent(token)}`, 'GET');
+    msg.textContent = '';
+    const companies = data.companies || [];
+    if(companies.length === 0){
+      results.innerHTML = '<div class="empty">No applications recorded yet.</div>';
+      return;
+    }
+    results.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+        <thead><tr style="text-align:left;color:var(--ink-soft);font-size:12px;text-transform:uppercase;">
+          <th style="padding:6px 8px;">Company</th><th style="padding:6px 8px;">Last 7 days</th><th style="padding:6px 8px;">All-time</th>
+        </tr></thead>
+        <tbody>
+          ${companies.map(c => `<tr style="border-top:1px solid var(--line);">
+            <td style="padding:6px 8px;font-weight:600;">${escapeHtml(c.company)}</td>
+            <td style="padding:6px 8px;">${c.last7Days}</td>
+            <td style="padding:6px 8px;">${c.totalApplicants}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  }catch(err){
+    msg.textContent = err.message;
+    msg.className = 'form-msg error';
+  }
+}
 
 async function syncJobs(){
   const msg = document.getElementById('sync-msg');
@@ -147,12 +198,12 @@ function renderSyncResults(){
       ${filtered.map(j => `
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${j.title}</p>
-            <p class="res-sub">${j.company} · ${j.location} · ${j.sector}</p>
+            <p class="res-title">${escapeHtml(j.title)}</p>
+            <p class="res-sub">${escapeHtml(j.company)} · ${escapeHtml(j.location)} · ${escapeHtml(j.sector)}</p>
             <span class="pay-pill">${payLabelFor(j)}</span>
-            <div class="skill-row">${(j.skills || []).map(s => `<span class="skill-pill">${s}</span>`).join('')}</div>
+            <div class="skill-row">${(j.skills || []).map(s => `<span class="skill-pill">${escapeHtml(s)}</span>`).join('')}</div>
             <div class="btn-row">
-              ${j.applicationLink ? `<a class="apply-btn" href="${j.applicationLink}" target="_blank" rel="noopener noreferrer">View posting ↗</a>` : ''}
+              ${j.applicationLink ? `<a class="apply-btn" href="${escapeHtml(j.applicationLink)}" target="_blank" rel="noopener noreferrer">View posting ↗</a>` : ''}
             </div>
           </div>
         </div>

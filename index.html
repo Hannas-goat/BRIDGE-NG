@@ -13,11 +13,17 @@
     if(t) document.documentElement.setAttribute('data-theme', t);
   }catch(e){ /* localStorage unavailable (privacy mode etc.) — default theme is fine */ }
 })();
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="images/bridgeng-logo-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#8B5CF6">
+<link rel="apple-touch-icon" href="/images/pwa-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bridge NG">
@@ -216,8 +222,8 @@
               </div>
               <label>WhatsApp number</label>
               <div class="phone-field-row">
-                <select id="hdr-whatsapp-cc"></select>
-                <input type="tel" id="hdr-whatsapp-number" placeholder="803 123 4567">
+                <select id="hdr-whatsapp-cc" onchange="formatPhoneInputLive(document.getElementById('hdr-whatsapp-number'), this)"></select>
+                <input type="tel" id="hdr-whatsapp-number" placeholder="803 123 4567" oninput="formatPhoneInputLive(this, document.getElementById('hdr-whatsapp-cc'))">
               </div>
               <button class="go-btn" style="width:100%;margin-top:12px;" onclick="saveWhatsappFromHeader()">Save</button>
               <p class="whatsapp-status-note">Your preference is saved now. Delivery depends on WhatsApp alerts being turned on for Bridge NG — if nothing arrives yet, that's on our end, not a mistake on yours.</p>
@@ -331,8 +337,8 @@
         <div>
           <label>Phone number</label>
           <div class="phone-field-row">
-            <select id="s-phone-cc"></select>
-            <input type="tel" id="s-phone" placeholder="803 123 4567">
+            <select id="s-phone-cc" onchange="formatPhoneInputLive(document.getElementById('s-phone'), this)"></select>
+            <input type="tel" id="s-phone" placeholder="803 123 4567" oninput="formatPhoneInputLive(this, document.getElementById('s-phone-cc'))">
           </div>
         </div>
       </div>
@@ -430,8 +436,8 @@
         </div>
         <label>WhatsApp number</label>
         <div class="phone-field-row">
-          <select id="s-whatsapp-cc"></select>
-          <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567">
+          <select id="s-whatsapp-cc" onchange="formatPhoneInputLive(document.getElementById('s-whatsapp-number'), this)"></select>
+          <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567" oninput="formatPhoneInputLive(this, document.getElementById('s-whatsapp-cc'))">
         </div>
         <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
         <p class="ndpr-note"><span aria-hidden="true">🔒</span> Your phone number is encrypted at rest and used only to send you the alerts above — never shared with employers or anyone else, and you can remove it any time by clearing this field and saving.</p>
@@ -455,11 +461,6 @@
       </div>
       <p class="form-msg" id="profile-save-msg"></p>
       <div id="saved-searches-list"></div>
-      <div class="danger-zone" id="danger-zone-section" style="display:none;">
-        <p class="danger-zone-title">Danger zone</p>
-        <p class="danger-zone-sub">Permanently delete your account and everything tied to it — profile, resume, applications, saved searches, messages. This can't be undone.</p>
-        <button type="button" class="danger-btn" onclick="openDeleteAccountModal()">Delete my account</button>
-      </div>
     </div>
     <div id="my-applications-list"></div>
     <div id="seeker-results"></div>
@@ -888,6 +889,7 @@
       </div>
       <div class="btn-row">
         <button class="follow-btn" id="explore-match-toggle" onclick="toggleExploreMatch()">Match my profile: OFF</button>
+        <button class="follow-btn" id="explore-following-toggle" onclick="toggleExploreFollowing()">Following: OFF</button>
         <button class="ai-btn" id="quick-match-toggle" onclick="toggleQuickMatchMode()">🔀 Quick Match mode: OFF</button>
       </div>
       <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0;">Matching uses your real saved skills, field of study, and career stage — sign in first to turn it on.</p>
@@ -1422,6 +1424,8 @@
     </div>
     <label>Confirm your password to continue</label>
     <input type="password" id="delete-account-password" class="form-textarea" style="min-height:auto;" placeholder="Your password">
+    <label style="margin-top:12px;">Type <b>DELETE</b> to confirm</label>
+    <input type="text" id="delete-account-typed" class="form-textarea" style="min-height:auto;" placeholder="DELETE" autocomplete="off">
     <p class="form-msg" id="delete-account-msg"></p>
     <div class="pitch-modal-actions">
       <button class="upload-btn" onclick="closeDeleteAccountModal()">Cancel</button>
@@ -1454,6 +1458,27 @@
       <p style="font-size:28px;margin:0 0 6px;">🎉</p>
       <p style="color:var(--ink);font-weight:600;margin:0 0 4px;">You're on the list!</p>
       <p style="font-size:13px;color:var(--ink-soft);margin:0;">We'll email you the moment the app is ready to download.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pitch-modal-overlay" id="report-job-modal-overlay" onclick="if(event.target === this) closeReportJobModal()">
+  <div class="pitch-modal">
+    <div class="pitch-modal-head">
+      <div>
+        <h3>🚩 Report this listing</h3>
+        <p class="pitch-modal-sub" id="report-job-sub"></p>
+      </div>
+      <button class="pitch-modal-close" onclick="closeReportJobModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <label>What's wrong with this listing? (optional)</label>
+    <textarea class="form-textarea" id="report-job-reason" style="min-height:90px;" placeholder="e.g. asking for payment to apply, looks like a duplicate, seems fake..."></textarea>
+    <p class="form-msg" id="report-job-msg"></p>
+    <div class="pitch-modal-actions">
+      <button class="upload-btn" onclick="closeReportJobModal()">Cancel</button>
+      <button class="danger-btn" onclick="submitJobReport()">Report listing</button>
     </div>
   </div>
 </div>
@@ -1643,6 +1668,27 @@ const KANBAN_EMPTY = {
   archived: {icon: '🗂️', text: 'Roles you\'re no longer pursuing go here.'},
 };
 
+// Timestamps from the server are UTC "YYYY-MM-DD HH:MM:SS" (SQLite datetime('now')) with no
+// timezone marker, which most browsers would otherwise parse as local time — force UTC parsing.
+function relativeTime(dateStr){
+  if(!dateStr) return '';
+  const iso = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+  const then = new Date(iso).getTime();
+  if(isNaN(then)) return dateStr.slice(0, 10);
+  const diffMin = Math.floor((Date.now() - then) / 60000);
+  if(diffMin < 1) return 'just now';
+  if(diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if(diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if(diffDay === 1) return 'yesterday';
+  if(diffDay < 30) return `${diffDay} days ago`;
+  const diffMonth = Math.floor(diffDay / 30);
+  if(diffMonth < 12) return `${diffMonth} month${diffMonth === 1 ? '' : 's'} ago`;
+  const diffYear = Math.floor(diffDay / 365);
+  return `${diffYear} year${diffYear === 1 ? '' : 's'} ago`;
+}
+
 function renderMyApplications(){
   const el = document.getElementById('my-applications-list');
   if(!el) return;
@@ -1662,7 +1708,7 @@ function renderMyApplications(){
               <div class="kanban-card" data-id="${a.id}" data-stage="${stage}">
                 <p class="kanban-card-title">${escapeHtml(a.jobTitle)}</p>
                 <p class="kanban-card-sub">${escapeHtml(a.company)}</p>
-                <p class="kanban-card-date">Applied ${(a.createdAt || '').slice(0, 10)}</p>
+                <p class="kanban-card-date">Applied ${relativeTime(a.createdAt)}${a.updatedAt && a.updatedAt !== a.createdAt ? ` · Updated ${relativeTime(a.updatedAt)}` : ''}</p>
                 ${a.applicationLink ? `<a class="kanban-card-link" href="${escapeAttr(safeUrl(a.applicationLink))}" target="_blank" rel="noopener noreferrer" onpointerdown="event.stopPropagation()">View posting ↗</a>` : ''}
                 <select class="kanban-move-select" onpointerdown="event.stopPropagation()" onchange="moveApplication(${a.id}, this.value)">
                   ${KANBAN_STAGES.map(s => `<option value="${s}" ${s === stage ? 'selected' : ''}>${KANBAN_LABELS[s]}</option>`).join('')}
@@ -1684,8 +1730,10 @@ async function moveApplication(id, status){
   app.status = status; // optimistic
   renderMyApplications();
   try{
-    await apiUpdateApplicationStatus(id, status);
+    const { application } = await apiUpdateApplicationStatus(id, status);
+    if(application) app.updatedAt = application.updatedAt;
     if(status === 'offer') celebrate();
+    renderMyApplications();
   }catch(e){
     app.status = prevStatus; // roll back on failure
     renderMyApplications();
@@ -1799,6 +1847,42 @@ function followButtonHtml(company){
   const following = isFollowingCompany(company);
   const onclickJs = `toggleFollowCompany('${jsStr(company)}', this)`;
   return `<button class="follow-btn${following ? ' following' : ''}" title="You'll get alerts when this company posts new roles." onclick="${escapeAttr(onclickJs)}">${following ? '✓ Following' : '+ Follow ' + escapeHtml(company)}</button>`;
+}
+
+function reportJobButtonHtml(job){
+  const onclickJs = `openReportJobModal('${jsStr(job.title || '')}', '${jsStr(job.company || '')}')`;
+  return `<button class="report-job-btn" title="Report this listing" aria-label="Report this listing" onclick="${escapeAttr(onclickJs)}">🚩</button>`;
+}
+
+let reportJobContext = null;
+
+function openReportJobModal(jobTitle, company){
+  reportJobContext = {jobTitle, company};
+  document.getElementById('report-job-sub').textContent = `${jobTitle} at ${company}`;
+  document.getElementById('report-job-reason').value = '';
+  document.getElementById('report-job-msg').textContent = '';
+  document.getElementById('report-job-modal-overlay').classList.add('open');
+}
+
+function closeReportJobModal(){
+  document.getElementById('report-job-modal-overlay').classList.remove('open');
+}
+
+async function submitJobReport(){
+  const msg = document.getElementById('report-job-msg');
+  if(!reportJobContext) return;
+  try{
+    await apiReportJob({
+      jobTitle: reportJobContext.jobTitle,
+      company: reportJobContext.company,
+      reason: document.getElementById('report-job-reason').value.trim(),
+    });
+    closeReportJobModal();
+    showToast("Thanks — we've flagged this listing for review.");
+  }catch(err){
+    msg.textContent = friendlyErrorMessage('generic');
+    msg.className = 'form-msg error';
+  }
 }
 
 // Deterministic skill-overlap badge — same intersection math as matchScore()'s skill component,
@@ -1957,6 +2041,7 @@ function renderRecentJobsFeed(){
               ${followButtonHtml(j.company)}
               ${applyButtonHtml(j)}
               ${pitchButtonHtml(j)}
+              ${reportJobButtonHtml(j)}
             </div>
           </div>
         </div>
@@ -1988,6 +2073,7 @@ function renderRemoteJobsFeed(){
               ${applyButtonHtml(j)}
               ${followButtonHtml(j.company)}
               ${pitchButtonHtml(j)}
+              ${reportJobButtonHtml(j)}
             </div>
           </div>
         </div>
@@ -1999,6 +2085,7 @@ function renderRemoteJobsFeed(){
 // --- Explore Jobs: instant keyword/location search + real-profile match highlighting ---
 
 let exploreMatchActive = false;
+let exploreFollowingActive = false;
 // Real inventory can run into the hundreds of roles — rendering all of them at once would be a
 // genuinely heavy DOM, so results are capped and grown 30 at a time via "Load more" instead of
 // silently discarding everything past the first page. Reset to 30 on any new search/filter (not
@@ -2024,6 +2111,23 @@ function toggleExploreMatch(){
   const btn = document.getElementById('explore-match-toggle');
   btn.textContent = 'Match my profile: ' + (exploreMatchActive ? 'ON' : 'OFF');
   btn.classList.toggle('following', exploreMatchActive);
+  exploreShownCount = 30;
+  renderExploreResults();
+}
+
+function toggleExploreFollowing(){
+  if(!exploreFollowingActive && !currentAccount){
+    showToast('Sign in to filter by companies you follow.');
+    return;
+  }
+  if(!exploreFollowingActive && followedCompanies.size === 0){
+    showToast("You're not following any companies yet — use the 'Follow' button on a job card first.");
+    return;
+  }
+  exploreFollowingActive = !exploreFollowingActive;
+  const btn = document.getElementById('explore-following-toggle');
+  btn.textContent = 'Following: ' + (exploreFollowingActive ? 'ON' : 'OFF');
+  btn.classList.toggle('following', exploreFollowingActive);
   exploreShownCount = 30;
   renderExploreResults();
 }
@@ -2088,6 +2192,9 @@ function renderExploreResults(){
   if(exploreMatchActive){
     jobs = jobs.filter(jobMatchesMyProfile);
   }
+  if(exploreFollowingActive){
+    jobs = jobs.filter(j => isFollowingCompany(j.company));
+  }
 
   const total = jobs.length;
   jobs = jobs.slice(0, exploreShownCount);
@@ -2114,6 +2221,7 @@ function renderExploreResults(){
               ${followButtonHtml(j.company)}
               ${bridgeGapButtonHtml(j.skills, mySkills)}
               ${pitchButtonHtml(j)}
+              ${reportJobButtonHtml(j)}
             </div>
             <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
@@ -4189,11 +4297,9 @@ function renderAuthArea(){
     const firstName = (currentAccount.profile.fullName || currentAccount.email).split(' ')[0];
     el.innerHTML = `<span class="user-greet">Signed in as <b>${firstName}</b></span><button class="auth-btn" onclick="signOut()">Sign out</button>`;
     document.getElementById('save-profile-btn').style.display = '';
-    document.getElementById('danger-zone-section').style.display = '';
   }else{
     el.innerHTML = `<a class="auth-btn" href="auth.html?mode=signin">Sign in</a><a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>`;
     document.getElementById('save-profile-btn').style.display = 'none';
-    document.getElementById('danger-zone-section').style.display = 'none';
   }
 }
 
@@ -4272,6 +4378,7 @@ async function signOut(){
 
 function openDeleteAccountModal(){
   document.getElementById('delete-account-password').value = '';
+  document.getElementById('delete-account-typed').value = '';
   document.getElementById('delete-account-msg').textContent = '';
   document.getElementById('delete-account-modal-overlay').classList.add('open');
 }
@@ -4316,9 +4423,15 @@ async function joinAppWaitlist(){
 
 async function confirmDeleteAccount(){
   const password = document.getElementById('delete-account-password').value;
+  const typed = document.getElementById('delete-account-typed').value.trim();
   const msg = document.getElementById('delete-account-msg');
   if(!password){
     msg.textContent = 'Enter your password to confirm.';
+    msg.className = 'form-msg error';
+    return;
+  }
+  if(typed !== 'DELETE'){
+    msg.textContent = 'Type DELETE (all caps) to confirm.';
     msg.className = 'form-msg error';
     return;
   }
@@ -4802,6 +4915,7 @@ function findJobs(){
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'cover')">Write cover letter ↗</button>
               ${bridgeGapButtonHtml(job.skills, seekerSkills)}
+              ${reportJobButtonHtml(job)}
             </div>
             <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
@@ -5482,6 +5596,7 @@ function renderJobMatchResults(resolved){
               ${applyButtonHtml(job)}
               ${followButtonHtml(job.company)}
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
+              ${reportJobButtonHtml(job)}
             </div>
           </div>
         </div>`).join('')}

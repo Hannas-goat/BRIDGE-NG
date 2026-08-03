@@ -78,6 +78,21 @@ function formatPhoneWithCountryCode(cc, number){
   return cleaned ? cc + ' ' + cleaned : '';
 }
 
+// Live input mask: groups digits as "XXX XXX XXXX" for +234 (the vast majority of this app's
+// users) while leaving other country codes as raw digits, since we don't know their national
+// formatting conventions and a wrong-shaped mask is worse than no mask.
+function formatPhoneInputLive(inputEl, ccSelectEl){
+  const cc = ccSelectEl ? ccSelectEl.value : '+234';
+  let digits = inputEl.value.replace(/\D/g, '');
+  if(cc !== '+234'){ inputEl.value = digits.slice(0, 10); return; }
+  // Nigerians naturally type the local trunk prefix ("0803...") even though it's paired with a
+  // +234 country code selector — strip it live so the mask matches what formatPhoneWithCountryCode
+  // saves, instead of grouping the leading 0 into the number itself.
+  digits = digits.replace(/^0+/, '').slice(0, 10);
+  const parts = [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 10)].filter(Boolean);
+  inputEl.value = parts.join(' ');
+}
+
 // Splits a stored phone string like "+234 803 123 4567" back into {cc, number} for editing.
 // Falls back to +234 for numbers saved before this country-code field existed.
 function splitPhoneCountryCode(fullPhone){
@@ -313,6 +328,7 @@ function apiChat(messages, context){ return apiRequest('/api/chat', 'POST', {mes
 function apiListJobs(){ return apiRequest('/api/jobs', 'GET'); }
 function apiCreateSavedSearch(payload){ return apiRequest('/api/saved-searches', 'POST', payload); }
 function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'POST', payload); }
+function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', payload); }
 function apiListSavedSearches(){ return apiRequest('/api/saved-searches', 'GET'); }
 function apiDeleteSavedSearch(id){ return apiRequest('/api/saved-searches/delete', 'POST', {id}); }
 function apiFollowCompany(company){ return apiRequest('/api/follow-company', 'POST', {company}); }

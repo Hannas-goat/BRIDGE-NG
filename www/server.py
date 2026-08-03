@@ -31,7 +31,8 @@ DB_PATH = os.path.join(BASE_DIR, "bridgeng.db")
 PORT = int(os.environ.get("PORT", 8000))
 
 STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html",
-                 "about.html", "careers.html", "support.html", "contact.html", "pricing.html", "profile.html"}
+                 "about.html", "careers.html", "support.html", "contact.html", "pricing.html", "profile.html",
+                 "manifest.json", "sw.js"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
@@ -619,6 +620,16 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS job_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_title TEXT NOT NULL,
+            company TEXT NOT NULL,
+            reason TEXT DEFAULT '',
+            reporter_user_id INTEGER REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS followed_companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL REFERENCES users(id),
@@ -709,6 +720,7 @@ def init_db():
         )
     """)
     ensure_column(conn, "applications", "status", "status TEXT NOT NULL DEFAULT 'applied'")
+    ensure_column(conn, "applications", "updated_at", "updated_at TEXT")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS employer_posted_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1248,6 +1260,7 @@ def application_row_to_json(row):
         "company": row["company"],
         "applicationLink": row["application_link"],
         "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"] or "",
         "status": row["status"] if row["status"] in APPLICATION_STATUSES else "applied",
     }
 
@@ -1964,6 +1977,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_me()
         if parsed.path == "/api/debug/db":
             return self.handle_debug_db(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/admin/application-stats":
+            return self.handle_application_stats(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/debug/ai-errors":
             return self.handle_debug_ai_errors()
         if parsed.path == "/api/jobs":
@@ -2065,6 +2080,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_sync_jobs()
         if parsed.path == "/api/app-waitlist":
             return self.handle_join_app_waitlist()
+        if parsed.path == "/api/report-job":
+            return self.handle_report_job()
         if parsed.path == "/api/saved-searches":
             return self.handle_create_saved_search()
         if parsed.path == "/api/saved-searches/delete":
@@ -2376,6 +2393,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             info["error"] = str(e)
         self.send_json(200, info)
+
+    def handle_application_stats(self, query):
+        """Operator-only (same shared-secret pattern as the other admin endpoints): real,
+        already-tracked per-company application counts — every "Apply via Company Site" click
+        creates a row in `applications` (applying requires being signed in, so every row is a real,
+        attributed applicant). Exists so the actual "we drove N applicants to your portal this
+        week" number for a B2B pitch comes from real data instead of being made up."""
+        if not IMPORT_TOKEN or query.get("token", [None])[0] != IMPORT_TOKEN:
+            return self.send_json(401, {"error": "Invalid or missing import token."})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT company, COUNT(*) AS total, "
+                "SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS last7d "
+                "FROM applications GROUP BY company ORDER BY total DESC"
+            ).fetchall()
+            conn.close()
+        self.send_json(200, {
+            "companies": [
+                {"company": r["company"], "totalApplicants": r["total"], "last7Days": r["last7d"]}
+                for r in rows
+            ]
+        })
 
     def handle_debug_ai_errors(self):
         """Unauthenticated, read-only: the last several AI-call failures (which model, what
@@ -2775,6 +2815,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not is_duplicate_key_error(e):
                     conn.close()
                     raise
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    def handle_report_job(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        job_title = (data.get("jobTitle") or "").strip()[:200]
+        company = (data.get("company") or "").strip()[:200]
+        reason = (data.get("reason") or "").strip()[:500]
+        if not job_title or not company:
+            return self.send_json(400, {"error": "Missing job details."})
+        user_id = self.current_user_id()
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                "INSERT INTO job_reports (job_title, company, reason, reporter_user_id) VALUES (?, ?, ?, ?)",
+                (job_title, company, reason, user_id),
+            )
+            conn.commit()
             conn.close()
         self.send_json(200, {"ok": True})
 
@@ -3258,7 +3318,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with db_lock:
             conn = get_db()
             conn.execute(
-                "UPDATE applications SET status = ? WHERE id = ? AND user_id = ?",
+                "UPDATE applications SET status = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
                 (status, app_id, user_id),
             )
             conn.commit()
