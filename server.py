@@ -924,6 +924,19 @@ def init_db():
     # sex/resume/email, regardless of what's in the row.
     ensure_column(conn, "profiles", "public_slug", "public_slug TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "public_profile_enabled", "public_profile_enabled INTEGER DEFAULT 0")
+    # Multi-select preferred locations. The legacy single-string preferred_location column is kept
+    # in sync as locations[0] (or '') purely so old read sites that still expect one string keep
+    # working unchanged — preferred_locations (a JSON array) is the real source of truth going
+    # forward. Backfill wraps each existing single value into a one-item list, once, at the moment
+    # this column is first added.
+    added_preferred_locations = ensure_column(conn, "profiles", "preferred_locations", "preferred_locations TEXT DEFAULT '[]'")
+    if added_preferred_locations:
+        for row in conn.execute("SELECT user_id, preferred_location FROM profiles").fetchall():
+            loc = (row["preferred_location"] or "").strip()
+            conn.execute(
+                "UPDATE profiles SET preferred_locations = ? WHERE user_id = ?",
+                (json.dumps([loc] if loc else []), row["user_id"]),
+            )
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -1080,7 +1093,7 @@ def profile_row_to_json(row):
         # the whole request if that invariant is ever violated — return a blank profile instead.
         return {
             "fullName": "", "dob": "", "sex": "", "phone": "", "address": "", "education": "",
-            "careerLevel": "", "fieldOfStudy": "", "preferredLocation": "", "skills": [],
+            "careerLevel": "", "fieldOfStudy": "", "preferredLocation": "", "preferredLocations": [], "skills": [],
             "openToRemote": False, "resumeText": "", "resumeFile": None, "resumeFilename": "",
             "university": "", "nyscStatus": "", "ppaState": "", "ppaLga": "", "pitchMedia": None,
             "whatsappNumber": "", "whatsappAlertsEnabled": False,
@@ -1123,6 +1136,7 @@ def profile_row_to_json(row):
         "careerLevel": row["career_level"],
         "fieldOfStudy": row["field_of_study"],
         "preferredLocation": row["preferred_location"],
+        "preferredLocations": json.loads(row["preferred_locations"] or "[]"),
         "skills": json.loads(row["skills"] or "[]"),
         "openToRemote": bool(row["open_to_remote"]),
         "resumeText": decrypt_field(row["resume_text"] or ""),
@@ -1446,6 +1460,24 @@ def parse_cv_extraction_json(reply):
     }
 
 
+def normalize_preferred_locations(data):
+    """Accepts either the new preferredLocations array or (for older callers, e.g. CV-extraction
+    signup) a single preferredLocation string, and always returns a clean list — capped so a
+    malformed/abusive payload can't stuff an unbounded array into the profile."""
+    locations = data.get("preferredLocations")
+    if not isinstance(locations, list):
+        single = (data.get("preferredLocation") or "").strip()
+        locations = [single] if single else []
+    seen = []
+    for loc in locations:
+        cleaned = str(loc).strip()[:80]
+        if cleaned and cleaned not in seen:
+            seen.append(cleaned)
+        if len(seen) >= 10:
+            break
+    return seen
+
+
 def level_distance(a, b):
     """Python port of index.html's levelDistance() — kept in sync deliberately so a
     real candidate match score means the same thing as the sample-data match score."""
@@ -1460,14 +1492,18 @@ def level_distance(a, b):
 
 
 def match_score(required_skills, candidate_skills, req_level, cand_level, req_loc, cand_loc):
-    """Python port of index.html's matchScore() — same formula, same 2-99 range."""
+    """Python port of index.html's matchScore() — same formula, same 2-99 range.
+    cand_loc accepts either a single location string (older callers, e.g. abroad-region matching)
+    or a list of preferred locations (candidate profile matching, multi-select) — normalized to a
+    list either way so one candidate matching ANY of their chosen locations earns the bonus."""
     req = set(required_skills)
     cand = set(candidate_skills)
     intersection = len(req & cand)
     union = len(req | cand)
     skill_score = 0 if union == 0 else intersection / union
     level_penalty = level_distance(req_level, cand_level) * 0.12
-    loc_bonus = 0.05 if (req_loc in ("Any location", "") or cand_loc == req_loc or req_loc == "Remote") else 0
+    cand_locs = cand_loc if isinstance(cand_loc, list) else ([cand_loc] if cand_loc else [])
+    loc_bonus = 0.05 if (req_loc in ("Any location", "") or req_loc in cand_locs or req_loc == "Remote") else 0
     score = skill_score * 0.8 + 0.2 - level_penalty + loc_bonus
     return max(2, min(99, round(score * 100)))
 
@@ -2201,16 +2237,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 user_id = cur.lastrowid
                 skills = data.get("skills") or []
+                locations = normalize_preferred_locations(data)
                 conn.execute(
                     """INSERT INTO profiles (user_id, full_name, dob, sex, phone, address,
-                       education, career_level, field_of_study, preferred_location, skills, open_to_remote,
+                       education, career_level, field_of_study, preferred_location, preferred_locations, skills, open_to_remote,
                        university, nysc_status, ppa_state, ppa_lga, whatsapp_number, whatsapp_alerts_enabled)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (user_id, encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
                      encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
                      encrypt_field(data.get("address", "")), data.get("education", ""),
                      data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
-                     data.get("preferredLocation", ""), json.dumps(skills),
+                     locations[0] if locations else "", json.dumps(locations), json.dumps(skills),
                      1 if data.get("openToRemote") else 0,
                      (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
                      (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
@@ -2468,11 +2505,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(400, {"error": "Malformed request body."})
 
         skills = data.get("skills") or []
+        locations = normalize_preferred_locations(data)
         with db_lock:
             conn = get_db()
             conn.execute(
                 """UPDATE profiles SET full_name=?, dob=?, sex=?, phone=?, address=?,
-                   education=?, career_level=?, field_of_study=?, preferred_location=?,
+                   education=?, career_level=?, field_of_study=?, preferred_location=?, preferred_locations=?,
                    skills=?, open_to_remote=?, university=?, nysc_status=?, ppa_state=?, ppa_lga=?,
                    whatsapp_number=?, whatsapp_alerts_enabled=?, portfolio_link=?,
                    updated_at=datetime('now') WHERE user_id=?""",
@@ -2480,7 +2518,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
                  encrypt_field(data.get("address", "")), data.get("education", ""),
                  data.get("careerLevel", ""), data.get("fieldOfStudy", ""),
-                 data.get("preferredLocation", ""), json.dumps(skills),
+                 locations[0] if locations else "", json.dumps(locations), json.dumps(skills),
                  1 if data.get("openToRemote") else 0,
                  (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
                  (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
@@ -2575,7 +2613,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "fullName": decrypt_field(row["full_name"]) or "Bridge NG member",
             "fieldOfStudy": row["field_of_study"] or "",
             "careerLevel": row["career_level"] or "",
-            "preferredLocation": row["preferred_location"] or "",
+            "preferredLocation": ", ".join(json.loads(row["preferred_locations"] or "[]")),
             "university": row["university"] or "",
             "nyscStatus": row["nysc_status"] or "",
             "skills": json.loads(row["skills"] or "[]"),
@@ -3936,13 +3974,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     continue  # candidate specifically asked not to be shown to this one employer
                 if ppa_state_filter and (row["ppa_state"] or "").strip().lower() != ppa_state_filter.lower():
                     continue  # employer asked for a specific (self-declared) PPA state only
-                score = match_score(skills, cand_skills, level, row["career_level"], location, row["preferred_location"])
+                cand_locations = json.loads(row["preferred_locations"] or "[]")
+                score = match_score(skills, cand_skills, level, row["career_level"], location, cand_locations)
                 matches.append({
                     "userId": row["uid"],
                     "fullName": decrypt_field(row["full_name"]) or "Bridge NG member",
                     "careerLevel": row["career_level"],
                     "fieldOfStudy": row["field_of_study"],
-                    "preferredLocation": row["preferred_location"],
+                    "preferredLocations": cand_locations,
                     "ppaState": row["ppa_state"] or "",
                     "nyscStatus": row["nysc_status"] or "",
                     "hasPitch": bool(row["pitch_media_kind"]),

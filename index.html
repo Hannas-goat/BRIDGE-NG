@@ -381,10 +381,14 @@ if('serviceWorker' in navigator){
           <label>Field of study / background</label>
           <input type="text" id="s-field" placeholder="e.g. Computer Science, UNILAG">
         </div>
-        <div>
-          <label>Preferred location</label>
-          <select id="s-loc"></select>
-        </div>
+      </div>
+      <label>Preferred location(s)</label>
+      <p style="font-size:12px;color:var(--ink-soft);margin:-8px 0 8px;">Pick as many cities/states as you'd genuinely accept a role in — matching gives credit if a role is in any of them.</p>
+      <div class="chip-field" id="s-loc-chips"></div>
+      <div class="skill-add-row">
+        <input type="text" id="s-loc-input" list="s-loc-datalist" placeholder="Type a city, e.g. Lekki" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkill('s-loc-chips', seekerLocations, 's-loc-input');}">
+        <datalist id="s-loc-datalist"></datalist>
+        <button class="upload-btn" onclick="addCustomSkill('s-loc-chips', seekerLocations, 's-loc-input')">Add location</button>
       </div>
       <div class="field-row">
         <div>
@@ -1552,14 +1556,15 @@ let employerSkills = new Set();
 let abroadSkills = new Set();
 let careerMatchSkills = new Set();
 let jobMatchSkills = new Set();
+let seekerLocations = new Set();
 buildChips('s-skills', seekerSkills);
 buildChips('e-skills', employerSkills);
 buildChips('ab-skills', abroadSkills);
 buildChips('cm-skills', careerMatchSkills);
 buildChips('jm-skills', jobMatchSkills);
 
-populateLocationSelect('s-loc', true);
 populateLocationSelect('e-loc', false);
+populateLocationDatalist('s-loc-datalist');
 populatePpaStateSelect('s-ppa-state');
 populatePpaStateSelect('e-ppa-state', 'Any PPA state / not NYSC-specific');
 populatePhoneCountrySelect('s-phone-cc');
@@ -2303,7 +2308,9 @@ async function saveCurrentSearch(){
     return;
   }
   const level = document.getElementById('s-level').value;
-  const loc = document.getElementById('s-loc').value;
+  // Saved-search alerts still match against a single location (see handle_create_saved_search) —
+  // use the first picked preferred location as the representative one, or none to match any location.
+  const loc = [...seekerLocations][0] || '';
   try{
     await apiCreateSavedSearch({skills: [...seekerSkills], level, location: loc, label: [...seekerSkills].slice(0, 3).join(', ')});
     await loadSavedSearches();
@@ -2619,7 +2626,7 @@ function renderMegaProfileMeter(){
   const profile = currentAccount.profile;
   const filled = PROFILE_COMPLETION_FIELDS.filter(f => {
     const v = profile[f.key];
-    return f.key === 'skills' ? !!(v && v.length) : !!(v && String(v).trim());
+    return (f.key === 'skills' || f.key === 'preferredLocations') ? !!(v && v.length) : !!(v && String(v).trim());
   }).length;
   const pct = Math.round(filled / PROFILE_COMPLETION_FIELDS.length * 100);
   el.innerHTML = `
@@ -2637,7 +2644,7 @@ function renderHeaderProfileMeter(){
   const profile = currentAccount.profile;
   const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
     const v = profile[f.key];
-    return f.key === 'skills' ? !(v && v.length) : !(v && String(v).trim());
+    return (f.key === 'skills' || f.key === 'preferredLocations') ? !(v && v.length) : !(v && String(v).trim());
   });
   const filledCount = PROFILE_COMPLETION_FIELDS.length - missing.length;
   const pct = Math.round(filledCount / PROFILE_COMPLETION_FIELDS.length * 100);
@@ -4115,7 +4122,7 @@ function renderMilestoneBadges(){
   const profile = currentAccount.profile;
   const filled = PROFILE_COMPLETION_FIELDS.filter(f => {
     const v = profile[f.key];
-    return f.key === 'skills' ? !!(v && v.length) : !!(v && String(v).trim());
+    return (f.key === 'skills' || f.key === 'preferredLocations') ? !!(v && v.length) : !!(v && String(v).trim());
   }).length;
   const badges = [
     {label: 'Profile complete', earned: filled === PROFILE_COMPLETION_FIELDS.length, icon: '🏅'},
@@ -4165,7 +4172,7 @@ const PROFILE_COMPLETION_FIELDS = [
   {key: 'education', label: 'Education level', target: 's-education'},
   {key: 'careerLevel', label: 'Career stage', target: 's-level'},
   {key: 'fieldOfStudy', label: 'Field of study', target: 's-field'},
-  {key: 'preferredLocation', label: 'Preferred location', target: 's-loc'},
+  {key: 'preferredLocations', label: 'Preferred location', target: 's-loc-input'},
   {key: 'university', label: 'University / institution', target: 's-university'},
   {key: 'skills', label: 'Skills', target: 's-skill-input'},
 ];
@@ -4192,7 +4199,7 @@ function renderProfileCompletion(){
   const profile = currentAccount.profile;
   const missing = PROFILE_COMPLETION_FIELDS.filter(f => {
     const v = profile[f.key];
-    return f.key === 'skills' ? !(v && v.length) : !(v && String(v).trim());
+    return (f.key === 'skills' || f.key === 'preferredLocations') ? !(v && v.length) : !(v && String(v).trim());
   });
   const filledCount = PROFILE_COMPLETION_FIELDS.length - missing.length;
   const pct = Math.round(filledCount / PROFILE_COMPLETION_FIELDS.length * 100);
@@ -4249,7 +4256,7 @@ function fillSeekerFormFromProfile(profile){
   if(profile.education) document.getElementById('s-education').value = profile.education;
   if(profile.careerLevel) document.getElementById('s-level').value = profile.careerLevel;
   document.getElementById('s-field').value = profile.fieldOfStudy || '';
-  if(profile.preferredLocation) document.getElementById('s-loc').value = profile.preferredLocation;
+  applySelectedSkills('s-loc-chips', seekerLocations, profile.preferredLocations || []);
   document.getElementById('s-remote').value = profile.openToRemote ? 'yes' : 'no';
   document.getElementById('s-university').value = profile.university || '';
   if(profile.nyscStatus) document.getElementById('s-nysc').value = profile.nyscStatus;
@@ -4494,7 +4501,7 @@ async function saveProfile(){
     address: document.getElementById('s-address').value,
     education, careerLevel,
     fieldOfStudy: document.getElementById('s-field').value,
-    preferredLocation: document.getElementById('s-loc').value,
+    preferredLocations: [...seekerLocations],
     openToRemote: document.getElementById('s-remote').value === 'yes',
     university: document.getElementById('s-university').value,
     nyscStatus: document.getElementById('s-nysc').value,
@@ -4738,7 +4745,10 @@ function matchScore(requiredSkills, candidateSkills, reqLevel, candLevel, reqLoc
   const union = new Set([...req, ...cand]).size;
   const skillScore = union === 0 ? 0 : intersection/union;
   const levelPenalty = levelDistance(reqLevel, candLevel) * 0.12;
-  const locBonus = (reqLoc === 'Any location' || candLoc === reqLoc || reqLoc === 'Remote') ? 0.05 : 0;
+  // candLoc accepts either a single location string (older callers) or an array of preferred
+  // locations (multi-select candidate matching) — normalized to an array either way.
+  const candLocs = Array.isArray(candLoc) ? candLoc : (candLoc ? [candLoc] : []);
+  const locBonus = (reqLoc === 'Any location' || candLocs.includes(reqLoc) || reqLoc === 'Remote') ? 0.05 : 0;
   let score = skillScore*0.8 + 0.2 - levelPenalty + locBonus;
   return Math.max(2, Math.min(99, Math.round(score*100)));
 }
@@ -4874,7 +4884,7 @@ function skillPills(allSkills, highlightSet){
 function findJobs(){
   const name = document.getElementById('s-name').value || 'You';
   const level = document.getElementById('s-level').value;
-  const loc = document.getElementById('s-loc').value;
+  const loc = [...seekerLocations];
   if(seekerSkills.size === 0){
     showToast('Select at least one skill to find matches.');
     return;
@@ -5943,7 +5953,7 @@ function renderEmployerResultsSection(){
           </div>
           <div class="res-body">
             <p class="res-title">${escapeHtml(name)} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
-            <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${escapeHtml(m.preferredLocation || 'Location not specified')} · ${escapeHtml(m.careerLevel || 'Level not specified')}</p>
+            <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${escapeHtml((m.preferredLocations || []).join(', ') || 'Location not specified')} · ${escapeHtml(m.careerLevel || 'Level not specified')}</p>
             ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
             ${reliabilityBadgeHtml(m)}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
@@ -5991,7 +6001,7 @@ function shortlistMatrixHtml(matches, blinded){
               <td>${escapeHtml(candidateDisplayName(m, blinded, i))}</td>
               <td><span class="matrix-score-pill" style="background:${gaugeColor(m.score).bg};color:${gaugeColor(m.score).fg};">${m.score}%</span></td>
               <td>${m.nyscStatus ? escapeHtml(m.nyscStatus) + (m.ppaState ? ' · ' + escapeHtml(m.ppaState) : '') : '—'}</td>
-              <td>${escapeHtml(m.preferredLocation || '—')}</td>
+              <td>${escapeHtml((m.preferredLocations || []).join(', ') || '—')}</td>
               <td>${(m.verifiedBadges || []).length ? (m.verifiedBadges || []).map(b => `<span class="verified-badge" style="margin-right:4px;" onclick="showBadgeDetail('${escapeHtml(b.skill)}', ${b.score}, ${b.total}, '${escapeHtml(b.date)}')">✓ ${escapeHtml(b.skill)}</span>`).join('') : '—'}</td>
               <td>${pipelineStageCellHtml(m.userId)}</td>
               <td>${teamCellHtml(m.userId)}</td>

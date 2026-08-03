@@ -157,6 +157,7 @@ function createChip(containerId, targetSet, label, startSelected){
   c.tabIndex = 0;
   c.setAttribute('role', 'button');
   c.setAttribute('aria-pressed', startSelected ? 'true' : 'false');
+  if(startSelected) targetSet.add(label);
   const toggle = ()=>{
     if(targetSet.has(label)){ targetSet.delete(label); c.classList.remove('selected'); }
     else { targetSet.add(label); c.classList.add('selected'); }
@@ -240,6 +241,20 @@ function populateLocationSelect(selectId, includeAny){
     html += `<optgroup label="${state}">` + LOCATIONS[state].map(c=>`<option>${c}</option>`).join('') + `</optgroup>`;
   });
   sel.innerHTML = html;
+}
+
+// Flat, deduped list of every city/state name for a <datalist> — used by the preferred-locations
+// multi-select chip input, which (unlike a plain <select>) needs autocomplete suggestions rather
+// than a fixed dropdown of options.
+function populateLocationDatalist(datalistId){
+  const dl = document.getElementById(datalistId);
+  if(!dl) return;
+  const names = new Set(['Remote']);
+  Object.keys(LOCATIONS).forEach(state=>{
+    names.add(state);
+    LOCATIONS[state].forEach(c => names.add(c));
+  });
+  dl.innerHTML = [...names].sort().map(n => `<option value="${n}"></option>`).join('');
 }
 
 // --- Train Yourself: curated learning-platform search links per skill ---
