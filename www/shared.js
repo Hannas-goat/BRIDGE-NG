@@ -312,6 +312,7 @@ function apiChat(messages, context){ return apiRequest('/api/chat', 'POST', {mes
 
 function apiListJobs(){ return apiRequest('/api/jobs', 'GET'); }
 function apiCreateSavedSearch(payload){ return apiRequest('/api/saved-searches', 'POST', payload); }
+function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'POST', payload); }
 function apiListSavedSearches(){ return apiRequest('/api/saved-searches', 'GET'); }
 function apiDeleteSavedSearch(id){ return apiRequest('/api/saved-searches/delete', 'POST', {id}); }
 function apiFollowCompany(company){ return apiRequest('/api/follow-company', 'POST', {company}); }

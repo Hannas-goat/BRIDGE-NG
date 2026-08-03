@@ -610,6 +610,15 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_waitlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            platform TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(email, platform)
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS followed_companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL REFERENCES users(id),
@@ -2054,6 +2063,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_import_jobs()
         if parsed.path == "/api/jobs/sync":
             return self.handle_sync_jobs()
+        if parsed.path == "/api/app-waitlist":
+            return self.handle_join_app_waitlist()
         if parsed.path == "/api/saved-searches":
             return self.handle_create_saved_search()
         if parsed.path == "/api/saved-searches/delete":
@@ -2743,6 +2754,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         self.send_json(200, {"jobs": [imported_job_row_to_json(r) for r in rows]})
 
+    # ---------- native app waitlist ----------
+
+    def handle_join_app_waitlist(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        email = (data.get("email") or "").strip().lower()
+        platform = (data.get("platform") or "").strip()[:20]
+        if not EMAIL_RE.match(email):
+            return self.send_json(400, {"error": "Enter a valid email address."})
+        with db_lock:
+            conn = get_db()
+            try:
+                conn.execute(
+                    "INSERT INTO app_waitlist (email, platform) VALUES (?, ?)", (email, platform)
+                )
+                conn.commit()
+            except Exception as e:
+                if not is_duplicate_key_error(e):
+                    conn.close()
+                    raise
+            conn.close()
+        self.send_json(200, {"ok": True})
+
     # ---------- saved searches ----------
 
     def handle_create_saved_search(self):
@@ -2756,12 +2791,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not skills:
             return self.send_json(400, {"error": "Select at least one skill to save this search."})
         label = (data.get("label") or "").strip() or ", ".join(skills[:3])
+        level = data.get("level", "")
+        location = data.get("location", "")
+        skill_set = set(skills)
 
         with db_lock:
             conn = get_db()
+            existing = conn.execute(
+                "SELECT * FROM saved_searches WHERE user_id = ? AND level = ? AND location = ?",
+                (user_id, level, location),
+            ).fetchall()
+            duplicate = next((r for r in existing if set(json.loads(r["skills"] or "[]")) == skill_set), None)
+            if duplicate is not None:
+                conn.close()
+                return self.send_json(200, {"ok": True, "search": saved_search_row_to_json(duplicate)})
             cur = conn.execute(
                 "INSERT INTO saved_searches (user_id, label, skills, level, location) VALUES (?, ?, ?, ?, ?)",
-                (user_id, label, json.dumps(skills), data.get("level", ""), data.get("location", "")),
+                (user_id, label, json.dumps(skills), level, location),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM saved_searches WHERE id = ?", (cur.lastrowid,)).fetchone()
