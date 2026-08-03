@@ -317,6 +317,23 @@ if('serviceWorker' in navigator){
     <div class="milestone-badges" id="nysc-badge"></div>
     <div id="profile-completion"></div>
     <div id="profile-insights"></div>
+    <div class="card" id="referrals-card" style="display:none;">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">Refer someone, get real credit</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px;">Create a link and share it — if someone signs up through it and later gets hired, it's tracked here for a referral bounty (reviewed and paid out manually, not automatic).</p>
+      <div class="field-row">
+        <div>
+          <label>Job title (optional)</label>
+          <input type="text" id="ref-job-title" placeholder="e.g. Senior DevOps Engineer">
+        </div>
+        <div>
+          <label>Company (optional)</label>
+          <input type="text" id="ref-company" placeholder="e.g. Paystack">
+        </div>
+      </div>
+      <button class="go-btn" style="margin-top:0;" onclick="createReferralLink()">Create referral link →</button>
+      <p class="form-msg" id="referral-create-msg"></p>
+      <div id="referrals-list" style="margin-top:14px;"></div>
+    </div>
     <div class="card">
       <h3 style="margin-bottom:4px;color:var(--indigo);">Build your profile</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 18px;">Personal details</p>
@@ -4664,6 +4681,67 @@ async function loadProfileInsights(){
   }
 }
 
+// --- Referrals: real tracking (who signed up via your link, who got hired) — see
+// handle_create_referral_link/handle_list_my_referrals/handle_set_pipeline_stage in server.py.
+// Deliberately no automatic payout here; a bounty gets reviewed and paid out manually. ---
+
+async function loadReferrals(){
+  const card = document.getElementById('referrals-card');
+  if(!card) return;
+  if(!currentAccount){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  try{
+    const data = await apiListMyReferrals();
+    renderReferrals(data.links || []);
+  }catch(e){
+    document.getElementById('referrals-list').innerHTML = '';
+  }
+}
+
+function renderReferrals(links){
+  const el = document.getElementById('referrals-list');
+  if(links.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Your referral links</h2><span>${links.length}</span></div>
+    ${links.map(l => `
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">${escapeHtml(l.jobTitle || 'General referral link')}${l.company ? ' · ' + escapeHtml(l.company) : ''}</div>
+          <div class="settings-row-sub">${l.signups} signed up · ${l.hires} hired${l.hires > 0 ? ' 🎉' : ''}</div>
+        </div>
+        <button class="upload-btn" onclick="copyReferralLink('${jsStr(l.url)}')">Copy link</button>
+      </div>
+    `).join('')}
+  `;
+}
+
+async function createReferralLink(){
+  const jobTitle = document.getElementById('ref-job-title').value.trim();
+  const company = document.getElementById('ref-company').value.trim();
+  const msg = document.getElementById('referral-create-msg');
+  try{
+    const data = await apiCreateReferralLink({jobTitle, company});
+    document.getElementById('ref-job-title').value = '';
+    document.getElementById('ref-company').value = '';
+    msg.textContent = '';
+    await copyReferralLink(data.url);
+    await loadReferrals();
+  }catch(e){
+    msg.textContent = "Couldn't create a referral link — try again.";
+    msg.className = 'form-msg error';
+  }
+}
+
+async function copyReferralLink(path){
+  const url = location.origin + path;
+  try{
+    await navigator.clipboard.writeText(url);
+    showToast('Referral link copied — share it anywhere.');
+  }catch(e){
+    showToast(url);
+  }
+}
+
 function renderProfileInsights(data){
   const el = document.getElementById('profile-insights');
   if(!el) return;
@@ -4789,7 +4867,8 @@ async function initAccount(){
   await loadApplications();
   await loadCheckinStatus();
   await loadConversations();
-  if(currentAccount) await loadProfileInsights();
+  await loadProfileInsights();
+  await loadReferrals();
   if(currentAccount) startNotifPolling();
   renderRecentJobsFeed(); // re-render now that we know follow state, in case it loaded before loadImportedJobs() finished
 }
@@ -4838,7 +4917,8 @@ async function signOut(){
   await loadApplications();
   await loadCheckinStatus();
   await loadConversations();
-  if(currentAccount) await loadProfileInsights();
+  await loadProfileInsights();
+  await loadReferrals();
   renderRecentJobsFeed();
   renderRemoteJobsFeed();
 }

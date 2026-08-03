@@ -346,6 +346,8 @@ function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'PO
 function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', payload); }
 function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GET'); }
 function apiGetCertificateUrl(skill){ return apiRequest(`/api/certificate-url?skill=${encodeURIComponent(skill)}`, 'GET'); }
+function apiCreateReferralLink(payload){ return apiRequest('/api/referrals/create', 'POST', payload); }
+function apiListMyReferrals(){ return apiRequest('/api/referrals/mine', 'GET'); }
 function apiGetSqlPlaygroundChallenges(){ return apiRequest('/api/sql-playground/challenges', 'GET'); }
 function apiSubmitSqlPlaygroundQuery(payload){ return apiRequest('/api/sql-playground/submit', 'POST', payload); }
 function apiCreateAsyncInterview(payload){ return apiRequest('/api/async-interview/create', 'POST', payload); }

@@ -629,6 +629,25 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS referral_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referrer_user_id INTEGER NOT NULL REFERENCES users(id),
+            code TEXT UNIQUE NOT NULL,
+            job_title TEXT DEFAULT '',
+            company TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS referral_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referral_link_id INTEGER NOT NULL REFERENCES referral_links(id),
+            referred_user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            hired_at TEXT
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS job_reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_title TEXT NOT NULL,
@@ -2429,6 +2448,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_profile_insights()
         if parsed.path == "/api/certificate-url":
             return self.handle_certificate_url(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/referrals/mine":
+            return self.handle_list_my_referrals()
         if parsed.path == "/api/account/export":
             return self.handle_export_data()
         if parsed.path == "/api/checkin":
@@ -2545,6 +2566,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_join_app_waitlist()
         if parsed.path == "/api/report-job":
             return self.handle_report_job()
+        if parsed.path == "/api/referrals/create":
+            return self.handle_create_referral_link()
         if parsed.path == "/api/saved-searches":
             return self.handle_create_saved_search()
         if parsed.path == "/api/saved-searches/delete":
@@ -2683,6 +2706,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                      encrypt_field((data.get("whatsappNumber") or "").strip()),
                      1 if data.get("whatsappAlertsEnabled") else 0),
                 )
+                referral_code = (data.get("referralCode") or "").strip()
+                if referral_code:
+                    link = conn.execute("SELECT id FROM referral_links WHERE code = ?", (referral_code,)).fetchone()
+                    if link is not None:
+                        conn.execute(
+                            "INSERT INTO referral_claims (referral_link_id, referred_user_id) VALUES (?, ?)",
+                            (link["id"], user_id),
+                        )
                 conn.commit()
             except Exception as e:
                 conn.close()
@@ -3454,6 +3485,50 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.commit()
             conn.close()
         self.send_json(200, {"ok": True})
+
+    # ---------- referrals: a candidate shares a link for a role, gets real credit (not an
+    # automatic payout — see handle_set_pipeline_stage) if the person they refer gets hired ----------
+
+    def handle_create_referral_link(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body() or {}
+        job_title = (data.get("jobTitle") or "").strip()[:200]
+        company = (data.get("company") or "").strip()[:200]
+        code = secrets.token_urlsafe(6)
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                "INSERT INTO referral_links (referrer_user_id, code, job_title, company) VALUES (?, ?, ?, ?)",
+                (user_id, code, job_title, company),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True, "code": code, "url": f"/auth.html?mode=signup&ref={code}"})
+
+    def handle_list_my_referrals(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(200, {"links": []})
+        with db_lock:
+            conn = get_db()
+            links = conn.execute(
+                "SELECT * FROM referral_links WHERE referrer_user_id = ? ORDER BY id DESC", (user_id,)
+            ).fetchall()
+            result = []
+            for link in links:
+                claims = conn.execute(
+                    "SELECT * FROM referral_claims WHERE referral_link_id = ? ORDER BY id DESC", (link["id"],)
+                ).fetchall()
+                result.append({
+                    "id": link["id"], "code": link["code"], "jobTitle": link["job_title"], "company": link["company"],
+                    "url": f"/auth.html?mode=signup&ref={link['code']}",
+                    "signups": len(claims),
+                    "hires": sum(1 for c in claims if c["hired_at"]),
+                })
+            conn.close()
+        self.send_json(200, {"links": result})
 
     # ---------- saved searches ----------
 
@@ -4306,6 +4381,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 conn.execute(
                     "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, '', ?)",
                     (candidate_user_id, "pipeline_stage", notif_message, employer["company_name"]),
+                )
+            if stage == "hired":
+                # Real referral-bounty signal: this candidate got hired, and they were referred by
+                # someone — flag it for the operator to review and pay out manually (see
+                # handle_list_my_referrals). Never an automatic Paystack transfer — that needs a
+                # funded, transfer-enabled account and real fraud review before moving money.
+                conn.execute(
+                    "UPDATE referral_claims SET hired_at = datetime('now') WHERE referred_user_id = ? AND hired_at IS NULL",
+                    (candidate_user_id,),
                 )
             conn.commit()
             conn.close()

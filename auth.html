@@ -426,6 +426,7 @@ async function doSignUp(){
 
   const payload = {
     email, password, fullName,
+    referralCode: new URLSearchParams(location.search).get('ref') || '',
     dob: document.getElementById('su-dob').value,
     sex: document.getElementById('su-sex').value,
     phone: formatPhoneWithCountryCode(document.getElementById('su-phone-cc').value, document.getElementById('su-phone').value),
