@@ -345,6 +345,18 @@ function apiCreateSavedSearch(payload){ return apiRequest('/api/saved-searches',
 function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'POST', payload); }
 function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', payload); }
 function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GET'); }
+
+// Mirrors server.py's slugify() exactly, so a link built here resolves to the same job the
+// server would generate the URL for — only the leading numeric id is ever actually used to look
+// the job up, this just keeps the URL text matching for a cleaner/more credible shared link.
+function jsSlugify(text){
+  const cleaned = (text || '').replace(/[^a-zA-Z0-9\s-]/g, '').trim().toLowerCase().replace(/[\s-]+/g, '-');
+  return cleaned.slice(0, 80).replace(/^-+|-+$/g, '') || 'role';
+}
+
+function jobSeoUrl(dbId, title, company){
+  return `/jobs/${dbId}-${jsSlugify(title)}-at-${jsSlugify(company)}`;
+}
 function apiListSavedSearches(){ return apiRequest('/api/saved-searches', 'GET'); }
 function apiDeleteSavedSearch(id){ return apiRequest('/api/saved-searches/delete', 'POST', {id}); }
 function apiFollowCompany(company){ return apiRequest('/api/follow-company', 'POST', {company}); }

@@ -20,6 +20,7 @@ import urllib.parse
 import urllib.request
 
 from cryptography.fernet import Fernet, InvalidToken
+from PIL import Image, ImageDraw, ImageFont
 
 # On hosts like Render, stdout isn't a real terminal, so Python block-buffers print() output
 # instead of flushing per line — logs can end up delayed indefinitely or never show up at all.
@@ -32,7 +33,7 @@ PORT = int(os.environ.get("PORT", 8000))
 
 STATIC_FILES = {"index.html", "auth.html", "shared.js", "styles.css", "admin-jobs-sync.html", "privacy.html", "terms.html",
                  "about.html", "careers.html", "support.html", "contact.html", "pricing.html", "profile.html",
-                 "manifest.json", "sw.js"}
+                 "manifest.json", "sw.js", "robots.txt"}
 STATIC_DIRS = {"images"}
 
 PBKDF2_ITERATIONS = 200_000
@@ -1579,6 +1580,174 @@ def location_indicates_remote(location):
     return any(kw in loc for kw in ("remote", "anywhere", "worldwide", "global"))
 
 
+def slugify(text):
+    text = re.sub(r"[^a-zA-Z0-9\s-]", "", text or "").strip().lower()
+    text = re.sub(r"[\s-]+", "-", text)
+    return text[:80].strip("-") or "role"
+
+
+def job_seo_url(job_id, title, company):
+    """Only the numeric id is ever actually used for lookup (see handle_job_detail_page) — the
+    descriptive slug text is cosmetic/for SEO, so an old shared link stays valid even if the job's
+    title is later edited."""
+    return f"/jobs/{job_id}-{slugify(title)}-at-{slugify(company)}"
+
+
+def job_pay_label(pay_min, pay_max):
+    if not pay_min and not pay_max:
+        return "Competitive salary"
+    return f"₦{pay_min:,} – ₦{pay_max:,}/mo"
+
+
+def _wrap_text_lines(draw, text, font, max_width):
+    words = (text or "").split()
+    lines, current = [], ""
+    for word in words:
+        candidate = (current + " " + word).strip()
+        if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+_OG_IMAGE_CHAR_MAP = str.maketrans({
+    "—": "-", "–": "-",  # em dash, en dash
+    "‘": "'", "’": "'",  # curly single quotes
+    "“": '"', "”": '"',  # curly double quotes
+    "…": "...",  # ellipsis
+    "•": "-",  # bullet
+    " ": " ",  # non-breaking space
+})
+
+
+def _og_image_safe_text(text):
+    """Pillow's bundled default font (see generate_og_image) has a limited glyph set — real
+    ATS-sourced job titles/locations often use 'smart' typography (em dashes, curly quotes) that
+    would otherwise render as a visible tofu box. Normalizes the common cases to plain ASCII."""
+    return (text or "").translate(_OG_IMAGE_CHAR_MAP)
+
+
+def generate_og_image(title, company, location):
+    """Renders a real, per-job 1200x630 share-preview image server-side. Uses Pillow's own
+    bundled scalable font (ImageFont.load_default(size=...), no external .ttf file needed) so
+    this renders identically on Render as it does locally — nothing to bundle or install beyond
+    the Pillow package itself. Regenerated per-request rather than cached to disk; rendering a
+    handful of text lines is cheap, and this only runs when a link is actually shared/crawled."""
+    w, h = 1200, 630
+    img = Image.new("RGB", (w, h), "#FBF6EA")
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([0, 0, w, 14], fill="#8B5CF6")
+
+    brand_font = ImageFont.load_default(size=32)
+    title_font = ImageFont.load_default(size=56)
+    sub_font = ImageFont.load_default(size=32)
+    footer_font = ImageFont.load_default(size=24)
+
+    draw.text((70, 56), "Bridge NG", font=brand_font, fill="#14213D")
+
+    title = _og_image_safe_text(title) or "New role"
+    company = _og_image_safe_text(company)
+    location = _og_image_safe_text(location)
+
+    title_lines = _wrap_text_lines(draw, title, title_font, w - 140)[:3]
+    y = 190
+    for line in title_lines:
+        draw.text((70, y), line, font=title_font, fill="#14213D")
+        y += 68
+
+    sub = " · ".join(p for p in (company, location) if p)
+    if sub:
+        draw.text((70, y + 16), sub, font=sub_font, fill="#5B6478")
+
+    draw.text((70, h - 60), "bridge-ng.onrender.com", font=footer_font, fill="#A66E1B")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def render_job_detail_html(job, job_id):
+    """Real, server-rendered (no JS required) HTML for one specific job — crawlable by Google and
+    correctly unfurled by WhatsApp/Twitter/etc, neither of which execute the SPA's client-side
+    JOBS rendering. Deliberately scoped to imported_jobs only (real ATS-sourced listings that are
+    already publicly browsable in Explore Jobs) — employer_posted_jobs are anonymous, unauthenticated
+    submissions never shown outside the posting employer's own dashboard and matched candidates'
+    notifications, and making those independently indexable by Google would be a real, new exposure
+    this feature shouldn't introduce."""
+    title = job["title"] or "Role"
+    company = job["company"] or ""
+    location = job["location"] or "Nigeria"
+    level = job["level"] or ""
+    skills = json.loads(job["skills"] or "[]")
+    pay = job_pay_label(job["pay_min"] or 0, job["pay_max"] or 0)
+    description = (job["description"] or "").strip()
+    canonical_url = job_seo_url(job_id, title, company)
+    page_title = html.escape(f"{title} at {company} — Bridge NG")
+    meta_desc = html.escape(
+        f"{title} at {company} — {location}. {pay}. Apply on Bridge NG, "
+        f"the skill-based job matching platform for Nigerian talent."
+    )
+    skills_html = "".join(f'<span class="skill-pill">{html.escape(s)}</span>' for s in skills)
+    apply_link = job["application_link"] or ""
+    apply_html = (
+        f'<a class="apply-btn" href="{html.escape(apply_link)}" target="_blank" rel="noopener noreferrer">Apply via Company Site</a>'
+        if apply_link else ""
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{page_title}</title>
+<meta name="description" content="{meta_desc}">
+<link rel="canonical" href="https://bridge-ng.onrender.com{html.escape(canonical_url)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{page_title}">
+<meta property="og:description" content="{meta_desc}">
+<meta property="og:image" content="https://bridge-ng.onrender.com{html.escape(canonical_url)}/og-image.png">
+<meta property="og:url" content="https://bridge-ng.onrender.com{html.escape(canonical_url)}">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" type="image/png" href="/images/bridgeng-logo-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav" style="position:static;animation:none;">
+    <a class="brand" href="/index.html" style="text-decoration:none;color:inherit;">
+      <img class="brand-logo" src="/images/bridgeng-logo-wordmark.png" alt="Bridge NG">
+    </a>
+  </div>
+</div>
+<div class="auth-wrap" style="max-width:680px;">
+  <div class="card">
+    <h1 style="font-family:'Fraunces',serif;font-size:26px;color:var(--indigo);margin:0 0 6px;">{html.escape(title)}</h1>
+    <p style="font-size:15px;color:var(--ink-soft);margin:0 0 14px;">{html.escape(company)} · {html.escape(location)}{(' · ' + html.escape(level)) if level else ''}</p>
+    <span class="pay-pill">{html.escape(pay)}</span>
+    <div class="skill-row" style="margin-top:14px;">{skills_html}</div>
+    {f'<p style="font-size:14px;color:var(--ink);margin-top:18px;line-height:1.6;white-space:pre-line;">{html.escape(description)}</p>' if description else ''}
+    <div class="btn-row" style="margin-top:20px;">
+      {apply_html}
+      <a class="upload-btn" href="/index.html">See more roles on Bridge NG →</a>
+    </div>
+  </div>
+</div>
+<footer class="site-footer">
+  <div class="footer-bottom">
+    <span>© 2026 Bridge NG. All rights reserved.</span>
+  </div>
+</footer>
+</body>
+</html>
+"""
+
+
 NIGERIAN_PLACE_NAMES = (
     "nigeria", "lagos", "abuja", "kano", "ibadan", "port harcourt", "kaduna",
     "enugu", "benin city", "jos", "abeokuta", "owerri", "warri", "calabar",
@@ -2019,6 +2188,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/me":
             return self.handle_me()
+        if parsed.path == "/sitemap.xml":
+            return self.handle_sitemap()
         if parsed.path == "/api/debug/db":
             return self.handle_debug_db(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/admin/application-stats":
@@ -2083,6 +2254,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # needed for a single dynamic path prefix like this.
         if parsed.path.startswith("/p/") or parsed.path == "/p":
             return self.serve_static("/profile.html")
+        # Real, crawlable per-job pages (bridge-ng.onrender.com/jobs/4521-some-descriptive-slug)
+        # and their matching dynamic OG share-preview image. Only the leading numeric id is ever
+        # actually used to look the job up (see job_seo_url) — anything else in the path is
+        # cosmetic and ignored, so an old link with a stale title-derived slug still resolves.
+        job_match = re.match(r"^/jobs/(\d+)(?:-[^/]*)?(?:/og-image\.png)?$", parsed.path)
+        if job_match:
+            return self.handle_job_seo_route(int(job_match.group(1)), parsed.path.endswith("/og-image.png"))
         return self.serve_static(parsed.path)
 
     def do_POST(self):
@@ -2630,6 +2808,54 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
             "portfolioLink": row["portfolio_link"] or "",
         })
+
+    def handle_job_seo_route(self, job_id, want_image):
+        """Backs both /jobs/<id>-slug (real crawlable HTML) and /jobs/<id>-slug/og-image.png (the
+        matching dynamic share-preview image it links to). Scoped to imported_jobs only — see
+        render_job_detail_html for why employer_posted_jobs is deliberately excluded."""
+        with db_lock:
+            conn = get_db()
+            job = conn.execute("SELECT * FROM imported_jobs WHERE id = ?", (job_id,)).fetchone()
+            conn.close()
+        if job is None:
+            return self.send_json(404, {"error": "This role isn't available anymore — it may have been filled or removed."})
+        if want_image:
+            png_bytes = generate_og_image(job["title"], job["company"], job["location"])
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(png_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(png_bytes)
+            return
+        body = render_job_detail_html(job, job_id).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache, must-revalidate")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def handle_sitemap(self):
+        """Lists every real job detail page plus the main static pages, so Google can discover
+        and index them directly instead of relying on crawling internal links from the SPA (whose
+        job cards are rendered client-side after the initial HTML response)."""
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute("SELECT id, title, company FROM imported_jobs ORDER BY id DESC LIMIT 2000").fetchall()
+            conn.close()
+        base = "https://bridge-ng.onrender.com"
+        urls = [base + p for p in ("/index.html", "/about.html", "/careers.html", "/pricing.html", "/contact.html")]
+        urls += [base + job_seo_url(r["id"], r["title"], r["company"]) for r in rows]
+        lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+        lines += [f"  <url><loc>{html.escape(u)}</loc></url>" for u in urls]
+        lines.append("</urlset>")
+        body = "\n".join(lines).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/xml; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_save_resume(self):
         """Persists whatever resume (pasted text or uploaded file) the candidate currently has in

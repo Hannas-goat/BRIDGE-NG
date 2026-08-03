@@ -1591,6 +1591,7 @@ async function loadImportedJobs(){
     (data.jobs || []).forEach(j=>{
       JOBS.push({
         id: JOBS.length,
+        dbId: j.id,
         title: j.title,
         company: j.company,
         loc: j.location || 'Remote',
@@ -1860,6 +1861,26 @@ function reportJobButtonHtml(job){
   return `<button class="report-job-btn" title="Report this listing" aria-label="Report this listing" onclick="${escapeAttr(onclickJs)}">🚩</button>`;
 }
 
+// Real per-job, crawlable page + dynamic OG share-preview image (see job_seo_url/
+// render_job_detail_html/generate_og_image in server.py) — only offered for real imported
+// listings (job.dbId), never sample/placeholder cards that have no matching server-side page.
+function shareJobButtonHtml(job){
+  if(!job.imported || !job.dbId) return '';
+  const url = jobSeoUrl(job.dbId, job.title || '', job.company || '');
+  const onclickJs = `shareJobLink('${jsStr(url)}')`;
+  return `<button class="report-job-btn" title="Copy shareable link" aria-label="Copy shareable link" onclick="${escapeAttr(onclickJs)}">🔗</button>`;
+}
+
+async function shareJobLink(path){
+  const url = location.origin + path;
+  try{
+    await navigator.clipboard.writeText(url);
+    showToast("Link copied — paste it anywhere and it'll show a real preview with the role and company.");
+  }catch(e){
+    showToast(url);
+  }
+}
+
 let reportJobContext = null;
 
 function openReportJobModal(jobTitle, company){
@@ -2048,6 +2069,7 @@ function renderRecentJobsFeed(){
               ${applyButtonHtml(j)}
               ${pitchButtonHtml(j)}
               ${reportJobButtonHtml(j)}
+              ${shareJobButtonHtml(j)}
             </div>
           </div>
         </div>
@@ -2080,6 +2102,7 @@ function renderRemoteJobsFeed(){
               ${followButtonHtml(j.company)}
               ${pitchButtonHtml(j)}
               ${reportJobButtonHtml(j)}
+              ${shareJobButtonHtml(j)}
             </div>
           </div>
         </div>
@@ -2228,6 +2251,7 @@ function renderExploreResults(){
               ${bridgeGapButtonHtml(j.skills, mySkills)}
               ${pitchButtonHtml(j)}
               ${reportJobButtonHtml(j)}
+              ${shareJobButtonHtml(j)}
             </div>
             <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
@@ -4972,6 +4996,7 @@ function findJobs(){
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'cover')">Write cover letter ↗</button>
               ${bridgeGapButtonHtml(job.skills, seekerSkills)}
               ${reportJobButtonHtml(job)}
+              ${shareJobButtonHtml(job)}
             </div>
             <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
@@ -5653,6 +5678,7 @@ function renderJobMatchResults(resolved){
               ${followButtonHtml(job.company)}
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
               ${reportJobButtonHtml(job)}
+              ${shareJobButtonHtml(job)}
             </div>
           </div>
         </div>`).join('')}
