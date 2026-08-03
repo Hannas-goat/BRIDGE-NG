@@ -347,6 +347,10 @@ function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', pay
 function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GET'); }
 function apiGetSqlPlaygroundChallenges(){ return apiRequest('/api/sql-playground/challenges', 'GET'); }
 function apiSubmitSqlPlaygroundQuery(payload){ return apiRequest('/api/sql-playground/submit', 'POST', payload); }
+function apiCreateAsyncInterview(payload){ return apiRequest('/api/async-interview/create', 'POST', payload); }
+function apiListMyAsyncInterviews(){ return apiRequest('/api/async-interview/mine', 'GET'); }
+function apiSubmitAsyncInterviewAnswer(payload){ return apiRequest('/api/async-interview/answer', 'POST', payload); }
+function apiGetAsyncInterviewDetail(id){ return apiRequest(`/api/async-interview/detail?id=${encodeURIComponent(id)}`, 'GET'); }
 
 // Mirrors server.py's slugify() exactly, so a link built here resolves to the same job the
 // server would generate the URL for — only the leading numeric id is ever actually used to look

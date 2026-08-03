@@ -1114,7 +1114,37 @@ if('serviceWorker' in navigator){
       <h3 style="margin-bottom:4px;color:var(--indigo);">Messages</h3>
       <p style="font-size:13px;color:var(--ink-soft);margin:0;">Employers can message you directly when your profile matches a role they've posted. Sign in to see and reply to your conversations.</p>
     </div>
+    <div id="async-interviews-list"></div>
     <div id="conversations-list"></div>
+  </div>
+
+  <div class="pitch-modal-overlay" id="async-answer-modal-overlay" onclick="if(event.target === this) closeAsyncAnswerModal()">
+    <div class="pitch-modal">
+      <div class="pitch-modal-head">
+        <div>
+          <h3>Record your answer</h3>
+          <p class="pitch-modal-sub" id="async-answer-question"></p>
+        </div>
+        <button class="pitch-modal-close" onclick="closeAsyncAnswerModal()" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="pitch-video-wrap">
+        <video id="async-preview-video" autoplay playsinline muted class="pitch-video"></video>
+        <audio id="async-preview-audio" controls style="display:none;width:100%;"></audio>
+        <div class="pitch-placeholder" id="async-placeholder"><span>🎬</span><p>No recording yet</p></div>
+        <div class="pitch-timer" id="async-timer" style="display:none;">1:00</div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="go-btn" style="margin-top:0;" id="async-record-video-btn" onclick="startAsyncRecording('video')">🎥 Record video</button>
+        <button class="ai-btn" id="async-record-audio-btn" onclick="startAsyncRecording('audio')">🎙️ Record audio only</button>
+        <button class="upload-btn" id="async-stop-btn" onclick="stopAsyncRecording()" style="display:none;">⏹ Stop</button>
+        <button class="go-btn" style="margin-top:0;display:none;" id="async-save-btn" onclick="saveAsyncAnswer()">Submit answer</button>
+        <button class="upload-btn" id="async-discard-btn" onclick="discardAsyncRecording()" style="display:none;">Re-record</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0;" id="async-size-note"></p>
+      <p class="form-msg" id="async-answer-msg"></p>
+    </div>
   </div>
 
   <!-- EMPLOYER PANEL -->
@@ -2908,6 +2938,204 @@ async function loadConversations(){
   }
   renderConversations();
   updateMessagesUnreadBadge();
+  loadAsyncInterviews(); // same "refresh the Messages page" trigger points as conversations
+}
+
+// --- Asynchronous video Q&A: employer asks up to 3 questions once, candidate has 48h to record
+// a reply to each on their own time. Reuses the same capture/compression settings as the profile
+// pitch recorder (PITCH_VIDEO_CONSTRAINTS/PITCH_VIDEO_BITRATE/PITCH_AUDIO_BITRATE/pickPitchMimeType)
+// but keeps entirely separate DOM elements and state, so it can't interfere with an in-progress
+// profile pitch recording. ---
+const ASYNC_ANSWER_MAX_SECONDS = 60;
+let myAsyncInterviews = [];
+let asyncStream = null, asyncRecorder = null, asyncChunks = [], asyncTimerInterval = null, asyncBlob = null, asyncKind = 'video';
+let asyncAnswerContext = null; // {interviewId, questionIndex}
+
+async function loadAsyncInterviews(){
+  if(!currentAccount){ myAsyncInterviews = []; renderAsyncInterviews(); return; }
+  try{
+    const data = await apiListMyAsyncInterviews();
+    myAsyncInterviews = data.interviews || [];
+  }catch(e){
+    myAsyncInterviews = [];
+  }
+  renderAsyncInterviews();
+}
+
+function asyncDeadlineLabel(deadline, expired){
+  if(expired) return 'Window closed';
+  const ms = new Date(deadline.replace(' ', 'T') + 'Z').getTime() - Date.now();
+  const hours = Math.max(0, Math.floor(ms / 3600000));
+  const mins = Math.max(0, Math.floor((ms % 3600000) / 60000));
+  return `${hours}h ${mins}m left`;
+}
+
+function renderAsyncInterviews(){
+  const el = document.getElementById('async-interviews-list');
+  if(!el) return;
+  if(myAsyncInterviews.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="results-head"><h2>Video interview requests</h2><span>${myAsyncInterviews.length}</span></div>
+    ${myAsyncInterviews.map(iv => `
+      <div class="message-thread-card">
+        <div class="message-thread-head" style="cursor:default;">
+          <p class="res-title">${escapeHtml(iv.company)}${iv.jobTitle ? ' · ' + escapeHtml(iv.jobTitle) : ''}</p>
+          <span class="message-thread-date" style="color:${iv.expired ? 'var(--red)' : 'var(--green-deep)'};">${asyncDeadlineLabel(iv.deadline, iv.expired)}</span>
+        </div>
+        <div class="message-thread-body" style="display:block;">
+          ${iv.questions.map((q, i) => {
+            const answered = iv.answeredQuestions.includes(i);
+            return `<div style="padding:10px 0;border-top:1px solid var(--line);">
+              <p style="font-size:13.5px;color:var(--ink);margin:0 0 8px;">${i + 1}. ${escapeHtml(q)}</p>
+              ${answered
+                ? '<span class="follow-btn following" style="cursor:default;">✓ Answered</span>'
+                : (iv.expired
+                    ? '<span style="font-size:12px;color:var(--ink-soft);">Window closed — no longer accepting an answer.</span>'
+                    : `<button class="ai-btn" onclick="openAsyncAnswerModal(${iv.id}, ${i}, '${jsStr(q)}')">🎥 Record answer</button>`)}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function openAsyncAnswerModal(interviewId, questionIndex, questionText){
+  asyncAnswerContext = {interviewId, questionIndex};
+  document.getElementById('async-answer-question').textContent = questionText;
+  document.getElementById('async-answer-msg').textContent = '';
+  discardAsyncRecording();
+  document.getElementById('async-answer-modal-overlay').classList.add('open');
+}
+
+function closeAsyncAnswerModal(){
+  if(asyncStream){ asyncStream.getTracks().forEach(t => t.stop()); asyncStream = null; }
+  clearInterval(asyncTimerInterval);
+  document.getElementById('async-answer-modal-overlay').classList.remove('open');
+}
+
+async function startAsyncRecording(kind){
+  asyncKind = kind;
+  try{
+    asyncStream = await navigator.mediaDevices.getUserMedia(
+      kind === 'video' ? {video: PITCH_VIDEO_CONSTRAINTS, audio: true} : {audio: true}
+    );
+  }catch(e){
+    showToast('Could not access your camera/microphone — check permissions and try again.');
+    return;
+  }
+  const video = document.getElementById('async-preview-video');
+  const audio = document.getElementById('async-preview-audio');
+  if(kind === 'video'){
+    video.srcObject = asyncStream;
+    video.style.display = '';
+    audio.style.display = 'none';
+  }else{
+    video.style.display = 'none';
+  }
+  document.getElementById('async-placeholder').style.display = 'none';
+
+  asyncChunks = [];
+  const mimeType = pickPitchMimeType(kind);
+  const recorderOpts = {
+    ...(mimeType ? {mimeType} : {}),
+    ...(kind === 'video' ? {videoBitsPerSecond: PITCH_VIDEO_BITRATE} : {}),
+    audioBitsPerSecond: PITCH_AUDIO_BITRATE,
+  };
+  try{
+    asyncRecorder = new MediaRecorder(asyncStream, recorderOpts);
+  }catch(e){
+    asyncRecorder = new MediaRecorder(asyncStream);
+  }
+  asyncRecorder.ondataavailable = e => { if(e.data.size > 0) asyncChunks.push(e.data); };
+  asyncRecorder.onstop = onAsyncRecordingStopped;
+  asyncRecorder.start();
+
+  document.getElementById('async-record-video-btn').style.display = 'none';
+  document.getElementById('async-record-audio-btn').style.display = 'none';
+  document.getElementById('async-stop-btn').style.display = '';
+
+  let secondsLeft = ASYNC_ANSWER_MAX_SECONDS;
+  const timerEl = document.getElementById('async-timer');
+  timerEl.style.display = '';
+  timerEl.textContent = `1:00`;
+  asyncTimerInterval = setInterval(() => {
+    secondsLeft--;
+    timerEl.textContent = `0:${String(Math.max(0, secondsLeft)).padStart(2, '0')}`;
+    if(secondsLeft <= 0) stopAsyncRecording();
+  }, 1000);
+}
+
+function onAsyncRecordingStopped(){
+  asyncBlob = new Blob(asyncChunks, {type: asyncRecorder.mimeType});
+  if(asyncStream){ asyncStream.getTracks().forEach(t => t.stop()); asyncStream = null; }
+  const url = URL.createObjectURL(asyncBlob);
+  const video = document.getElementById('async-preview-video');
+  const audio = document.getElementById('async-preview-audio');
+  if(asyncKind === 'video'){
+    video.srcObject = null;
+    video.src = url;
+    video.muted = false;
+    video.controls = true;
+  }else{
+    audio.src = url;
+    audio.style.display = '';
+  }
+  document.getElementById('async-timer').style.display = 'none';
+  document.getElementById('async-stop-btn').style.display = 'none';
+  document.getElementById('async-save-btn').style.display = '';
+  document.getElementById('async-discard-btn').style.display = '';
+  const kb = Math.round(asyncBlob.size / 1024);
+  document.getElementById('async-size-note').textContent =
+    `${kb < 1024 ? kb + ' KB' : (kb / 1024).toFixed(1) + ' MB'} — optimized for slow connections.`;
+}
+
+function stopAsyncRecording(){
+  clearInterval(asyncTimerInterval);
+  if(asyncRecorder && asyncRecorder.state !== 'inactive') asyncRecorder.stop();
+}
+
+function discardAsyncRecording(){
+  clearInterval(asyncTimerInterval);
+  if(asyncRecorder && asyncRecorder.state !== 'inactive'){ asyncRecorder.onstop = null; asyncRecorder.stop(); }
+  if(asyncStream){ asyncStream.getTracks().forEach(t => t.stop()); asyncStream = null; }
+  asyncBlob = null;
+  asyncChunks = [];
+  const video = document.getElementById('async-preview-video');
+  const audio = document.getElementById('async-preview-audio');
+  video.src = ''; video.srcObject = null; video.muted = true; video.controls = false; video.style.display = '';
+  audio.src = ''; audio.style.display = 'none';
+  document.getElementById('async-placeholder').style.display = '';
+  document.getElementById('async-timer').style.display = 'none';
+  document.getElementById('async-size-note').textContent = '';
+  document.getElementById('async-record-video-btn').style.display = '';
+  document.getElementById('async-record-audio-btn').style.display = '';
+  document.getElementById('async-stop-btn').style.display = 'none';
+  document.getElementById('async-save-btn').style.display = 'none';
+  document.getElementById('async-discard-btn').style.display = 'none';
+}
+
+async function saveAsyncAnswer(){
+  if(!asyncBlob || !asyncAnswerContext) return;
+  const msg = document.getElementById('async-answer-msg');
+  msg.textContent = 'Uploading…';
+  msg.className = 'form-msg';
+  try{
+    const base64 = await blobToBase64(asyncBlob);
+    await apiSubmitAsyncInterviewAnswer({
+      interviewId: asyncAnswerContext.interviewId,
+      questionIndex: asyncAnswerContext.questionIndex,
+      mediaKind: asyncKind,
+      mediaType: asyncRecorder.mimeType,
+      base64,
+    });
+    closeAsyncAnswerModal();
+    showToast('Answer submitted.');
+    await loadAsyncInterviews();
+  }catch(err){
+    msg.textContent = (err && err.message) || "Couldn't submit that answer — try again.";
+    msg.className = 'form-msg error';
+  }
 }
 
 function updateMessagesUnreadBadge(){
@@ -3497,6 +3725,60 @@ document.addEventListener('pause', (e) => {
 function toggleMessageComposer(userId){
   const el = document.getElementById('msg-composer-' + userId);
   if(el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function toggleAsyncInterviewForm(userId){
+  const el = document.getElementById('async-form-' + userId);
+  if(el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function sendAsyncInterviewQuestions(candidateUserId, btn){
+  if(!employerAccountLoggedIn){
+    showToast('Sign in as an employer to send video questions.');
+    return;
+  }
+  const form = btn.closest('.message-composer');
+  const jobTitle = form.dataset.jobTitle;
+  const questions = [...form.querySelectorAll('.async-q-input')].map(i => i.value.trim()).filter(Boolean);
+  const msg = document.getElementById('async-form-msg-' + candidateUserId);
+  if(questions.length === 0){
+    msg.textContent = 'Write at least one question.';
+    msg.className = 'form-msg error';
+    return;
+  }
+  try{
+    const data = await apiCreateAsyncInterview({candidateUserId, jobTitle, questions});
+    msg.textContent = `✓ Sent — the candidate has 48 hours to reply.`;
+    msg.className = 'form-msg success';
+    form.querySelectorAll('.async-q-input').forEach(i => i.value = '');
+    const viewEl = document.getElementById('async-view-' + candidateUserId);
+    if(viewEl) viewEl.innerHTML = `<button class="ai-btn" style="margin-top:8px;" onclick="viewAsyncInterviewAnswers(${data.interviewId}, ${candidateUserId})">🎥 View answers</button><div id="async-answers-${candidateUserId}"></div>`;
+  }catch(e){
+    msg.textContent = (e && e.message) || "Couldn't send those questions — try again.";
+    msg.className = 'form-msg error';
+  }
+}
+
+async function viewAsyncInterviewAnswers(interviewId, candidateUserId){
+  const el = document.getElementById('async-answers-' + candidateUserId);
+  if(!el) return;
+  el.innerHTML = '<p class="loading-line">Loading…</p>';
+  try{
+    const data = await apiGetAsyncInterviewDetail(interviewId);
+    const answersByIndex = {};
+    (data.answers || []).forEach(a => { answersByIndex[a.questionIndex] = a; });
+    el.innerHTML = data.questions.map((q, i) => {
+      const a = answersByIndex[i];
+      if(!a) return `<p style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">${i + 1}. ${escapeHtml(q)} — not answered yet.</p>`;
+      const url = `data:${a.mediaType};base64,${a.base64}`;
+      const player = a.mediaKind === 'video'
+        ? `<video src="${url}" controls style="width:100%;max-width:360px;border-radius:10px;margin-top:6px;"></video>`
+        : `<audio src="${url}" controls style="width:100%;margin-top:6px;"></audio>`;
+      return `<div style="margin-top:10px;"><p style="font-size:12.5px;color:var(--ink);margin:0;">${i + 1}. ${escapeHtml(q)}</p>${player}</div>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML = '<p class="fit-none">Could not load answers.</p>';
+  }
 }
 
 async function sendEmployerMessage(btn){
@@ -6153,11 +6435,21 @@ function renderEmployerResultsSection(){
               <button class="ai-btn" onclick="toggleMessageComposer(${m.userId})">✉ Message</button>
               <button class="ai-btn" onclick="suggestOutreachMessage(${m.userId})">✨ Suggest message</button>
               ${m.hasPitch ? `<button class="ai-btn" onclick="watchCandidatePitch(${m.userId}, this)">▶ Watch pitch</button>` : ''}
+              <button class="ai-btn" onclick="toggleAsyncInterviewForm(${m.userId})">🎥 Video questions</button>
             </div>
             <div class="pitch-watch-panel" id="pitch-watch-${m.userId}" style="display:none;"></div>
             <div class="message-composer" id="msg-composer-${m.userId}" style="display:none;" data-user-id="${m.userId}" data-company="${escapeAttr(company)}" data-job-title="${escapeAttr(title)}">
               <textarea class="form-textarea" placeholder="e.g. We saw your profile on Career Match AI — are you free for a quick chat about this role?"></textarea>
               <button class="go-btn" style="margin-top:8px;" onclick="sendEmployerMessage(this)">Send message →</button>
+            </div>
+            <div class="message-composer" id="async-form-${m.userId}" style="display:none;" data-user-id="${m.userId}" data-job-title="${escapeAttr(title)}">
+              <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 8px;">Up to 3 questions — the candidate gets 48 hours to record a 1-minute video reply to each.</p>
+              <input type="text" class="form-textarea async-q-input" style="min-height:auto;margin-bottom:8px;" placeholder="Question 1, e.g. Walk me through a time you handled a difficult client.">
+              <input type="text" class="form-textarea async-q-input" style="min-height:auto;margin-bottom:8px;" placeholder="Question 2 (optional)">
+              <input type="text" class="form-textarea async-q-input" style="min-height:auto;margin-bottom:8px;" placeholder="Question 3 (optional)">
+              <button class="go-btn" style="margin-top:0;" onclick="sendAsyncInterviewQuestions(${m.userId}, this)">Send questions →</button>
+              <p class="form-msg" id="async-form-msg-${m.userId}"></p>
+              <div id="async-view-${m.userId}"></div>
             </div>
           </div>
         </div>`;

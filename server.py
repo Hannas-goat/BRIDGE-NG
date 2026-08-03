@@ -837,6 +837,29 @@ def init_db():
             UNIQUE(employer_id, candidate_user_id)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS async_interviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            job_title TEXT DEFAULT '',
+            questions TEXT NOT NULL,
+            deadline TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS async_interview_answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            interview_id INTEGER NOT NULL REFERENCES async_interviews(id),
+            question_index INTEGER NOT NULL,
+            media_kind TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            media_base64 TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(interview_id, question_index)
+        )
+    """)
     # Employer Workspaces: additional logins that all resolve to the SAME employer_id (the
     # workspace), so every existing employer-authenticated endpoint (subscriptions, pipeline,
     # bank account) keeps working completely unchanged — a team member session just carries an
@@ -1037,6 +1060,9 @@ SKILL_CHALLENGE_PASS_THRESHOLD = 4  # out of 5 (80%) to earn the verified badge
 # an automated "you didn't get it" bot message is worse than silence; an employer who wants to
 # tell someone can still use the existing message composer in their own words.
 PIPELINE_STAGES = ["shortlisted", "interviewing", "offer", "hired", "rejected"]
+
+ASYNC_INTERVIEW_DEADLINE_HOURS = 48
+ASYNC_INTERVIEW_MAX_QUESTIONS = 3
 PIPELINE_STAGE_LABELS = {
     "shortlisted": "shortlisted you", "interviewing": "moved you to the interview stage",
     "offer": "extended you an offer", "hired": "marked you as hired",
@@ -2355,6 +2381,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_bank_resolve(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/pipeline":
             return self.handle_get_pipeline()
+        if parsed.path == "/api/async-interview/mine":
+            return self.handle_list_my_async_interviews()
+        if parsed.path == "/api/async-interview/detail":
+            return self.handle_get_async_interview_detail(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/team":
             return self.handle_list_team_members()
         if parsed.path == "/api/employer/candidate-notes":
@@ -2415,6 +2445,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_save_bank_account()
         if parsed.path == "/api/employer/pipeline":
             return self.handle_set_pipeline_stage()
+        if parsed.path == "/api/async-interview/create":
+            return self.handle_create_async_interview()
+        if parsed.path == "/api/async-interview/answer":
+            return self.handle_submit_async_interview_answer()
         if parsed.path == "/api/employer/team/add":
             return self.handle_add_team_member()
         if parsed.path == "/api/employer/team/remove":
@@ -4173,6 +4207,149 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if notif_message and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
         self.send_json(200, {"ok": True, "stage": stage})
+
+    # ---------- asynchronous video Q&A: employer asks 3 questions once, candidate has 48h to
+    # record a reply to each on their own time — no scheduling, no timezone coordination for a
+    # first-round screen. Video answers are stored/encrypted the same way as a profile pitch. ----------
+
+    def handle_create_async_interview(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        job_title = (data.get("jobTitle") or "").strip()
+        questions = [q.strip()[:300] for q in (data.get("questions") or []) if isinstance(q, str) and q.strip()]
+        if not candidate_user_id or not questions:
+            return self.send_json(400, {"error": "A candidate and at least one question are required."})
+        if len(questions) > ASYNC_INTERVIEW_MAX_QUESTIONS:
+            return self.send_json(400, {"error": f"Up to {ASYNC_INTERVIEW_MAX_QUESTIONS} questions at a time."})
+
+        deadline = (datetime.datetime.utcnow() + datetime.timedelta(hours=ASYNC_INTERVIEW_DEADLINE_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            candidate = conn.execute(
+                "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_messages FROM profiles WHERE user_id = ?",
+                (candidate_user_id,),
+            ).fetchone()
+            if candidate is None:
+                conn.close()
+                return self.send_json(404, {"error": "Candidate not found."})
+            cur = conn.execute(
+                "INSERT INTO async_interviews (employer_id, candidate_user_id, job_title, questions, deadline) VALUES (?, ?, ?, ?, ?)",
+                (employer_id, candidate_user_id, job_title, json.dumps(questions), deadline),
+            )
+            interview_id = cur.lastrowid
+            notif_message = f"{employer['company_name']} sent you {len(questions)} video question{'s' if len(questions) != 1 else ''} about {job_title or 'a role'} — you have {ASYNC_INTERVIEW_DEADLINE_HOURS} hours to reply."
+            conn.execute(
+                "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
+                (candidate_user_id, "async_interview", notif_message, job_title, employer["company_name"]),
+            )
+            conn.commit()
+            conn.close()
+        if candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
+            send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
+        self.send_json(200, {"ok": True, "interviewId": interview_id, "deadline": deadline})
+
+    def handle_list_my_async_interviews(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(200, {"interviews": []})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT ai.*, e.company_name FROM async_interviews ai JOIN employers e ON e.id = ai.employer_id "
+                "WHERE ai.candidate_user_id = ? ORDER BY ai.id DESC",
+                (user_id,),
+            ).fetchall()
+            interviews = []
+            for r in rows:
+                answered = {a["question_index"] for a in conn.execute(
+                    "SELECT question_index FROM async_interview_answers WHERE interview_id = ?", (r["id"],)
+                ).fetchall()}
+                interviews.append({
+                    "id": r["id"], "company": r["company_name"], "jobTitle": r["job_title"],
+                    "questions": json.loads(r["questions"]), "deadline": r["deadline"],
+                    "answeredQuestions": sorted(answered), "expired": r["deadline"] < datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+            conn.close()
+        self.send_json(200, {"interviews": interviews})
+
+    def handle_submit_async_interview_answer(self):
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        interview_id = data.get("interviewId")
+        question_index = data.get("questionIndex")
+        media_kind = (data.get("mediaKind") or "").strip()
+        media_type = (data.get("mediaType") or "").strip()
+        base64_data = data.get("base64") or ""
+        if not interview_id or question_index is None or media_kind not in ("video", "audio") or not base64_data:
+            return self.send_json(400, {"error": "Missing interview, question, or recording."})
+        try:
+            decoded_len = len(base64.b64decode(base64_data, validate=True))
+        except Exception:
+            return self.send_json(400, {"error": "Invalid recording data."})
+        if decoded_len > MAX_PITCH_MEDIA_BYTES:
+            return self.send_json(400, {"error": "That recording is too large to save (max 15MB — try a shorter clip)."})
+
+        with db_lock:
+            conn = get_db()
+            interview = conn.execute(
+                "SELECT * FROM async_interviews WHERE id = ? AND candidate_user_id = ?", (interview_id, user_id)
+            ).fetchone()
+            if interview is None:
+                conn.close()
+                return self.send_json(404, {"error": "Interview not found."})
+            if interview["deadline"] < datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"):
+                conn.close()
+                return self.send_json(400, {"error": "The 48-hour window for this interview has passed."})
+            questions = json.loads(interview["questions"])
+            if not isinstance(question_index, int) or question_index < 0 or question_index >= len(questions):
+                conn.close()
+                return self.send_json(400, {"error": "Invalid question."})
+            conn.execute(
+                """INSERT INTO async_interview_answers (interview_id, question_index, media_kind, media_type, media_base64)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(interview_id, question_index) DO UPDATE SET
+                   media_kind=excluded.media_kind, media_type=excluded.media_type, media_base64=excluded.media_base64, created_at=datetime('now')""",
+                (interview_id, question_index, media_kind, media_type, encrypt_field(base64_data)),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    def handle_get_async_interview_detail(self, query):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        interview_id = query.get("id", [None])[0]
+        with db_lock:
+            conn = get_db()
+            interview = conn.execute(
+                "SELECT * FROM async_interviews WHERE id = ? AND employer_id = ?", (interview_id, employer_id)
+            ).fetchone()
+            if interview is None:
+                conn.close()
+                return self.send_json(404, {"error": "Interview not found."})
+            answers = conn.execute(
+                "SELECT * FROM async_interview_answers WHERE interview_id = ? ORDER BY question_index", (interview_id,)
+            ).fetchall()
+            conn.close()
+        self.send_json(200, {
+            "id": interview["id"], "jobTitle": interview["job_title"], "deadline": interview["deadline"],
+            "questions": json.loads(interview["questions"]),
+            "answers": [{
+                "questionIndex": a["question_index"], "mediaKind": a["media_kind"],
+                "mediaType": a["media_type"], "base64": decrypt_field(a["media_base64"]),
+            } for a in answers],
+        })
 
     # ---------- employer workspaces: team members, candidate notes, votes ----------
 
