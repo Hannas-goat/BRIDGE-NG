@@ -1541,6 +1541,25 @@ if('serviceWorker' in navigator){
   </div>
 </div>
 
+<div class="pitch-modal-overlay" id="certificate-modal-overlay" onclick="if(event.target === this) closeCertificateModal()">
+  <div class="pitch-modal">
+    <div class="pitch-modal-head">
+      <div>
+        <h3>🏆 Shareable certificate</h3>
+        <p class="pitch-modal-sub">Real — built from your actual verified score, postable to LinkedIn or anywhere else.</p>
+      </div>
+      <button class="pitch-modal-close" onclick="closeCertificateModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="certificate-modal-body"><p class="pitch-modal-loading">Loading…</p></div>
+    <div class="pitch-modal-actions">
+      <button class="upload-btn" onclick="closeCertificateModal()">Close</button>
+      <button class="go-btn" style="margin-top:0;display:none;" id="certificate-copy-btn" onclick="copyCertificateLink()">Copy link</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottom-dock" id="bottom-dock">
   <button class="dock-btn" data-target="seeker" onclick="dockNavigate('seeker')">
     <span class="dock-icon">🏠</span><span class="dock-label">Home</span>
@@ -2834,7 +2853,8 @@ function renderSkillChallenges(){
     return `<div class="challenge-row">
       <span class="challenge-skill">${escapeHtml(skill)}</span>
       ${badge
-        ? `<span class="verified-badge" onclick="showBadgeDetail('${escapeHtml(skill)}', ${badge.score}, ${badge.total}, '${escapeHtml(badge.date)}')">✓ Verified (${badge.score}/${badge.total})</span>`
+        ? `<span class="verified-badge" onclick="showBadgeDetail('${escapeHtml(skill)}', ${badge.score}, ${badge.total}, '${escapeHtml(badge.date)}')">✓ Verified (${badge.score}/${badge.total})</span>
+           <button type="button" class="upload-btn" onclick="openCertificateModal('${jsStr(skill)}')">🏆 Get certificate</button>`
         : `<button type="button" class="upload-btn" onclick="openSkillChallenge('${escapeHtml(skill)}')">Take challenge</button>`}
     </div>`;
   }).join('');
@@ -2898,6 +2918,38 @@ async function submitSkillChallenge(){
 
 function showBadgeDetail(skill, score, total, date){
   showToast(`✓ Verified ${skill}: ${score}/${total} (${date})`);
+}
+
+let certificateUrl = null;
+
+async function openCertificateModal(skill){
+  document.getElementById('certificate-modal-overlay').classList.add('open');
+  const body = document.getElementById('certificate-modal-body');
+  document.getElementById('certificate-copy-btn').style.display = 'none';
+  body.innerHTML = '<p class="pitch-modal-loading">Generating…</p>';
+  try{
+    const data = await apiGetCertificateUrl(skill);
+    certificateUrl = data.url;
+    body.innerHTML = `<img src="${escapeAttr(data.url)}" alt="Verified ${escapeAttr(skill)} certificate" style="width:100%;border-radius:12px;border:1px solid var(--line);">`;
+    document.getElementById('certificate-copy-btn').style.display = '';
+  }catch(e){
+    body.innerHTML = '<p class="fit-none">Could not generate a certificate for that skill.</p>';
+  }
+}
+
+function closeCertificateModal(){
+  document.getElementById('certificate-modal-overlay').classList.remove('open');
+}
+
+async function copyCertificateLink(){
+  if(!certificateUrl) return;
+  const url = location.origin + certificateUrl;
+  try{
+    await navigator.clipboard.writeText(url);
+    showToast('Link copied — paste it into a LinkedIn post or anywhere else.');
+  }catch(e){
+    showToast(url);
+  }
 }
 
 function toggleMobileNav(){

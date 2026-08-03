@@ -1824,6 +1824,73 @@ def generate_og_image(title, company, location):
     return buf.getvalue()
 
 
+def compute_skill_percentile(conn, skill, score):
+    """Shared by handle_profile_insights and the shareable certificate — ranks `score` against
+    every other candidate's verified badge score for the same skill. Returns None (not a
+    misleading "top 100% of 1") when fewer than 5 total candidates have a verified badge for this
+    skill yet."""
+    rows = conn.execute("SELECT verified_badges FROM profiles WHERE verified_badges != '[]'").fetchall()
+    scores = []
+    for r in rows:
+        for b in json.loads(r["verified_badges"] or "[]"):
+            if b.get("skill") == skill:
+                scores.append(b.get("score", 0))
+    if len(scores) < 5:
+        return None
+    beats = sum(1 for s in scores if s < score)
+    beats_percent = round(beats / len(scores) * 100)
+    return {"sampleSize": len(scores), "beatsPercent": beats_percent, "topPercent": max(1, 100 - beats_percent)}
+
+
+def certificate_token(user_id, skill):
+    """Deterministic (same candidate+skill always resolves to the same shareable link — a real
+    certificate should stay valid forever, not expire) but unguessable without already knowing
+    both the user id and the exact skill name, so a certificate URL can be safely public (LinkedIn/
+    any viewer needs to load the image with no login) without allowing enumeration of candidates'
+    names/universities by walking sequential ids — same reasoning as the public-profile slug."""
+    secret = (ENCRYPTION_KEY or "insecure-dev-fallback").encode("utf-8")
+    digest = hmac.new(secret, f"cert:{user_id}:{skill}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return digest[:24]
+
+
+def generate_certificate_image(full_name, skill, score, total, date_str, university, percentile_text):
+    """Real per-candidate, per-skill certificate image — every value passed in is the candidate's
+    actual verified badge data (see handle_get_certificate), never a placeholder. percentile_text
+    is only ever set when handle_profile_insights' own minimum-sample-size guard already passed,
+    so this never prints a statistically meaningless "top 100% of 1" claim either."""
+    w, h = 1200, 630
+    img = Image.new("RGB", (w, h), "#FBF6EA")
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([0, 0, w, 14], fill="#8B5CF6")
+    draw.rectangle([24, 24, w - 24, h - 24], outline="#D9A441", width=3)
+
+    brand_font = ImageFont.load_default(size=28)
+    label_font = ImageFont.load_default(size=22)
+    name_font = ImageFont.load_default(size=44)
+    skill_font = ImageFont.load_default(size=34)
+    detail_font = ImageFont.load_default(size=24)
+    footer_font = ImageFont.load_default(size=20)
+
+    draw.text((w / 2, 70), "Bridge NG", font=brand_font, fill="#14213D", anchor="mm")
+    draw.text((w / 2, 130), "VERIFIED SKILL CERTIFICATE", font=label_font, fill="#A66E1B", anchor="mm")
+
+    draw.text((w / 2, 250), _og_image_safe_text(full_name) or "Bridge NG member", font=name_font, fill="#14213D", anchor="mm")
+    sub = _og_image_safe_text(university)
+    if sub:
+        draw.text((w / 2, 300), sub, font=detail_font, fill="#5B6478", anchor="mm")
+
+    draw.text((w / 2, 380), f"{_og_image_safe_text(skill)} - {score}/{total}", font=skill_font, fill="#8B5CF6", anchor="mm")
+    if percentile_text:
+        draw.text((w / 2, 430), percentile_text, font=detail_font, fill="#5B6478", anchor="mm")
+
+    draw.text((w / 2, h - 90), f"Scored on a real, server-graded challenge - {date_str}", font=detail_font, fill="#5B6478", anchor="mm")
+    draw.text((w / 2, h - 50), "bridge-ng.onrender.com", font=footer_font, fill="#A66E1B", anchor="mm")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def render_job_detail_html(job, job_id):
     """Real, server-rendered (no JS required) HTML for one specific job — crawlable by Google and
     correctly unfurled by WhatsApp/Twitter/etc, neither of which execute the SPA's client-side
@@ -2359,6 +2426,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_notifications()
         if parsed.path == "/api/profile/insights":
             return self.handle_profile_insights()
+        if parsed.path == "/api/certificate-url":
+            return self.handle_certificate_url(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/account/export":
             return self.handle_export_data()
         if parsed.path == "/api/checkin":
@@ -2420,6 +2489,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         job_match = re.match(r"^/jobs/(\d+)(?:-[^/]*)?(?:/og-image\.png)?$", parsed.path)
         if job_match:
             return self.handle_job_seo_route(int(job_match.group(1)), parsed.path.endswith("/og-image.png"))
+        # Shareable skill certificates (bridge-ng.onrender.com/certificate/<userId>/<skill>/<token>.png)
+        # — publicly loadable (LinkedIn/any viewer needs it with no login) but the token makes it
+        # unguessable without already knowing both the user id and the skill; see certificate_token.
+        cert_match = re.match(r"^/certificate/(\d+)/([^/]+)/([0-9a-f]+)\.png$", parsed.path)
+        if cert_match:
+            return self.handle_get_certificate(int(cert_match.group(1)), urllib.parse.unquote(cert_match.group(2)), cert_match.group(3))
         return self.serve_static(parsed.path)
 
     def do_POST(self):
@@ -3194,34 +3269,63 @@ class Handler(http.server.BaseHTTPRequestHandler):
             my_row = conn.execute("SELECT verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             my_badges = json.loads(my_row["verified_badges"] or "[]") if my_row else []
             percentiles = []
-            if my_badges:
-                all_rows = conn.execute(
-                    "SELECT verified_badges FROM profiles WHERE verified_badges != '[]'"
-                ).fetchall()
-                skill_scores = {}
-                for r in all_rows:
-                    for b in json.loads(r["verified_badges"] or "[]"):
-                        skill_scores.setdefault(b.get("skill"), []).append(b.get("score", 0))
-                for b in my_badges:
-                    scores = skill_scores.get(b["skill"], [])
-                    if len(scores) < 5:
-                        continue  # not enough other real candidates with this badge yet
-                    beats = sum(1 for s in scores if s < b["score"])
-                    beats_percent = round(beats / len(scores) * 100)
-                    percentiles.append({
-                        "skill": b["skill"],
-                        "score": b["score"],
-                        "total": b["total"],
-                        "sampleSize": len(scores),
-                        "beatsPercent": beats_percent,
-                        "topPercent": max(1, 100 - beats_percent),
-                    })
+            for b in my_badges:
+                stats = compute_skill_percentile(conn, b["skill"], b["score"])
+                if stats is None:
+                    continue
+                percentiles.append({"skill": b["skill"], "score": b["score"], "total": b["total"], **stats})
             conn.close()
         self.send_json(200, {
             "viewCount7d": view_count_7d,
             "viewingCompanies": companies,
             "skillPercentiles": percentiles,
         })
+
+    def handle_certificate_url(self, query):
+        """Authenticated: returns the candidate's own shareable certificate URL for one of their
+        real verified badges. Only ever generated for a skill they actually have a badge in."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        skill = (query.get("skill", [""])[0] or "").strip()
+        with db_lock:
+            conn = get_db()
+            row = conn.execute("SELECT verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            conn.close()
+        badges = json.loads(row["verified_badges"] or "[]") if row else []
+        badge = next((b for b in badges if b["skill"] == skill), None)
+        if badge is None:
+            return self.send_json(404, {"error": "You don't have a verified badge for that skill yet."})
+        token = certificate_token(user_id, skill)
+        self.send_json(200, {"url": f"/certificate/{user_id}/{urllib.parse.quote(skill)}/{token}.png"})
+
+    def handle_get_certificate(self, user_id, skill, token):
+        if not hmac.compare_digest(token, certificate_token(user_id, skill)):
+            return self.send_json(404, {"error": "Not found"})
+        with db_lock:
+            conn = get_db()
+            row = conn.execute("SELECT full_name, university, verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            if row is None:
+                conn.close()
+                return self.send_json(404, {"error": "Not found"})
+            badges = json.loads(row["verified_badges"] or "[]")
+            badge = next((b for b in badges if b["skill"] == skill), None)
+            if badge is None:
+                conn.close()
+                return self.send_json(404, {"error": "Not found"})
+            stats = compute_skill_percentile(conn, skill, badge["score"])
+            conn.close()
+        percentile_text = f"Beats {stats['beatsPercent']}% of {stats['sampleSize']} verified candidates - top {stats['topPercent']}%" if stats else ""
+        png_bytes = generate_certificate_image(
+            decrypt_field(row["full_name"]) or "Bridge NG member", skill, badge["score"], badge["total"],
+            badge.get("date", ""), row["university"] or "", percentile_text,
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(png_bytes)))
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.end_headers()
+        self.wfile.write(png_bytes)
 
     def handle_get_candidate_pitch(self, query):
         """Employer-side lookup of one candidate's pitch by user id — same unauthenticated trust

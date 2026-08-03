@@ -345,6 +345,7 @@ function apiCreateSavedSearch(payload){ return apiRequest('/api/saved-searches',
 function apiJoinAppWaitlist(payload){ return apiRequest('/api/app-waitlist', 'POST', payload); }
 function apiReportJob(payload){ return apiRequest('/api/report-job', 'POST', payload); }
 function apiGetProfileInsights(){ return apiRequest('/api/profile/insights', 'GET'); }
+function apiGetCertificateUrl(skill){ return apiRequest(`/api/certificate-url?skill=${encodeURIComponent(skill)}`, 'GET'); }
 function apiGetSqlPlaygroundChallenges(){ return apiRequest('/api/sql-playground/challenges', 'GET'); }
 function apiSubmitSqlPlaygroundQuery(payload){ return apiRequest('/api/sql-playground/submit', 'POST', payload); }
 function apiCreateAsyncInterview(payload){ return apiRequest('/api/async-interview/create', 'POST', payload); }
