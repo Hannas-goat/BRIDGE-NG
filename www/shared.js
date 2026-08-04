@@ -486,3 +486,90 @@ function friendlyErrorMessage(context){
   };
   return fallbacks[context] || fallbacks.generic;
 }
+
+// --- Offline-resilient submission queue ---
+// Narrow in scope on purpose: only for the two flows where losing an in-progress
+// attempt to a dropped connection costs real work (skill challenges, SQL Playground
+// answers) — not a general offline architecture for the whole app.
+
+const OFFLINE_QUEUE_KEY = 'bridgeng_offline_queue';
+
+function isNetworkFailure(e){
+  // apiRequest() already converts HTTP error responses into a plain Error with a
+  // server-supplied message. A TypeError here means fetch() never got a response at
+  // all — the actual "we're offline" case, as opposed to "the server rejected this".
+  return (e instanceof TypeError) || (typeof navigator !== 'undefined' && navigator.onLine === false);
+}
+
+function readOfflineQueue(){
+  try{ return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }catch(e){ return []; }
+}
+
+function writeOfflineQueue(queue){
+  try{ localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue)); }catch(e){ /* storage unavailable — best effort only */ }
+}
+
+function queueOfflineSubmission(kind, payload){
+  const queue = readOfflineQueue();
+  queue.push({id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, kind, payload, queuedAt: Date.now()});
+  writeOfflineQueue(queue);
+}
+
+function pendingOfflineSubmissionCount(kind){
+  const queue = readOfflineQueue();
+  return kind ? queue.filter(item => item.kind === kind).length : queue.length;
+}
+
+const OFFLINE_SUBMIT_HANDLERS = {
+  'skill-challenge': {
+    send: payload => apiSubmitSkillChallenge(payload),
+    onSuccess: (payload, data) => {
+      if(typeof currentAccount !== 'undefined' && currentAccount && currentAccount.profile) currentAccount.profile.verifiedBadges = data.badges;
+      if(typeof renderSkillChallenges === 'function') renderSkillChallenges();
+      showToast(data.passed
+        ? `✓ Your queued ${payload.skill} challenge synced and passed (${data.score}/${data.total}).`
+        : `Your queued ${payload.skill} challenge synced — scored ${data.score}/${data.total}.`);
+    }
+  },
+  'sql-playground': {
+    send: payload => apiSubmitSqlPlaygroundQuery(payload),
+    onSuccess: (payload, data) => {
+      showToast(data.correct
+        ? 'Your queued SQL Playground answer synced — correct!'
+        : "Your queued SQL Playground answer synced — wasn't quite right, you can try again.");
+    }
+  }
+};
+
+let offlineQueueFlushing = false;
+
+async function flushOfflineQueue(){
+  if(offlineQueueFlushing || typeof navigator === 'undefined' || navigator.onLine === false) return;
+  const queue = readOfflineQueue();
+  if(!queue.length) return;
+  offlineQueueFlushing = true;
+  try{
+    const remaining = [];
+    for(const item of queue){
+      const handler = OFFLINE_SUBMIT_HANDLERS[item.kind];
+      if(!handler) continue;
+      try{
+        const data = await handler.send(item.payload);
+        handler.onSuccess(item.payload, data);
+      }catch(e){
+        if(isNetworkFailure(e)){
+          remaining.push(item); // still can't reach the server — keep it queued
+        }
+        // else: the server actively rejected this attempt (e.g. stale challenge) — drop it, retrying won't help
+      }
+    }
+    writeOfflineQueue(remaining);
+  }finally{
+    offlineQueueFlushing = false;
+  }
+}
+
+if(typeof window !== 'undefined'){
+  window.addEventListener('online', flushOfflineQueue);
+  window.addEventListener('load', flushOfflineQueue);
+}

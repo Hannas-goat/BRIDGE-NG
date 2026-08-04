@@ -2939,8 +2939,9 @@ async function submitSkillChallenge(){
     showToast('Answer every question before submitting.');
     return;
   }
+  const skill = currentChallengeSkill;
   try{
-    const data = await apiSubmitSkillChallenge({skill: currentChallengeSkill, answers});
+    const data = await apiSubmitSkillChallenge({skill, answers});
     currentAccount.profile.verifiedBadges = data.badges;
     body.innerHTML = data.passed
       ? `<p class="fit-none" style="color:var(--green-deep);">✓ Passed — ${data.score}/${data.total}. Verified badge added to your profile.</p>`
@@ -2948,7 +2949,13 @@ async function submitSkillChallenge(){
          <button type="button" class="upload-btn" onclick="openSkillChallenge('${escapeHtml(currentChallengeSkill)}')">Try again</button>`;
     renderSkillChallenges();
   }catch(e){
-    showToast(friendlyErrorMessage('generic'));
+    if(isNetworkFailure(e)){
+      queueOfflineSubmission('skill-challenge', {skill, answers});
+      closeSkillChallengeModal();
+      showToast("You're offline. Your answers were saved and will submit automatically once your connection is back.");
+    }else{
+      showToast(friendlyErrorMessage('generic'));
+    }
   }
 }
 
@@ -5230,8 +5237,9 @@ async function submitSqlPlaygroundQuery(){
     return;
   }
   resultEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Running…</p>';
+  const challengeId = sqlPlaygroundActiveChallenge;
   try{
-    const data = await apiSubmitSqlPlaygroundQuery({challengeId: sqlPlaygroundActiveChallenge, query});
+    const data = await apiSubmitSqlPlaygroundQuery({challengeId, query});
     if(data.error){
       resultEl.innerHTML = `<div class="form-msg error">${escapeHtml(data.error)}</div>`;
       return;
@@ -5242,7 +5250,12 @@ async function submitSqlPlaygroundQuery(){
       ${data.preview && data.preview.length ? `<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;"><tbody>${previewRows}</tbody></table>` : ''}
     `;
   }catch(e){
-    resultEl.innerHTML = '<div class="form-msg error">Something went wrong running that query — try again.</div>';
+    if(isNetworkFailure(e)){
+      queueOfflineSubmission('sql-playground', {challengeId, query});
+      resultEl.innerHTML = '<div class="form-msg info">You\'re offline — this query was saved and will submit automatically once your connection is back.</div>';
+    }else{
+      resultEl.innerHTML = '<div class="form-msg error">Something went wrong running that query — try again.</div>';
+    }
   }
 }
 
