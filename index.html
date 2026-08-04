@@ -1938,6 +1938,7 @@ async function applyToJob(title, company, applicationLink, btn){
       btn.classList.add('applied');
     }
     celebrate();
+    loadCheckinStatus();
     if(applicationLink){
       window.open(safeUrl(applicationLink), '_blank', 'noopener');
     }else{
@@ -2948,6 +2949,7 @@ async function submitSkillChallenge(){
       : `<p class="fit-none">Scored ${data.score}/${data.total} — that's below the bar for a verified badge this time.</p>
          <button type="button" class="upload-btn" onclick="openSkillChallenge('${escapeHtml(currentChallengeSkill)}')">Try again</button>`;
     renderSkillChallenges();
+    loadCheckinStatus();
   }catch(e){
     if(isNetworkFailure(e)){
       queueOfflineSubmission('skill-challenge', {skill, answers});
@@ -4665,10 +4667,10 @@ function renderStreakWidget(streak, checkedInToday){
       <span class="streak-flame" aria-hidden="true">🔥</span>
       <div class="streak-body">
         <p class="streak-count">${streak} day${streak === 1 ? '' : 's'} streak</p>
-        <p class="streak-sub">${checkedInToday ? "You've checked in today — come back tomorrow to keep it going." : 'Check in today to keep your streak alive.'}</p>
+        <p class="streak-sub">${checkedInToday ? "You've kept your streak alive today — come back tomorrow." : 'Take a skill challenge, apply to a job, or update your profile to keep your streak alive — or just check in.'}</p>
       </div>
       ${checkedInToday
-        ? '<span class="streak-done-badge">✓ Checked in</span>'
+        ? '<span class="streak-done-badge">✓ Active today</span>'
         : '<button class="go-btn streak-checkin-btn" onclick="doCheckin()">Check in →</button>'}
     </div>
   `;
@@ -5148,6 +5150,7 @@ async function saveProfile(){
     msg.className = 'form-msg success';
     renderRemoteJobsFeed();
     renderProfileCompletion();
+    loadCheckinStatus();
     return true;
   }catch(err){
     msg.textContent = "Couldn't save profile (" + err.message + ").";
@@ -5240,6 +5243,7 @@ async function submitSqlPlaygroundQuery(){
   const challengeId = sqlPlaygroundActiveChallenge;
   try{
     const data = await apiSubmitSqlPlaygroundQuery({challengeId, query});
+    loadCheckinStatus();
     if(data.error){
       resultEl.innerHTML = `<div class="form-msg error">${escapeHtml(data.error)}</div>`;
       return;
@@ -6883,6 +6887,9 @@ function shortlistMatrixHtml(matches, blinded){
             <tr id="notes-row-${m.userId}" style="display:none;">
               <td colspan="8"><div class="candidate-notes-panel" id="notes-panel-${m.userId}"></div></td>
             </tr>
+            <tr id="scorecard-row-${m.userId}" style="display:none;">
+              <td colspan="8"><div class="candidate-scorecard-panel" id="scorecard-panel-${m.userId}"></div></td>
+            </tr>
           `).join('')}
         </tbody>
       </table>
@@ -6901,6 +6908,7 @@ function teamCellHtml(userId){
       <button type="button" class="vote-btn up" onclick="castVote(${userId}, 'up')">👍 <span id="vote-up-${userId}">·</span></button>
       <button type="button" class="vote-btn down" onclick="castVote(${userId}, 'down')">👎 <span id="vote-down-${userId}">·</span></button>
       <button type="button" class="upload-btn" style="font-size:11px;padding:4px 8px;" onclick="toggleCandidateNotes(${userId})">📝 Notes</button>
+      <button type="button" class="upload-btn" style="font-size:11px;padding:4px 8px;" onclick="toggleCandidateScorecard(${userId})">🎯 Rate</button>
     </div>
   `;
 }
@@ -6974,6 +6982,81 @@ async function submitCandidateNote(userId){
     await apiAddCandidateNote(userId, note);
     input.value = '';
     loadCandidateNotes(userId);
+  }catch(err){
+    showToast(err.message);
+  }
+}
+
+const SCORECARD_CRITERIA = [
+  {key: 'technical', label: 'Technical proficiency'},
+  {key: 'problemSolving', label: 'Problem solving'},
+  {key: 'communication', label: 'Communication'},
+];
+
+function toggleCandidateScorecard(userId){
+  const tr = document.getElementById(`scorecard-row-${userId}`);
+  if(!tr) return;
+  const opening = tr.style.display === 'none';
+  tr.style.display = opening ? '' : 'none';
+  if(opening) loadCandidateScorecard(userId);
+}
+
+function scorecardScoreSelect(userId, key, selected){
+  return `<select id="scorecard-${key}-${userId}">
+    ${[1,2,3,4,5].map(n => `<option value="${n}"${n === selected ? ' selected' : ''}>${n}</option>`).join('')}
+  </select>`;
+}
+
+async function loadCandidateScorecard(userId){
+  const panel = document.getElementById(`scorecard-panel-${userId}`);
+  if(!panel) return;
+  panel.innerHTML = '<p style="font-size:11.5px;color:var(--ink-soft);margin:4px 0;">Loading scorecard…</p>';
+  try{
+    const {scorecards, averages, myScorecard} = await apiGetCandidateScorecards(userId);
+    const mine = myScorecard || {technical: 3, problemSolving: 3, communication: 3, notes: ''};
+    panel.innerHTML = `
+      ${scorecards.length ? `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 10px;">
+          ${SCORECARD_CRITERIA.map(c => `<span style="font-size:11.5px;"><strong>${averages[c.key] ?? '—'}</strong> avg ${escapeHtml(c.label)}</span>`).join('')}
+          <span style="font-size:11px;color:var(--ink-soft);">from ${scorecards.length} rating${scorecards.length === 1 ? '' : 's'}</span>
+        </div>
+        <div style="max-height:140px;overflow-y:auto;margin:0 0 10px;">
+          ${scorecards.map(s => `
+            <div style="padding:5px 0;border-bottom:1px solid var(--line);font-size:11.5px;">
+              <strong>${escapeHtml(s.raterLabel)}</strong> — Technical ${s.technical}/5, Problem solving ${s.problemSolving}/5, Communication ${s.communication}/5
+              ${s.notes ? `<div style="color:var(--ink-soft);margin-top:2px;">${escapeHtml(s.notes)}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      ` : '<p style="font-size:11.5px;color:var(--ink-soft);margin:4px 0;">No ratings yet — be the first.</p>'}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        ${SCORECARD_CRITERIA.map(c => `
+          <div>
+            <label style="font-size:10.5px;">${escapeHtml(c.label)}</label>
+            ${scorecardScoreSelect(userId, c.key, mine[c.key])}
+          </div>
+        `).join('')}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input type="text" id="scorecard-notes-${userId}" placeholder="Optional note on this rating…" value="${escapeAttr(mine.notes || '')}" style="flex:1;height:34px;font-size:12px;">
+        <button class="upload-btn" onclick="submitCandidateScorecard(${userId})">${myScorecard ? 'Update' : 'Submit'} rating</button>
+      </div>
+    `;
+  }catch(err){
+    panel.innerHTML = `<p style="font-size:11.5px;color:var(--red);">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function submitCandidateScorecard(userId){
+  const payload = {};
+  for(const c of SCORECARD_CRITERIA){
+    payload[c.key] = Number(document.getElementById(`scorecard-${c.key}-${userId}`).value);
+  }
+  payload.notes = document.getElementById(`scorecard-notes-${userId}`).value.trim();
+  try{
+    await apiSetCandidateScorecard(userId, payload);
+    showToast('Rating saved.');
+    loadCandidateScorecard(userId);
   }catch(err){
     showToast(err.message);
   }

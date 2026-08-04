@@ -965,6 +965,25 @@ def init_db():
             UNIQUE(employer_id, candidate_user_id, voter_key)
         )
     """)
+    # A structured rubric alongside the freeform notes/votes above — same rater_key pattern as
+    # candidate_votes so each team member's own scorecard for a candidate can be found/replaced
+    # without colliding with a teammate's. 1-5 per named criterion, never averaged into a single
+    # opaque number that would hide what it's actually measuring.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS candidate_scorecards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            rater_key TEXT NOT NULL,
+            rater_label TEXT NOT NULL,
+            technical_score INTEGER NOT NULL,
+            problem_solving_score INTEGER NOT NULL,
+            communication_score INTEGER NOT NULL,
+            notes TEXT DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(employer_id, candidate_user_id, rater_key)
+        )
+    """)
     # CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists on disk from
     # an earlier version of this schema, so new columns need an explicit, safe migration.
     ensure_column(conn, "profiles", "open_to_remote", "open_to_remote INTEGER DEFAULT 0")
@@ -1064,6 +1083,24 @@ def migrate_encrypt_existing_profiles(conn):
     if migrated:
         conn.commit()
         print(f"[security] Encrypted previously-plaintext profile PII for {migrated} account(s).")
+
+
+def record_checkin_locked(conn, user_id):
+    """Records today's check-in as a side effect of a real growth action (finishing a skill
+    challenge attempt, writing a SQL Playground query, saving a profile edit, applying to a job) —
+    not just an empty daily login tap. Must be called with db_lock already held and an open conn;
+    never acquires the lock itself. Best-effort: swallows the expected duplicate-key case exactly
+    like the manual check-in endpoint does, and never lets a check-in failure break the action that
+    triggered it."""
+    try:
+        conn.execute(
+            "INSERT INTO checkins (user_id, checkin_date) VALUES (?, ?)",
+            (user_id, datetime.date.today().isoformat()),
+        )
+        conn.commit()
+    except Exception as e:
+        if not is_duplicate_key_error(e):
+            print(f"[checkin] Failed to auto-record check-in: {e}")
 
 
 def compute_streak(checkin_dates):
@@ -2660,6 +2697,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_candidate_notes(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/candidate-votes":
             return self.handle_get_candidate_votes(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/employer/candidate-scorecards":
+            return self.handle_list_candidate_scorecards(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/appointments/ics":
             return self.handle_appointment_ics(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/messages":
@@ -2736,6 +2775,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_add_candidate_note()
         if parsed.path == "/api/employer/candidate-votes":
             return self.handle_set_candidate_vote()
+        if parsed.path == "/api/employer/candidate-scorecards":
+            return self.handle_set_candidate_scorecard()
         if parsed.path == "/api/webhooks/paystack":
             return self.handle_paystack_webhook()
         if parsed.path == "/api/chat":
@@ -3170,6 +3211,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             conn.commit()
             row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            record_checkin_locked(conn, user_id)  # a real profile edit is real growth
             conn.close()
         self.send_json(200, {"ok": True, "profile": profile_row_to_json(row)})
 
@@ -3403,6 +3445,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not query:
             return self.send_json(400, {"error": "Write a query first."})
         result = sql_playground_grade(challenge, query)
+        user_id = self.current_user_id()
+        if user_id is not None:  # the Playground itself needs no login — this just credits a streak if signed in
+            with db_lock:
+                conn = get_db()
+                record_checkin_locked(conn, user_id)
+                conn.close()
         self.send_json(200, result)
 
     def handle_get_skill_challenge(self, query):
@@ -3454,6 +3502,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     (json.dumps(badges), user_id),
                 )
                 conn.commit()
+            record_checkin_locked(conn, user_id)  # attempting a challenge is real growth, pass or fail
             conn.close()
 
         self.send_json(200, {"score": correct, "total": len(bank), "passed": passed, "badges": badges})
@@ -4181,6 +4230,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "SELECT * FROM applications WHERE user_id = ? AND job_title = ? AND company = ?",
                 (user_id, job_title, company),
             ).fetchone()
+            record_checkin_locked(conn, user_id)  # applying to a job is real job-hunting activity
             conn.close()
         self.send_json(200, {"ok": True, "application": application_row_to_json(row)})
 
@@ -5066,6 +5116,80 @@ class Handler(http.server.BaseHTTPRequestHandler):
                        DO UPDATE SET vote=excluded.vote, voter_label=excluded.voter_label, updated_at=datetime('now')""",
                     (employer_id, candidate_user_id, voter_key, voter_label, vote),
                 )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    SCORECARD_CRITERIA = ("technical", "problemSolving", "communication")
+
+    def handle_list_candidate_scorecards(self, query):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        candidate_user_id = query.get("candidateUserId", [None])[0]
+        if not candidate_user_id:
+            return self.send_json(400, {"error": "candidateUserId is required."})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT * FROM candidate_scorecards WHERE employer_id = ? AND candidate_user_id = ? ORDER BY id",
+                (employer_id, candidate_user_id),
+            ).fetchall()
+            conn.close()
+        scorecards = [{
+            "raterLabel": r["rater_label"], "technical": r["technical_score"],
+            "problemSolving": r["problem_solving_score"], "communication": r["communication_score"],
+            "notes": r["notes"] or "", "updatedAt": r["updated_at"],
+        } for r in rows]
+        averages = {
+            crit: round(sum(s[crit] for s in scorecards) / len(scorecards), 1) if scorecards else None
+            for crit in self.SCORECARD_CRITERIA
+        }
+        my_key = self.current_voter_key()
+        my_scorecard = next((
+            {"technical": r["technical_score"], "problemSolving": r["problem_solving_score"],
+             "communication": r["communication_score"], "notes": r["notes"] or ""}
+            for r in rows if r["rater_key"] == my_key
+        ), None)
+        self.send_json(200, {"scorecards": scorecards, "averages": averages, "myScorecard": my_scorecard})
+
+    def handle_set_candidate_scorecard(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        scores = {}
+        for crit in self.SCORECARD_CRITERIA:
+            val = data.get(crit)
+            if not isinstance(val, int) or not (1 <= val <= 5):
+                return self.send_json(400, {"error": "Rate every criterion from 1 to 5."})
+            scores[crit] = val
+        if not candidate_user_id:
+            return self.send_json(400, {"error": "A candidate is required."})
+        notes = (data.get("notes") or "").strip()[:1000]
+
+        rater_key = self.current_voter_key()
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            conn.close()
+        rater_label = self.current_actor_label(employer)
+        with db_lock:
+            conn = get_db()
+            conn.execute(
+                """INSERT INTO candidate_scorecards
+                   (employer_id, candidate_user_id, rater_key, rater_label, technical_score, problem_solving_score, communication_score, notes, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                   ON CONFLICT(employer_id, candidate_user_id, rater_key)
+                   DO UPDATE SET technical_score=excluded.technical_score, problem_solving_score=excluded.problem_solving_score,
+                   communication_score=excluded.communication_score, notes=excluded.notes, rater_label=excluded.rater_label,
+                   updated_at=datetime('now')""",
+                (employer_id, candidate_user_id, rater_key, rater_label,
+                 scores["technical"], scores["problemSolving"], scores["communication"], notes),
+            )
             conn.commit()
             conn.close()
         self.send_json(200, {"ok": True})

@@ -330,6 +330,8 @@ function apiListCandidateNotes(candidateUserId){ return apiRequest(`/api/employe
 function apiAddCandidateNote(candidateUserId, note){ return apiRequest('/api/employer/candidate-notes', 'POST', {candidateUserId, note}); }
 function apiGetCandidateVotes(candidateUserId){ return apiRequest(`/api/employer/candidate-votes?candidateUserId=${encodeURIComponent(candidateUserId)}`, 'GET'); }
 function apiSetCandidateVote(candidateUserId, vote){ return apiRequest('/api/employer/candidate-votes', 'POST', {candidateUserId, vote}); }
+function apiGetCandidateScorecards(candidateUserId){ return apiRequest(`/api/employer/candidate-scorecards?candidateUserId=${encodeURIComponent(candidateUserId)}`, 'GET'); }
+function apiSetCandidateScorecard(candidateUserId, payload){ return apiRequest('/api/employer/candidate-scorecards', 'POST', {candidateUserId, ...payload}); }
 function apiMe(){ return apiRequest('/api/me', 'GET'); }
 function apiSaveProfile(payload){ return apiRequest('/api/profile', 'PUT', payload); }
 function apiSaveSettings(payload){ return apiRequest('/api/profile/settings', 'PUT', payload); }
