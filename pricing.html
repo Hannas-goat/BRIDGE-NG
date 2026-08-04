@@ -169,6 +169,15 @@
         <button class="go-btn" onclick="saveBankAccount()">Save this account →</button>
       </div>
     </div>
+
+    <div class="card" id="webhook-card">
+      <p style="font-weight:700;margin:0 0 4px;">Slack / Discord alerts</p>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Optional: paste an incoming-webhook URL from your Slack or Discord workspace and Bridge NG will post there the moment a hire check-in comes back "no longer there" — with backup candidates from the same original search, right in the message. Leave blank to turn this off.</p>
+      <p class="form-msg" id="webhook-msg"></p>
+      <label>Webhook URL</label>
+      <input type="text" id="webhook-url-input" placeholder="https://hooks.slack.com/services/... or https://discord.com/api/webhooks/...">
+      <button class="go-btn" style="margin-top:10px;" onclick="saveEmployerWebhook()">Save →</button>
+    </div>
   </div>
 </div>
 
@@ -301,12 +310,14 @@ async function refreshEmployerState(){
     subscribeBtn.textContent = 'Subscribe →';
   }
   document.getElementById('bank-verify-card').style.display = me.isOwner ? '' : 'none';
+  document.getElementById('webhook-card').style.display = me.isOwner ? '' : 'none';
 
   if(me.bankAccount){
     document.getElementById('bank-existing-row').style.display = '';
     document.getElementById('bank-existing-label').textContent =
       `${me.bankAccount.accountName} — ${me.bankAccount.bankName} (${me.bankAccount.accountNumber})`;
   }
+  document.getElementById('webhook-url-input').value = me.employer.webhookUrl || '';
 }
 
 async function handleSubscribeClick(){
@@ -376,6 +387,16 @@ async function saveBankAccount(){
     document.getElementById('bank-resolved-row').style.display = 'none';
   }catch(err){
     setMsg('bank-msg', err.message, 'error');
+  }
+}
+
+async function saveEmployerWebhook(){
+  const webhookUrl = document.getElementById('webhook-url-input').value.trim();
+  try{
+    await apiSaveEmployerWebhook(webhookUrl);
+    setMsg('webhook-msg', webhookUrl ? 'Saved — alerts are on.' : 'Saved — alerts are off.', 'success');
+  }catch(err){
+    setMsg('webhook-msg', err.message, 'error');
   }
 }
 

@@ -320,6 +320,7 @@ function apiEmployerSubscribe(billingCycle){ return apiRequest('/api/employer/su
 function apiListBanks(){ return apiRequest('/api/employer/banks', 'GET'); }
 function apiBankResolve(accountNumber, bankCode){ return apiRequest(`/api/employer/bank/resolve?accountNumber=${encodeURIComponent(accountNumber)}&bankCode=${encodeURIComponent(bankCode)}`, 'GET'); }
 function apiSaveBankAccount(payload){ return apiRequest('/api/employer/bank', 'POST', payload); }
+function apiSaveEmployerWebhook(webhookUrl){ return apiRequest('/api/employer/webhook', 'POST', {webhookUrl}); }
 function apiGetPipeline(){ return apiRequest('/api/employer/pipeline', 'GET'); }
 function apiSetPipelineStage(candidateUserId, stage, jobContext){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage, ...(jobContext || {})}); }
 function apiListTeamMembers(){ return apiRequest('/api/employer/team', 'GET'); }

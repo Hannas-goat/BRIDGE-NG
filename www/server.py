@@ -302,6 +302,26 @@ def send_whatsapp_alert(to_number, body):
         print(f"[whatsapp] Failed to send alert: {e}")
 
 
+def send_employer_webhook(webhook_url, message):
+    """Best-effort: never raises, no-ops silently if the employer hasn't set a webhook URL. Sends
+    both "text" (the key Slack incoming webhooks read) and "content" (the key Discord webhooks
+    read) in one JSON body — each platform ignores the key it doesn't recognize, so this works
+    against either without needing the employer to tell us which one they're using."""
+    if not webhook_url:
+        return
+    try:
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps({"text": message, "content": message}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception as e:
+        print(f"[webhook] Failed to notify employer: {e}")
+
+
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
 # A bigger, more capable model for the resume/cover-letter writing itself (the part users actually
@@ -915,6 +935,9 @@ def init_db():
         )
     """)
     ensure_column(conn, "employer_sessions", "team_member_id", "team_member_id INTEGER REFERENCES employer_team_members(id)")
+    # Per-employer, opt-in incoming-webhook URL (Slack or Discord) — not a global env var, since
+    # every employer has a different workspace. Closed until the employer sets their own URL.
+    ensure_column(conn, "employers", "webhook_url", "webhook_url TEXT DEFAULT ''")
     # Shared across a workspace (owner + every team member), never visible to the candidate or
     # any other employer — author_label is captured at write-time rather than joined at read-time
     # so a note still shows who wrote it even after that team member is later removed.
@@ -1365,6 +1388,7 @@ def employer_row_to_json(row):
         "id": row["id"], "email": row["email"], "companyName": row["company_name"],
         "corporateDomain": row["corporate_domain"] or "",
         "verified": is_verified_employer_domain(row["corporate_domain"]),
+        "webhookUrl": row["webhook_url"] or "",
     }
 
 
@@ -2694,6 +2718,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_employer_subscribe()
         if parsed.path == "/api/employer/bank":
             return self.handle_save_bank_account()
+        if parsed.path == "/api/employer/webhook":
+            return self.handle_save_employer_webhook()
         if parsed.path == "/api/employer/pipeline":
             return self.handle_set_pipeline_stage()
         if parsed.path == "/api/async-interview/create":
@@ -4507,6 +4533,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         self.send_json(200, {"ok": True, "bankAccount": bank_account_row_to_json(row)})
 
+    def handle_save_employer_webhook(self):
+        """Per-employer opt-in: a Slack or Discord incoming-webhook URL that gets a real POST when
+        a hire check-in comes back "no longer there" and backup candidates are surfaced — the one
+        employer-facing event in this app that's genuinely worth a real-time push (everything else
+        an employer sees is fine waiting for their next dashboard visit, same reasoning as
+        surface_backup_candidates' docstring). Not a global env var, since every employer has a
+        different workspace to post into."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        if self.current_team_member_info() is not None:
+            return self.send_json(403, {"error": "Only the workspace owner can manage integrations."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        webhook_url = (data.get("webhookUrl") or "").strip()
+        if webhook_url and not re.match(r"^https://(hooks\.slack\.com/|discord(app)?\.com/api/webhooks/)", webhook_url):
+            return self.send_json(400, {"error": "That doesn't look like a Slack or Discord webhook URL."})
+
+        with db_lock:
+            conn = get_db()
+            conn.execute("UPDATE employers SET webhook_url = ? WHERE id = ?", (webhook_url, employer_id))
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True, "webhookUrl": webhook_url})
+
     def handle_get_pipeline(self):
         """Only ever available to employers with a real account — the anonymous job-posting flow
         has no durable identity to hang stage history off of."""
@@ -4659,11 +4711,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send_json(404, {"error": "Check-in not found."})
             new_status = "confirmed" if still_employed else "failed"
             conn.execute(f"UPDATE hire_checkins SET {col} = ? WHERE id = ?", (new_status, checkin_id))
+            webhook_url, candidate_name = None, "Bridge NG member"
+            backups = []
             if not still_employed:
                 backups = surface_backup_candidates(conn, checkin)
                 conn.execute("UPDATE hire_checkins SET backup_candidates = ? WHERE id = ?", (json.dumps(backups), checkin_id))
+                employer_row = conn.execute("SELECT webhook_url FROM employers WHERE id = ?", (checkin["employer_id"],)).fetchone()
+                webhook_url = employer_row["webhook_url"] if employer_row else None
+                cand_row = conn.execute("SELECT full_name FROM profiles WHERE user_id = ?", (checkin["candidate_user_id"],)).fetchone()
+                candidate_name = (decrypt_field(cand_row["full_name"]) if cand_row else None) or candidate_name
             conn.commit()
             conn.close()
+        if webhook_url:
+            checkpoint_note = f"day-{day} check-in" if day != 90 else "day-90 (final) check-in"
+            backup_note = (
+                f" {len(backups)} backup candidate{'s' if len(backups) != 1 else ''} with similar skills have been surfaced in your Bridge NG dashboard."
+                if backups else " No strong backup matches were found automatically — worth a fresh search."
+            )
+            send_employer_webhook(
+                webhook_url,
+                f"Bridge NG: {candidate_name} ({checkin['job_title'] or 'your hire'} at {checkin['company'] or 'your company'}) "
+                f"is no longer there, per their {checkpoint_note}.{backup_note}",
+            )
         self.send_json(200, {"ok": True, "status": new_status})
 
     # ---------- asynchronous video Q&A: employer asks 3 questions once, candidate has 48h to
