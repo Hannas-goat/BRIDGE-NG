@@ -4928,8 +4928,8 @@ function onUniversityFieldChange(){
 function renderAuthArea(){
   const el = document.getElementById('auth-area');
   if(currentAccount){
-    const firstName = (currentAccount.profile.fullName || currentAccount.email).split(' ')[0];
-    el.innerHTML = `<span class="user-greet">Signed in as <b>${firstName}</b></span><button class="auth-btn" onclick="signOut()">Sign out</button>`;
+    const firstName = (currentAccount.profile.fullName || '').trim().split(' ')[0] || 'there';
+    el.innerHTML = `<span class="user-greet">Signed in as <b>${escapeHtml(firstName)}</b></span><button class="auth-btn" onclick="signOut()">Sign out</button>`;
     document.getElementById('save-profile-btn').style.display = '';
   }else{
     el.innerHTML = `<a class="auth-btn" href="auth.html?mode=signin">Sign in</a><a class="auth-btn filled" href="auth.html?mode=signup">Sign up</a>`;
