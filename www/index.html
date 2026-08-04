@@ -171,6 +171,10 @@ if('serviceWorker' in navigator){
       </div>
     </nav>
       <div class="nav-actions">
+        <button type="button" class="cmdk-trigger" onclick="openCommandPalette()" aria-label="Open command palette" title="Search &amp; jump to anything">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="cmdk-trigger-kbd">⌘K</span>
+        </button>
         <button type="button" class="low-data-toggle" id="low-data-toggle" onclick="toggleLowDataMode()"></button>
         <div class="notif-area" id="notif-area" style="display:none;">
           <button class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown()" aria-label="Notifications">
@@ -1582,6 +1586,13 @@ if('serviceWorker' in navigator){
       <button class="upload-btn" onclick="closeCertificateModal()">Close</button>
       <button class="go-btn" style="margin-top:0;display:none;" id="certificate-copy-btn" onclick="copyCertificateLink()">Copy link</button>
     </div>
+  </div>
+</div>
+
+<div class="cmdk-overlay" id="cmdk-overlay" onclick="if(event.target === this) closeCommandPalette()">
+  <div class="cmdk-box">
+    <input type="text" id="cmdk-input" class="cmdk-input" placeholder="Search or jump to anything… (e.g. &quot;update NYSC status&quot;)" oninput="renderCommandPaletteResults()" onkeydown="handleCommandPaletteKeydown(event)">
+    <div class="cmdk-results" id="cmdk-results"></div>
   </div>
 </div>
 
@@ -5364,6 +5375,120 @@ function updateDockActiveState(active){
     btn.classList.toggle('active', btn.dataset.target === active);
   });
 }
+
+// --- Command Palette (Cmd+K / Ctrl+K): fast keyboard-driven navigation + actions. Word-level
+// search (every typed word must appear somewhere in the item's label/keywords, in any order) —
+// not a full fuzzy-typo matcher, but forgiving of word order and covers real multi-word phrases
+// like "amaka interview" or "update nysc status" cleanly without a new dependency. ---
+
+const COMMAND_PALETTE_STATIC_ACTIONS = [
+  {label: 'Go to Home', keywords: 'seeker dashboard', action: () => showPage('seeker')},
+  {label: 'Explore Jobs', keywords: 'browse search roles', action: () => showPage('explore')},
+  {label: 'Resume Studio', keywords: 'cv resume builder tailor', action: () => showPage('resume')},
+  {label: 'Train Yourself', keywords: 'learn skills courses', action: () => showPage('train')},
+  {label: 'SQL Playground', keywords: 'practice query challenge', action: () => showPage('sqlplayground')},
+  {label: 'Work Abroad', keywords: 'remote international', action: () => showPage('abroad')},
+  {label: 'Interview Tips & Mock Simulator', keywords: 'practice camera', action: () => showPage('interview')},
+  {label: 'Book Appointment', keywords: 'schedule interview slot', action: () => showPage('appointment')},
+  {label: 'Career Match AI', keywords: 'scholarship visa pathway', action: () => showPage('career')},
+  {label: 'AI Job Match', keywords: 'best fit role', action: () => showPage('jobmatch')},
+  {label: 'Messages', keywords: 'inbox conversations employer video interviews', action: () => showPage('messages')},
+  {label: 'Salary & Culture Reviews', keywords: 'pay review company', action: () => showPage('salary')},
+  {label: 'Post a Job (Employer)', keywords: 'hiring recruit candidates', action: () => showPage('employer')},
+  {label: 'Open Settings', keywords: 'theme preferences account low data', action: () => toggleSettingsWidget()},
+  {label: 'Toggle Low Data Mode', keywords: '3g slow network data saver', action: () => toggleLowDataMode()},
+  {label: 'Update NYSC Status', keywords: 'corper service ppa', action: () => focusProfileFieldFromPalette('s-nysc')},
+  {label: 'Update Preferred Locations', keywords: 'city state relocate', action: () => focusProfileFieldFromPalette('s-loc-input')},
+  {label: 'Update Skills', keywords: 'add skill chip', action: () => focusProfileFieldFromPalette('s-skill-input')},
+  {label: 'Update Phone Number', keywords: 'contact whatsapp', action: () => focusProfileFieldFromPalette('s-phone')},
+  {label: 'Save My Profile', keywords: 'update submit', action: () => { showPage('seeker'); setTimeout(() => { const b = document.getElementById('save-profile-btn'); if(b) b.click(); }, 300); }},
+  {label: 'Sign Out', keywords: 'logout', action: () => { if(currentAccount) signOut(); else showToast('Not signed in.'); }},
+];
+
+function focusProfileFieldFromPalette(fieldId){
+  showPage('seeker');
+  setTimeout(() => focusProfileField(fieldId), 350);
+}
+
+// Dynamic items only exist while an employer has real search results loaded in memory — a
+// recruiter typing "invite amaka" only makes sense once there's an actual Amaka on screen.
+function getCommandPaletteItems(){
+  const items = [...COMMAND_PALETTE_STATIC_ACTIONS];
+  if(lastEmployerResults && lastEmployerResults.matches){
+    lastEmployerResults.matches.forEach(m => {
+      items.push({
+        label: `Invite ${m.fullName} to Interview`, keywords: m.fullName.toLowerCase(), hint: 'Candidate',
+        action: () => { showPage('employer'); setTimeout(() => inviteToInterview(m.userId), 350); },
+      });
+      items.push({
+        label: `Message ${m.fullName}`, keywords: m.fullName.toLowerCase(), hint: 'Candidate',
+        action: () => { showPage('employer'); setTimeout(() => toggleMessageComposer(m.userId), 350); },
+      });
+    });
+  }
+  return items;
+}
+
+function commandPaletteMatches(query, item){
+  const haystack = (item.label + ' ' + (item.keywords || '')).toLowerCase();
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return words.every(w => haystack.includes(w));
+}
+
+let cmdkActiveIndex = 0;
+let cmdkVisibleItems = [];
+
+function openCommandPalette(){
+  document.getElementById('cmdk-overlay').classList.add('open');
+  const input = document.getElementById('cmdk-input');
+  input.value = '';
+  cmdkActiveIndex = 0;
+  renderCommandPaletteResults();
+  setTimeout(() => input.focus(), 20);
+}
+
+function closeCommandPalette(){
+  document.getElementById('cmdk-overlay').classList.remove('open');
+}
+
+function renderCommandPaletteResults(){
+  const query = document.getElementById('cmdk-input').value;
+  const el = document.getElementById('cmdk-results');
+  cmdkVisibleItems = getCommandPaletteItems().filter(item => commandPaletteMatches(query, item)).slice(0, 20);
+  cmdkActiveIndex = Math.min(cmdkActiveIndex, Math.max(0, cmdkVisibleItems.length - 1));
+  if(cmdkVisibleItems.length === 0){
+    el.innerHTML = '<div class="cmdk-empty">No matches — try a different word.</div>';
+    return;
+  }
+  el.innerHTML = cmdkVisibleItems.map((item, i) => `
+    <div class="cmdk-item${i === cmdkActiveIndex ? ' active' : ''}" onmouseenter="cmdkActiveIndex=${i};renderCommandPaletteResults();" onclick="runCommandPaletteItem(${i})">
+      <span>${escapeHtml(item.label)}</span>
+      ${item.hint ? `<span class="cmdk-item-hint">${escapeHtml(item.hint)}</span>` : ''}
+    </div>
+  `).join('');
+}
+
+function runCommandPaletteItem(index){
+  const item = cmdkVisibleItems[index];
+  if(!item) return;
+  closeCommandPalette();
+  item.action();
+}
+
+function handleCommandPaletteKeydown(e){
+  if(e.key === 'ArrowDown'){ e.preventDefault(); cmdkActiveIndex = Math.min(cmdkActiveIndex + 1, cmdkVisibleItems.length - 1); renderCommandPaletteResults(); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); cmdkActiveIndex = Math.max(cmdkActiveIndex - 1, 0); renderCommandPaletteResults(); }
+  else if(e.key === 'Enter'){ e.preventDefault(); runCommandPaletteItem(cmdkActiveIndex); }
+  else if(e.key === 'Escape'){ closeCommandPalette(); }
+}
+
+document.addEventListener('keydown', (e) => {
+  if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
+    e.preventDefault();
+    const overlay = document.getElementById('cmdk-overlay');
+    if(overlay.classList.contains('open')) closeCommandPalette(); else openCommandPalette();
+  }
+});
 
 function goToResumeStudio(jobId, action){
   const job = JOBS[jobId];
