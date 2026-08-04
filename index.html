@@ -3782,6 +3782,39 @@ function saveEmployerConversationLocally(id, token, company, jobTitle){
   localStorage.setItem(EMPLOYER_CONVOS_KEY, JSON.stringify(list.slice(0, 30)));
 }
 
+// Client-side mirror of server.py's GITHUB_USERNAME_RE — only used to decide whether to show the
+// "View GitHub activity" button at all; the server independently re-derives and re-validates the
+// username itself before ever calling GitHub's API, so nothing here needs to be trusted.
+function githubUsernameFromUrl(url){
+  const m = /^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/?$/.exec((url || '').trim());
+  return m ? m[1] : null;
+}
+
+async function watchCandidateGithub(userId, portfolioLink, btn){
+  const panel = document.getElementById('github-watch-' + userId);
+  if(!panel) return;
+  if(panel.style.display !== 'none'){ panel.style.display = 'none'; return; }
+  panel.style.display = '';
+  if(panel.dataset.loaded) return;
+  panel.innerHTML = '<p class="loading-line">Loading real GitHub activity…</p>';
+  try{
+    const data = await apiGetGithubEnrichment(portfolioLink);
+    panel.innerHTML = `
+      <div class="github-enrichment-card">
+        ${data.avatarUrl ? `<img src="${escapeAttr(data.avatarUrl)}" alt="" class="github-avatar">` : ''}
+        <div>
+          <a href="${escapeAttr(safeUrl(data.profileUrl))}" target="_blank" rel="noopener noreferrer" class="verified-badge-link">@${escapeHtml(data.username)}</a>
+          <p class="github-enrichment-stats">${data.publicRepos} public repos · ${data.followers} followers</p>
+          ${data.topLanguages.length ? `<div class="skill-row">${data.topLanguages.map(l => `<span class="skill-pill">${escapeHtml(l)}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>
+    `;
+    panel.dataset.loaded = '1';
+  }catch(err){
+    panel.innerHTML = `<p class="fit-none">${escapeHtml((err && err.message) || "Couldn't load GitHub data.")}</p>`;
+  }
+}
+
 async function watchCandidatePitch(userId, btn){
   const panel = document.getElementById('pitch-watch-' + userId);
   if(!panel) return;
@@ -6776,8 +6809,10 @@ function renderEmployerResultsSection(){
               <button class="ai-btn" onclick="suggestOutreachMessage(${m.userId})">✨ Suggest message</button>
               ${m.hasPitch ? `<button class="ai-btn" onclick="watchCandidatePitch(${m.userId}, this)">▶ Watch pitch</button>` : ''}
               <button class="ai-btn" onclick="toggleAsyncInterviewForm(${m.userId})">🎥 Video questions</button>
+              ${githubUsernameFromUrl(m.portfolioLink) ? `<button class="ai-btn" onclick="watchCandidateGithub(${m.userId}, '${jsStr(m.portfolioLink)}', this)">🐙 View GitHub activity</button>` : ''}
             </div>
             <div class="pitch-watch-panel" id="pitch-watch-${m.userId}" style="display:none;"></div>
+            <div class="github-watch-panel" id="github-watch-${m.userId}" style="display:none;"></div>
             <div class="message-composer" id="msg-composer-${m.userId}" style="display:none;" data-user-id="${m.userId}" data-company="${escapeAttr(company)}" data-job-title="${escapeAttr(title)}">
               <textarea class="form-textarea" placeholder="e.g. We saw your profile on Career Match AI — are you free for a quick chat about this role?"></textarea>
               <button class="go-btn" style="margin-top:8px;" onclick="sendEmployerMessage(this)">Send message →</button>

@@ -564,6 +564,10 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 }
 
 .pitch-watch-panel{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+.github-watch-panel{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+.github-enrichment-card{display:flex;gap:12px;align-items:flex-start;}
+.github-avatar{width:44px;height:44px;border-radius:50%;flex:none;}
+.github-enrichment-stats{font-size:12.5px;color:var(--ink-soft);margin:2px 0 6px;}
 
 .pitch-player-toggle{flex:none;width:40px;height:40px;border-radius:50%;border:none;background:linear-gradient(135deg, var(--indigo-soft), var(--indigo) 60%);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 4px 12px rgba(139,92,246,0.3);}
 .pitch-player-toggle:hover{transform:scale(1.08);}

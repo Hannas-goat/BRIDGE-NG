@@ -1564,6 +1564,57 @@ def call_nvidia_with_fallbacks(messages, models, max_tokens=1400, timeout=45, so
     raise last_error
 
 
+GITHUB_USERNAME_RE = re.compile(r"^https?://(?:www\.)?github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/?$")
+GITHUB_ENRICHMENT_CACHE = {}  # username -> (fetched_at_epoch, data) — a handful of requests/hour
+GITHUB_ENRICHMENT_CACHE_TTL = 3600  # matters against GitHub's ~60/hr unauthenticated rate limit
+
+
+def github_username_from_url(url):
+    m = GITHUB_USERNAME_RE.match((url or "").strip())
+    return m.group(1) if m else None
+
+
+def fetch_github_enrichment(username):
+    """Real public GitHub data only — public repo count, follower count, and the languages
+    actually used across their 10 most-recently-updated public repos. No private data, no
+    fabricated "AI-analyzed contribution quality" score; just what GitHub's own public API
+    already says about the account. Cached in-memory for an hour per username since this runs
+    against GitHub's unauthenticated rate limit (~60 requests/hour per server IP)."""
+    cached = GITHUB_ENRICHMENT_CACHE.get(username)
+    if cached and time.time() - cached[0] < GITHUB_ENRICHMENT_CACHE_TTL:
+        return cached[1]
+
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "BridgeNG"}
+    user_req = urllib.request.Request(f"https://api.github.com/users/{username}", headers=headers)
+    with urllib.request.urlopen(user_req, timeout=10) as resp:
+        user = json.loads(resp.read().decode("utf-8"))
+
+    repos_req = urllib.request.Request(
+        f"https://api.github.com/users/{username}/repos?sort=updated&per_page=10", headers=headers
+    )
+    with urllib.request.urlopen(repos_req, timeout=10) as resp:
+        repos = json.loads(resp.read().decode("utf-8"))
+
+    language_counts = {}
+    for r in repos:
+        lang = r.get("language")
+        if lang:
+            language_counts[lang] = language_counts.get(lang, 0) + 1
+    top_languages = sorted(language_counts, key=language_counts.get, reverse=True)[:5]
+
+    data = {
+        "username": user.get("login", username),
+        "name": user.get("name") or "",
+        "avatarUrl": user.get("avatar_url") or "",
+        "publicRepos": user.get("public_repos", 0),
+        "followers": user.get("followers", 0),
+        "topLanguages": top_languages,
+        "profileUrl": user.get("html_url") or f"https://github.com/{username}",
+    }
+    GITHUB_ENRICHMENT_CACHE[username] = (time.time(), data)
+    return data
+
+
 def parse_job_info_json(reply, fallback_text):
     """Parses the AI job-lookup's JSON reply, tolerating markdown code fences, and falls back to
     a best-effort shape (rather than erroring out) if the model didn't return valid JSON."""
@@ -2545,6 +2596,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_profile_insights()
         if parsed.path == "/api/certificate-url":
             return self.handle_certificate_url(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/github-enrichment":
+            return self.handle_github_enrichment(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/referrals/mine":
             return self.handle_list_my_referrals()
         if parsed.path == "/api/account/export":
@@ -3433,6 +3486,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(404, {"error": "You don't have a verified badge for that skill yet."})
         token = certificate_token(user_id, skill)
         self.send_json(200, {"url": f"/certificate/{user_id}/{urllib.parse.quote(skill)}/{token}.png"})
+
+    def handle_github_enrichment(self, query):
+        """Unauthenticated, same trust model as the rest of the employer-facing candidate data
+        (handle_post_employer_job already hands out full names/skills to anyone who posts a job)
+        — this just adds real public GitHub stats for a candidate whose self-declared portfolio
+        link happens to be a GitHub profile URL. Nothing here is private data; it's exactly what
+        GitHub's own public API already returns for that username."""
+        portfolio_link = (query.get("url", [""])[0] or "").strip()
+        username = github_username_from_url(portfolio_link)
+        if not username:
+            return self.send_json(400, {"error": "That's not a GitHub profile URL."})
+        try:
+            data = fetch_github_enrichment(username)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return self.send_json(404, {"error": "No GitHub account found at that link."})
+            return self.send_json(502, {"error": "GitHub didn't respond as expected — try again shortly."})
+        except Exception:
+            return self.send_json(502, {"error": "Couldn't reach GitHub right now — try again shortly."})
+        self.send_json(200, data)
 
     def handle_get_certificate(self, user_id, skill, token):
         if not hmac.compare_digest(token, certificate_token(user_id, skill)):
