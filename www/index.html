@@ -5521,6 +5521,48 @@ function matchScore(requiredSkills, candidateSkills, reqLevel, candLevel, reqLoc
   return Math.max(2, Math.min(99, Math.round(score*100)));
 }
 
+// Same exact formula as matchScore() above, but returns the labeled components instead of just
+// the final number — "extreme transparency" only means something if the breakdown can't drift
+// from what was actually computed, so this mirrors matchScore() line for line rather than
+// re-deriving the math a second, differently-worded way.
+function explainMatchScore(requiredSkills, candidateSkills, reqLevel, candLevel, reqLoc, candLoc){
+  const req = new Set(requiredSkills);
+  const cand = new Set(candidateSkills);
+  const matchedSkills = [...req].filter(s => cand.has(s));
+  const union = new Set([...req, ...cand]).size;
+  const skillScore = union === 0 ? 0 : matchedSkills.length / union;
+  const levelDist = levelDistance(reqLevel, candLevel);
+  const levelPenalty = levelDist * 0.12;
+  const candLocs = Array.isArray(candLoc) ? candLoc : (candLoc ? [candLoc] : []);
+  const locMatches = reqLoc === 'Any location' || candLocs.includes(reqLoc) || reqLoc === 'Remote';
+  const locBonus = locMatches ? 0.05 : 0;
+  const rawScore = skillScore * 0.8 + 0.2 - levelPenalty + locBonus;
+  return {
+    score: Math.max(2, Math.min(99, Math.round(rawScore * 100))),
+    matchedSkills, missingSkills: [...req].filter(s => !cand.has(s)),
+    requiredCount: req.size, matchedCount: matchedSkills.length,
+    skillPoints: Math.round(skillScore * 80),
+    levelExact: levelDist === 0, levelPenaltyPoints: Math.round(levelPenalty * 100),
+    locMatches, locBonusPoints: locMatches ? 5 : 0,
+  };
+}
+
+function matchScoreExplainHtml(breakdown){
+  return `
+    <span class="overlap-badge match-explain-badge" onclick="toggleOverlapPopover(event)">
+      ⓘ Why this score?
+      <span class="overlap-popover">
+        <span class="overlap-popover-title">${breakdown.matchedCount}/${breakdown.requiredCount} required skills (+${breakdown.skillPoints}pt${breakdown.skillPoints === 1 ? '' : 's'} of 80 base)</span>
+        <span class="overlap-skill-group">
+          ${breakdown.matchedSkills.length ? breakdown.matchedSkills.map(s => `<span class="skill-pill match">${escapeHtml(s)}</span>`).join('') : '<span class="overlap-popover-empty">No overlapping skills yet.</span>'}
+        </span>
+        ${breakdown.missingSkills.length ? `<span class="overlap-popover-title">Missing</span><span class="overlap-skill-group">${breakdown.missingSkills.map(s => `<span class="skill-pill miss">${escapeHtml(s)}</span>`).join('')}</span>` : ''}
+        <span class="overlap-popover-title">${breakdown.levelExact ? 'Career level matches exactly (no penalty)' : `Career level ${breakdown.levelPenaltyPoints}pt penalty for the gap`}</span>
+        <span class="overlap-popover-title">${breakdown.locMatches ? `Location matches (+${breakdown.locBonusPoints}pt)` : 'Location doesn’t match (no bonus, not a penalty)'}</span>
+      </span>
+    </span>`;
+}
+
 function gaugeColor(pct){
   if(pct >= 70) return {bg:'var(--green-pale)', fg:'var(--green-deep)'};
   if(pct >= 40) return {bg:'var(--gold-pale)', fg:'var(--gold-deep)'};
@@ -5664,13 +5706,14 @@ function findJobs(){
   }
   const scored = JOBS.map(j=>({
     job:j,
-    score: matchScore(j.skills, [...seekerSkills], j.level, level, j.loc, loc)
-  })).sort((a,b)=>b.score-a.score).slice(0,6);
+    breakdown: explainMatchScore(j.skills, [...seekerSkills], j.level, level, j.loc, loc)
+  })).sort((a,b)=>b.breakdown.score-a.breakdown.score).slice(0,6);
 
   results.innerHTML = `
     <div class="results-head"><h2>Matches for ${name}</h2><span>${scored.length} roles, best fit first</span></div>
     <div class="grid">
-      ${scored.map(({job,score})=>{
+      ${scored.map(({job,breakdown})=>{
+        const score = breakdown.score;
         const c = gaugeColor(score);
         return `<div class="res-card">
           <div class="gauge">
@@ -5685,6 +5728,7 @@ function findJobs(){
           <div class="res-body">
             <p class="res-title">${escapeHtml(job.title)}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
             <p class="res-sub">${companyHoverSpan(job.company)} · ${escapeHtml(job.loc)} · ${escapeHtml(job.level)}</p>
+            <div style="margin:2px 0 6px;">${matchScoreExplainHtml(breakdown)}</div>
             <span class="pay-pill">${payLabel(job)}</span>
             <div class="skill-row">${skillPills(job.skills, seekerSkills)}</div>
             <div class="btn-row">
