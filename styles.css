@@ -244,7 +244,11 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:500;margin:0;}
 .notif-item p{margin:0 0 4px;font-size:13px;color:var(--ink);line-height:1.4;}
 .notif-item span{font-size:11px;color:var(--ink-soft);}
 .notif-item.unread{background:var(--gold-pale);}
+.notif-item-clickable{cursor:pointer;transition:background .15s ease;}
+.notif-item-clickable:hover{background:var(--surface-2);}
+.notif-view-link{display:block;margin-top:4px;font-size:11px;font-weight:700;color:var(--gold-deep);}
 .notif-empty{padding:20px 14px;font-size:13px;color:var(--ink-soft);text-align:center;}
+.notif-job-modal-desc{font-size:13.5px;color:var(--ink-soft);line-height:1.6;margin:4px 0 0;}
 
 .profile-meter-area{position:relative;}
 .profile-meter-badge{position:relative;width:38px;height:38px;border-radius:50%;border:none;background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background .15s;}

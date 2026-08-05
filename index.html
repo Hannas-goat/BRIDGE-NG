@@ -1570,6 +1570,25 @@ if('serviceWorker' in navigator){
   </div>
 </div>
 
+<div class="pitch-modal-overlay" id="notif-job-modal-overlay" onclick="if(event.target === this) closeNotifJobModal()">
+  <div class="pitch-modal">
+    <div class="pitch-modal-head">
+      <div>
+        <h3 id="notif-job-modal-title"></h3>
+        <p class="pitch-modal-sub" id="notif-job-modal-sub"></p>
+      </div>
+      <button class="pitch-modal-close" onclick="closeNotifJobModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="notif-job-modal-body"></div>
+    <div class="pitch-modal-actions">
+      <button class="upload-btn" onclick="closeNotifJobModal()">Close</button>
+      <button class="ai-btn" id="notif-job-modal-apply" style="display:none;">View full listing ↗</button>
+    </div>
+  </div>
+</div>
+
 <div class="pitch-modal-overlay" id="certificate-modal-overlay" onclick="if(event.target === this) closeCertificateModal()">
   <div class="pitch-modal">
     <div class="pitch-modal-head">
@@ -2445,8 +2464,17 @@ async function saveCurrentSearch(){
   // Saved-search alerts still match against a single location (see handle_create_saved_search) —
   // use the first picked preferred location as the representative one, or none to match any location.
   const loc = [...seekerLocations][0] || '';
+  const label = [...seekerSkills].slice(0, 3).join(', ');
+  // The server only rejects an exact (skills, level, location) triple, but the chip only ever shows
+  // the first 3 skills — so two searches that differ beyond that (a 4th skill, say) still render as
+  // identical-looking duplicate chips. Catch that here, on the same visible identity the user sees.
+  const alreadySaved = savedSearches.some(s => s.label === label && s.level === level && s.location === loc);
+  if(alreadySaved){
+    showToast("You already have a saved search for this — no need to add it twice.");
+    return;
+  }
   try{
-    await apiCreateSavedSearch({skills: [...seekerSkills], level, location: loc, label: [...seekerSkills].slice(0, 3).join(', ')});
+    await apiCreateSavedSearch({skills: [...seekerSkills], level, location: loc, label});
     await loadSavedSearches();
     showToast("Search saved — you'll get an alert here when a new job matches it.");
   }catch(err){
@@ -2664,11 +2692,63 @@ function renderNotifDropdown(){
     return;
   }
   el.innerHTML = notifications.map(n => `
-    <div class="notif-item${n.read ? '' : ' unread'}">
+    <div class="notif-item${n.read ? '' : ' unread'}${n.jobId ? ' notif-item-clickable' : ''}"
+      ${n.jobId ? `onclick="openNotificationJob(${n.id})" role="button" tabindex="0"` : ''}>
       <p>${escapeHtml(n.message)}</p>
       <span>${escapeHtml(n.createdAt)}</span>
+      ${n.jobId ? '<span class="notif-view-link">View role details →</span>' : ''}
     </div>
   `).join('');
+}
+
+// Backs the notification-dropdown "View role details" click: fetches the real listing the
+// notification was generated from (see handle_get_notification_job) and shows it in a modal so
+// someone can judge fit without leaving the dropdown. Falls back to a toast if the role's since
+// been removed rather than opening an empty modal.
+async function openNotificationJob(notifId){
+  try{
+    const job = await apiGetNotificationJob(notifId);
+    renderNotifJobModal(job);
+    document.getElementById('notif-job-modal-overlay').classList.add('open');
+    const n = notifications.find(x => x.id === notifId);
+    if(n && !n.read){
+      n.read = true;
+      renderNotifDropdown();
+      const unread = notifications.filter(x => !x.read).length;
+      const badge = document.getElementById('notif-badge');
+      if(badge){
+        if(unread > 0){ badge.textContent = unread > 9 ? '9+' : String(unread); badge.style.display = ''; }
+        else{ badge.style.display = 'none'; }
+      }
+    }
+  }catch(e){
+    showToast("This role isn't available anymore — it may have been filled or removed.");
+  }
+}
+
+function renderNotifJobModal(job){
+  document.getElementById('notif-job-modal-title').textContent = job.title;
+  document.getElementById('notif-job-modal-sub').textContent =
+    `${job.company} · ${job.location}${job.level ? ' · ' + job.level : ''}`;
+  const perkLabels = (job.perks || []).map(p => PERK_LABELS[p] || p);
+  document.getElementById('notif-job-modal-body').innerHTML = `
+    <span class="pay-pill">${escapeHtml(job.pay)}</span>
+    <div class="skill-row">${skillPills(job.skills || [], seekerSkills)}</div>
+    ${job.description ? `<p class="notif-job-modal-desc">${escapeHtml(job.description)}</p>` : ''}
+    ${perkLabels.length ? `<p class="notif-job-modal-desc">${perkLabels.map(escapeHtml).join(' · ')}</p>` : ''}
+    ${!job.description && !perkLabels.length ? '<p class="notif-job-modal-desc">No further description was given for this role — the skills, level and pay above are what it was matched on.</p>' : ''}
+  `;
+  const applyBtn = document.getElementById('notif-job-modal-apply');
+  if(job.url){
+    applyBtn.style.display = '';
+    applyBtn.onclick = () => { window.open(job.url, '_blank', 'noopener'); };
+  }else{
+    applyBtn.style.display = 'none';
+  }
+}
+
+function closeNotifJobModal(){
+  document.getElementById('notif-job-modal-overlay').classList.remove('open');
 }
 
 function toggleNotifDropdown(){

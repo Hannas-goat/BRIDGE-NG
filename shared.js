@@ -380,6 +380,7 @@ function apiUnfollowCompany(company){ return apiRequest('/api/unfollow-company',
 function apiListFollowedCompanies(){ return apiRequest('/api/followed-companies', 'GET'); }
 function apiListNotifications(){ return apiRequest('/api/notifications', 'GET'); }
 function apiMarkNotificationsRead(){ return apiRequest('/api/notifications/read', 'POST', {}); }
+function apiGetNotificationJob(id){ return apiRequest('/api/notifications/job?id=' + encodeURIComponent(id), 'GET'); }
 function apiCheckinStatus(){ return apiRequest('/api/checkin', 'GET'); }
 function apiCheckin(){ return apiRequest('/api/checkin', 'POST', {}); }
 function apiCampusCount(university){ return apiRequest('/api/campus-count?university=' + encodeURIComponent(university), 'GET'); }

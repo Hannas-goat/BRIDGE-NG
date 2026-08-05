@@ -1047,6 +1047,14 @@ def init_db():
                 "UPDATE profiles SET preferred_locations = ? WHERE user_id = ?",
                 (json.dumps([loc] if loc else []), row["user_id"]),
             )
+    # Lets a "new role matches you" notification link back to the actual listing it's about, so
+    # clicking it can show the real description/skills/pay instead of just the one-line message.
+    # job_source tells handle_get_notification_job which table job_id points into — imported_jobs
+    # (a real, publicly browsable listing) or employer_posted_jobs (anonymous employer submissions,
+    # never public — see render_job_detail_html). Left blank/NULL on notification kinds that were
+    # never about a specific listing (pipeline_stage, hire_checkin, etc.) — nothing to link there.
+    ensure_column(conn, "notifications", "job_id", "job_id INTEGER")
+    ensure_column(conn, "notifications", "job_source", "job_source TEXT DEFAULT ''")
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
@@ -1494,6 +1502,8 @@ def notification_row_to_json(row):
         "company": row["company"],
         "read": bool(row["is_read"]),
         "createdAt": row["created_at"],
+        "jobId": row["job_id"],
+        "jobSource": row["job_source"] or "",
     }
 
 
@@ -1541,15 +1551,17 @@ def application_row_to_json(row):
     }
 
 
-def notify_candidate_of_match(conn, user_id, kind, message, job_title, company):
+def notify_candidate_of_match(conn, user_id, kind, message, job_title, company, job_id=None, job_source=''):
     """Shared by every "new role matches you" path (saved search, followed company, single or
     bulk sync): writes the in-app notification, then also sends WhatsApp if the candidate has
     both the master whatsapp_alerts_enabled toggle AND the granular whatsapp_notify_matches
     preference on — the same two-flag gate handle_post_employer_job already uses, so a saved
-    search behaves identically to an employer posting a job directly on Bridge NG."""
+    search behaves identically to an employer posting a job directly on Bridge NG. job_id/job_source
+    (always 'imported' from these callers — real rows in imported_jobs) let the notification link
+    back to that listing's real description; see handle_get_notification_job."""
     conn.execute(
-        "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
-        (user_id, kind, message, job_title, company),
+        "INSERT INTO notifications (user_id, kind, message, job_title, company, job_id, job_source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, kind, message, job_title, company, job_id, job_source),
     )
     candidate = conn.execute(
         "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_matches FROM profiles WHERE user_id = ?",
@@ -1573,13 +1585,15 @@ def generate_notifications_for_job(conn, job):
         loc_ok = not row["location"] or row["location"] in ("Any location", "Any region") or row["location"] == job["location"]
         if level_ok and loc_ok:
             message = f'New role matching your saved search "{row["label"] or "Untitled search"}": {job["title"]} at {job["company"]}.'
-            notify_candidate_of_match(conn, row["user_id"], "saved_search", message, job["title"], job["company"])
+            notify_candidate_of_match(conn, row["user_id"], "saved_search", message, job["title"], job["company"],
+                                       job_id=job["id"], job_source="imported")
 
     for row in conn.execute(
         "SELECT * FROM followed_companies WHERE lower(company) = lower(?)", (job["company"],)
     ).fetchall():
         message = f'{job["company"]} just posted a new role: {job["title"]}.'
-        notify_candidate_of_match(conn, row["user_id"], "followed_company", message, job["title"], job["company"])
+        notify_candidate_of_match(conn, row["user_id"], "followed_company", message, job["title"], job["company"],
+                                   job_id=job["id"], job_source="imported")
 
 
 def call_nvidia(messages, max_tokens=1400, model=None, timeout=45):
@@ -2196,11 +2210,13 @@ def generate_bulk_notifications(conn, company, inserted_jobs):
         return
     count = len(inserted_jobs)
     example = inserted_jobs[0]["title"]
+    example_id = inserted_jobs[0]["id"]
 
     for row in conn.execute("SELECT * FROM followed_companies WHERE lower(company) = lower(?)", (company,)).fetchall():
         message = (f'{company} just posted {count} new roles — including "{example}".' if count > 1
                    else f'{company} just posted a new role: {example}.')
-        notify_candidate_of_match(conn, row["user_id"], "followed_company", message, example, company)
+        notify_candidate_of_match(conn, row["user_id"], "followed_company", message, example, company,
+                                   job_id=example_id, job_source="imported")
 
     for row in conn.execute("SELECT * FROM saved_searches").fetchall():
         saved_skills = {s.lower() for s in json.loads(row["skills"] or "[]")}
@@ -2217,11 +2233,13 @@ def generate_bulk_notifications(conn, company, inserted_jobs):
             continue
         match_count = len(matches)
         match_example = matches[0]["title"]
+        match_example_id = matches[0]["id"]
         label = row["label"] or "Untitled search"
         message = (f'{match_count} new roles match your saved search "{label}" — including "{match_example}" at {company}.'
                    if match_count > 1 else
                    f'New role matching your saved search "{label}": {match_example} at {company}.')
-        notify_candidate_of_match(conn, row["user_id"], "saved_search", message, match_example, company)
+        notify_candidate_of_match(conn, row["user_id"], "saved_search", message, match_example, company,
+                                   job_id=match_example_id, job_source="imported")
 
 
 TAG_RE = re.compile(r"<[^>]+>")
@@ -2653,6 +2671,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_followed_companies()
         if parsed.path == "/api/notifications":
             return self.handle_list_notifications()
+        if parsed.path == "/api/notifications/job":
+            return self.handle_get_notification_job(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/profile/insights":
             return self.handle_profile_insights()
         if parsed.path == "/api/certificate-url":
@@ -3910,6 +3930,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.commit()
             conn.close()
         self.send_json(200, {"ok": True})
+
+    def handle_get_notification_job(self, query):
+        """Backs the "click a notification to see the job" flow: looks up whichever real job row
+        (job_id, job_source) the notification was created against and returns enough to judge fit
+        (skills/level/location/pay + description where one exists) — never fabricated, and scoped
+        to notifications belonging to the signed-in user so this can't be used to browse other
+        people's employer_match notifications into private employer_posted_jobs rows."""
+        user_id = self.current_user_id()
+        if user_id is None:
+            return self.send_json(401, {"error": "You need to sign in first."})
+        notif_id = query.get("id", [None])[0]
+        with db_lock:
+            conn = get_db()
+            notif = conn.execute(
+                "SELECT * FROM notifications WHERE id = ? AND user_id = ?", (notif_id, user_id)
+            ).fetchone()
+            if notif is None or not notif["job_id"] or not notif["job_source"]:
+                conn.close()
+                return self.send_json(404, {"error": "This notification isn't linked to a specific role."})
+            conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notif["id"],))
+            conn.commit()
+            if notif["job_source"] == "imported":
+                job = conn.execute("SELECT * FROM imported_jobs WHERE id = ?", (notif["job_id"],)).fetchone()
+                conn.close()
+                if job is None:
+                    return self.send_json(404, {"error": "This role isn't available anymore — it may have been filled or removed."})
+                return self.send_json(200, {
+                    "title": job["title"], "company": job["company"], "location": job["location"] or "Nigeria",
+                    "level": job["level"], "skills": json.loads(job["skills"] or "[]"),
+                    "pay": job_pay_label(job["pay_min"] or 0, job["pay_max"] or 0),
+                    "description": job["description"] or "", "perks": [],
+                    "url": job_seo_url(job["id"], job["title"], job["company"]),
+                })
+            if notif["job_source"] == "employer_posted":
+                job = conn.execute("SELECT * FROM employer_posted_jobs WHERE id = ?", (notif["job_id"],)).fetchone()
+                conn.close()
+                if job is None:
+                    return self.send_json(404, {"error": "This role is no longer available."})
+                # No free-text description field here — employers posting directly only ever supply
+                # structured fields (see handle_post_employer_job) — so skills/level/pay/perks stand
+                # in for "the description" (they're also exactly what match_score judged fit on).
+                return self.send_json(200, {
+                    "title": job["title"], "company": job["company"], "location": job["location"] or "Nigeria",
+                    "level": job["level"], "skills": json.loads(job["skills"] or "[]"),
+                    "pay": job_pay_label(job["pay_min"] or 0, job["pay_max"] or 0),
+                    "description": "", "perks": json.loads(job["perks"] or "[]"),
+                    "url": "",
+                })
+            conn.close()
+            return self.send_json(404, {"error": "This notification isn't linked to a specific role."})
 
     # ---------- daily check-in streak ----------
 
@@ -5263,8 +5333,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     perk_note = (" (" + ", ".join(PERK_LABELS[p] for p in perks) + ")") if perks else ""
                     message = f"A new role matches your profile: {title} at {company} — {score}% match.{perk_note}"
                     conn.execute(
-                        "INSERT INTO notifications (user_id, kind, message, job_title, company) VALUES (?, ?, ?, ?, ?)",
-                        (row["uid"], "employer_match", message, title, company),
+                        "INSERT INTO notifications (user_id, kind, message, job_title, company, job_id, job_source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (row["uid"], "employer_match", message, title, company, job_id, "employer_posted"),
                     )
                     notified += 1
                     if row["whatsapp_alerts_enabled"] and row["whatsapp_notify_matches"]:
