@@ -1055,6 +1055,41 @@ def init_db():
     # never about a specific listing (pipeline_stage, hire_checkin, etc.) — nothing to link there.
     ensure_column(conn, "notifications", "job_id", "job_id INTEGER")
     ensure_column(conn, "notifications", "job_source", "job_source TEXT DEFAULT ''")
+    # Backfill for notifications that predate job_id/job_source (including ones sent between that
+    # column first landing and this backfill being added — ensure_column's "just added" return
+    # value can't gate this, since on that in-between deploy the columns already existed but were
+    # never populated). Filtering on job_id IS NULL makes this both correct there and a cheap
+    # no-op on every later, already-backfilled startup. Best-effort match on the job_title/company
+    # text the row already stored — a miss (job since deleted, title edited) just leaves that one
+    # row unlinked, same as before this backfill existed.
+    for row in conn.execute(
+        "SELECT id, job_title, company FROM notifications "
+        "WHERE kind IN ('saved_search','followed_company') AND job_id IS NULL AND job_title != '' AND company != ''"
+    ).fetchall():
+        match = conn.execute(
+            "SELECT id FROM imported_jobs WHERE lower(title) = lower(?) AND lower(company) = lower(?) "
+            "ORDER BY id DESC LIMIT 1",
+            (row["job_title"], row["company"]),
+        ).fetchone()
+        if match:
+            conn.execute(
+                "UPDATE notifications SET job_id = ?, job_source = 'imported' WHERE id = ?",
+                (match["id"], row["id"]),
+            )
+    for row in conn.execute(
+        "SELECT id, job_title, company FROM notifications "
+        "WHERE kind = 'employer_match' AND job_id IS NULL AND job_title != '' AND company != ''"
+    ).fetchall():
+        match = conn.execute(
+            "SELECT id FROM employer_posted_jobs WHERE lower(title) = lower(?) AND lower(company) = lower(?) "
+            "ORDER BY id DESC LIMIT 1",
+            (row["job_title"], row["company"]),
+        ).fetchone()
+        if match:
+            conn.execute(
+                "UPDATE notifications SET job_id = ?, job_source = 'employer_posted' WHERE id = ?",
+                (match["id"], row["id"]),
+            )
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
