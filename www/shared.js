@@ -1,3 +1,9 @@
+// Real, server-scored skill challenges (see SKILL_CHALLENGES in server.py) — this list just
+// mirrors which skill names the server has a question bank for, nothing else. Shared (not
+// index.html-only) so auth.html's CV-parse nudge can honestly say "there's a real challenge for
+// this" without duplicating (and risking drifting from) the list.
+const SKILL_CHALLENGE_SKILLS = ['Python', 'SQL', 'Excel', 'Customer Service', 'JavaScript'];
+
 // Generic multi-step "wizard" card — purely a display layer over whatever form fields/IDs/submit
 // functions live inside each .wizard-step; it only shows/hides step groups and never changes what
 // those functions read or how they submit. Shared here (not index.html-only) since both index.html
@@ -321,6 +327,7 @@ function apiListBanks(){ return apiRequest('/api/employer/banks', 'GET'); }
 function apiBankResolve(accountNumber, bankCode){ return apiRequest(`/api/employer/bank/resolve?accountNumber=${encodeURIComponent(accountNumber)}&bankCode=${encodeURIComponent(bankCode)}`, 'GET'); }
 function apiSaveBankAccount(payload){ return apiRequest('/api/employer/bank', 'POST', payload); }
 function apiSaveEmployerWebhook(webhookUrl){ return apiRequest('/api/employer/webhook', 'POST', {webhookUrl}); }
+function apiGenerateApiKey(){ return apiRequest('/api/employer/api-key/generate', 'POST', {}); }
 function apiGetPipeline(){ return apiRequest('/api/employer/pipeline', 'GET'); }
 function apiSetPipelineStage(candidateUserId, stage, jobContext){ return apiRequest('/api/employer/pipeline', 'POST', {candidateUserId, stage, ...(jobContext || {})}); }
 function apiListTeamMembers(){ return apiRequest('/api/employer/team', 'GET'); }
@@ -357,10 +364,19 @@ function apiListMyHireCheckins(){ return apiRequest('/api/my-hire-checkins', 'GE
 function apiRespondHireCheckin(payload){ return apiRequest('/api/hire-checkin/respond', 'POST', payload); }
 function apiGetSqlPlaygroundChallenges(){ return apiRequest('/api/sql-playground/challenges', 'GET'); }
 function apiSubmitSqlPlaygroundQuery(payload){ return apiRequest('/api/sql-playground/submit', 'POST', payload); }
+function apiGetSpreadsheetSandboxChallenges(){ return apiRequest('/api/spreadsheet-sandbox/challenges', 'GET'); }
+function apiSubmitSpreadsheetSandbox(challengeId, grid){ return apiRequest('/api/spreadsheet-sandbox/submit', 'POST', {challengeId, grid}); }
 function apiCreateAsyncInterview(payload){ return apiRequest('/api/async-interview/create', 'POST', payload); }
 function apiListMyAsyncInterviews(){ return apiRequest('/api/async-interview/mine', 'GET'); }
 function apiSubmitAsyncInterviewAnswer(payload){ return apiRequest('/api/async-interview/answer', 'POST', payload); }
 function apiGetAsyncInterviewDetail(id){ return apiRequest(`/api/async-interview/detail?id=${encodeURIComponent(id)}`, 'GET'); }
+function apiAnalyzeAsyncAnswer(interviewId, questionIndex){ return apiRequest('/api/async-interview/analyze', 'POST', {interviewId, questionIndex}); }
+function apiListTalentPools(){ return apiRequest('/api/employer/talent-pools', 'GET'); }
+function apiAddTalentPoolMember(candidateUserId, poolName, note){ return apiRequest('/api/employer/talent-pools/add-member', 'POST', {candidateUserId, poolName, note}); }
+function apiRemoveTalentPoolMember(poolId, candidateUserId){ return apiRequest('/api/employer/talent-pools/remove-member', 'POST', {poolId, candidateUserId}); }
+function apiMarkTalentPoolReminded(poolId, candidateUserId){ return apiRequest('/api/employer/talent-pools/mark-reminded', 'POST', {poolId, candidateUserId}); }
+function apiGetDiversityStats(){ return apiRequest('/api/employer/diversity-stats', 'GET'); }
+function apiGetDemandSignal(skills, excludeCompany){ return apiRequest(`/api/employer/demand-signal?skills=${encodeURIComponent(skills.join(','))}&excludeCompany=${encodeURIComponent(excludeCompany || '')}`, 'GET'); }
 
 // Mirrors server.py's slugify() exactly, so a link built here resolves to the same job the
 // server would generate the URL for — only the leading numeric id is ever actually used to look
@@ -415,6 +431,11 @@ function showToast(message){
     container = document.createElement('div');
     container.id = 'toast-container';
     container.className = 'toast-container';
+    // A screen reader user gets no visual toast, so this is the only way they hear "Search
+    // saved", a validation error, etc. — "polite" queues it after whatever's currently being
+    // read instead of barging in like "assertive" would.
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('role', 'status');
     document.body.appendChild(container);
   }
   const toast = document.createElement('div');

@@ -1,15 +1,18 @@
 import base64
 import datetime
+import gzip
 import hashlib
 import hmac
 import html
 import http.server
 import io
+import ipaddress
 import json
 import mimetypes
 import os
 import re
 import secrets
+import socket
 import socketserver
 import sqlite3
 import sys
@@ -302,6 +305,37 @@ def send_whatsapp_alert(to_number, body):
         print(f"[whatsapp] Failed to send alert: {e}")
 
 
+# Slack/Discord/Teams incoming-webhook URLs are always these fixed domains — trusting them
+# outright is safe. A "custom HR portal" URL is arbitrary by definition, so it gets a real check
+# instead: resolve the hostname and reject anything pointing at a private/loopback/link-local
+# address (the standard SSRF guard against a webhook being used to probe internal services or
+# cloud metadata endpoints like 169.254.169.254). This doesn't defend against DNS-rebinding (the
+# hostname resolving safely now, then to a private IP at send time) — a known, accepted gap at
+# this scale, not a claim of complete protection.
+KNOWN_WEBHOOK_HOST_RE = re.compile(
+    r"^https://(hooks\.slack\.com/|discord(app)?\.com/api/webhooks/|"
+    r"outlook\.office\.com/webhook/|[a-z0-9-]+\.webhook\.office\.com/)"
+)
+
+
+def is_safe_custom_webhook_url(url):
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return False
+    return True
+
+
 def send_employer_webhook(webhook_url, message):
     """Best-effort: never raises, no-ops silently if the employer hasn't set a webhook URL. Sends
     both "text" (the key Slack incoming webhooks read) and "content" (the key Discord webhooks
@@ -322,6 +356,29 @@ def send_employer_webhook(webhook_url, message):
         print(f"[webhook] Failed to notify employer: {e}")
 
 
+# Real, typed application-lifecycle events for the same employer-configured webhook_url — Slack/
+# Discord still render fine (they only ever look at "text"/"content"), but a custom HR portal or
+# internal automation gets a stable "event" name plus a structured "data" object to branch on
+# instead of having to regex a sentence. See handle_set_pipeline_stage and
+# handle_submit_skill_challenge for what actually fires each event.
+def send_employer_webhook_event(webhook_url, event, summary, data):
+    if not webhook_url:
+        return
+    try:
+        payload = {"text": summary, "content": summary, "event": event, "data": data,
+                   "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception as e:
+        print(f"[webhook] Failed to deliver '{event}' to employer: {e}")
+
+
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruct")
 # A bigger, more capable model for the resume/cover-letter writing itself (the part users actually
@@ -330,6 +387,29 @@ NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "meta/llama-3.2-11b-vision-instruc
 # on any failure — wrong/inaccessible model name or timeout alike — rather than erroring out.
 NVIDIA_RESUME_MODEL = os.environ.get("NVIDIA_RESUME_MODEL", "meta/llama-3.2-90b-vision-instruct")
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+
+# The three selectable pitch tones on a job card's "Generate pitch" button — {name} is the only
+# template slot, filled in with the candidate's real name. All three carry the same "never invent
+# experience" constraint as the rest of handle_resume_generate; only voice and length differ.
+PITCH_TONE_INSTRUCTIONS = {
+    "formal": (
+        'Write a concise, specific, professional cover letter (under 350 words) for {name}, '
+        'applying to the role below. Base it only on the resume content given — do not invent experience. '
+        'Warm and confident tone, no generic filler phrases like "I am writing to express my interest".'
+    ),
+    "direct": (
+        'Write a short, direct elevator pitch (under 120 words) for {name}, applying to the role below. '
+        'Base it only on the resume content given — do not invent experience. Get straight to the point: '
+        'lead with the single strongest, most relevant qualification, then one or two more, then a direct '
+        'closing line asking for next steps. No warm-up sentences, no filler.'
+    ),
+    "creative": (
+        'Write an energetic, personality-forward cover letter (under 300 words) for {name}, applying to '
+        'the role below, in the voice of someone pitching themselves to a startup — confident and a little '
+        'informal, but still genuinely professional (never gimmicky, no emoji spam, no slang that undermines '
+        'credibility). Base it only on the resume content given — do not invent experience.'
+    ),
+}
 
 try:
     from pypdf import PdfReader
@@ -473,6 +553,27 @@ def record_ai_error(source, model, status, detail):
             "time": datetime.datetime.utcnow().isoformat() + "Z",
             "source": source, "model": model, "status": status, "detail": detail[:500],
         })
+
+
+# Fixed-window rate limit for the Candidate Sourcing API — in-memory, not persisted, which is
+# fine for a single-process server like this one (a restart just resets everyone's window early,
+# never lets anyone over the real limit). Keyed by employer id, not the raw API key, so this
+# still works if a key is ever rotated mid-window.
+SOURCING_API_RATE_LOCK = threading.Lock()
+SOURCING_API_RATE_WINDOW_SECONDS = 60
+SOURCING_API_RATE_LIMIT = 30  # requests per window — generous for real integration polling, not for scraping
+_sourcing_api_hits = {}  # employer_id -> (window_start_epoch, count)
+
+
+def sourcing_api_rate_limited(employer_id):
+    now = time.time()
+    with SOURCING_API_RATE_LOCK:
+        window_start, count = _sourcing_api_hits.get(employer_id, (now, 0))
+        if now - window_start >= SOURCING_API_RATE_WINDOW_SECONDS:
+            window_start, count = now, 0
+        count += 1
+        _sourcing_api_hits[employer_id] = (window_start, count)
+        return count > SOURCING_API_RATE_LIMIT
         del LAST_AI_ERRORS[:-15]
 
 # The mobile app's WebView can't turn a client-side Blob (jsPDF/docx output) into a real device
@@ -916,6 +1017,31 @@ def init_db():
             UNIQUE(interview_id, question_index)
         )
     """)
+    # Talent pools ("Silver Medalists" etc.) — a candidate an employer already has a real
+    # relationship with (interviewed, considered) but didn't hire for that specific role. No
+    # automated candidate-facing outreach here by design (see reminder logic in
+    # handle_list_talent_pools) — this only ever computes a staleness badge for the EMPLOYER to
+    # see and act on themselves, never messages a candidate on its own.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS talent_pools (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_id INTEGER NOT NULL REFERENCES employers(id),
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(employer_id, name)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS talent_pool_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pool_id INTEGER NOT NULL REFERENCES talent_pools(id),
+            candidate_user_id INTEGER NOT NULL REFERENCES users(id),
+            note TEXT DEFAULT '',
+            added_at TEXT NOT NULL DEFAULT (datetime('now')),
+            last_reminder_at TEXT,
+            UNIQUE(pool_id, candidate_user_id)
+        )
+    """)
     # Employer Workspaces: additional logins that all resolve to the SAME employer_id (the
     # workspace), so every existing employer-authenticated endpoint (subscriptions, pipeline,
     # bank account) keeps working completely unchanged — a team member session just carries an
@@ -1001,6 +1127,16 @@ def init_db():
     ensure_column(conn, "profiles", "nysc_status", "nysc_status TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "ppa_state", "ppa_state TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "ppa_lga", "ppa_lga TEXT DEFAULT ''")
+    # Same self-declared honesty rule: Bridge NG has no way to actually inspect anyone's power/
+    # internet setup, so these are always shown as self-declared, never "verified" — free text
+    # like nysc_status above, constrained to a dropdown client-side only, not validated here.
+    ensure_column(conn, "profiles", "power_setup", "power_setup TEXT DEFAULT ''")
+    ensure_column(conn, "profiles", "internet_setup", "internet_setup TEXT DEFAULT ''")
+    # Self-declared expected monthly pay — same honesty rule again, and deliberately never shown
+    # on the public shareable profile (handle_public_profile): unlike NYSC status or skills, a
+    # number meant for salary negotiation shouldn't be visible to the general public, only to a
+    # signed-in employer actually evaluating this candidate.
+    ensure_column(conn, "profiles", "salary_expectation", "salary_expectation INTEGER")
     ensure_column(conn, "profiles", "pitch_media_kind", "pitch_media_kind TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "pitch_media_type", "pitch_media_type TEXT DEFAULT ''")
     ensure_column(conn, "profiles", "pitch_media_base64", "pitch_media_base64 TEXT DEFAULT ''")
@@ -1020,6 +1156,14 @@ def init_db():
     # that one employer's searches — real value for someone employed and searching quietly.
     ensure_column(conn, "profiles", "visibility", "visibility TEXT DEFAULT 'public'")
     ensure_column(conn, "profiles", "hide_from_employer", "hide_from_employer TEXT DEFAULT ''")
+    # Pro Growth candidate-sourcing API key — a long random token, not itself sensitive (it's a
+    # credential, not personal data), so unlike the PII columns above it's never encrypted; see
+    # handle_generate_api_key / current_api_employer_id.
+    ensure_column(conn, "employers", "api_key", "api_key TEXT DEFAULT ''")
+    # Real speech-to-text transcript of an async video/audio answer, captured live in the browser
+    # while recording (Web Speech API) — never a fabricated summary. Encrypted like media_base64
+    # on the same table, since it's the same sensitive interview content in text form.
+    ensure_column(conn, "async_interview_answers", "transcript", "transcript TEXT DEFAULT ''")
     # Granular WhatsApp preferences layered on top of the existing master whatsapp_alerts_enabled
     # toggle (a message only ever sends if BOTH the master toggle AND the specific one are on).
     # New columns backfill from the existing master flag ONLY at the moment they're first added,
@@ -1093,6 +1237,19 @@ def init_db():
     conn.commit()
     migrate_encrypt_existing_profiles(conn)
     conn.close()
+
+
+def parse_optional_positive_int(value):
+    """None/blank stays None (no expectation given, not "expects ₦0") — anything that isn't a
+    valid positive whole number is treated the same as not given, rather than erroring the whole
+    profile save over one malformed field."""
+    if value in (None, ""):
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
 
 
 def migrate_encrypt_existing_profiles(conn):
@@ -1319,6 +1476,148 @@ SQL_PLAYGROUND_FORBIDDEN_RE = re.compile(
     r"\b(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|replace)\b", re.IGNORECASE
 )
 
+# ---------- Spreadsheet Sandbox: a real, tiny formula engine (SUM/AVERAGE, +-*/, parens, cell
+# refs) — candidate-submitted formulas actually get evaluated by this, not just displayed. Same
+# "never trust a client-submitted result" rule as SQL Playground above: grading re-evaluates the
+# candidate's own submitted grid server-side against this same engine and checks real computed
+# values, never a client-reported pass/fail.
+SPREADSHEET_CELL_REF_RE = re.compile(r"^[A-Z]+[0-9]+$")
+SPREADSHEET_TOKEN_RE = re.compile(r"SUM|AVERAGE|[A-Z]+[0-9]+:[A-Z]+[0-9]+|[A-Z]+[0-9]+|[0-9]+\.?[0-9]*|[()+\-*/]")
+
+
+class SpreadsheetFormulaError(ValueError):
+    pass
+
+
+def spreadsheet_cell_value(grid, ref, visiting):
+    if ref in visiting:
+        raise SpreadsheetFormulaError(f"Circular reference at {ref}")
+    raw = (grid.get(ref) or "").strip()
+    if raw == "":
+        return 0.0
+    if raw.startswith("="):
+        visiting = visiting | {ref}
+        return spreadsheet_evaluate(raw[1:], grid, visiting)
+    try:
+        return float(raw)
+    except ValueError:
+        raise SpreadsheetFormulaError(f"'{raw}' in {ref} is not a number or formula")
+
+
+def spreadsheet_range_values(grid, range_str, visiting):
+    start, end = range_str.split(":")
+    col_match = re.match(r"([A-Z]+)([0-9]+)", start)
+    end_match = re.match(r"([A-Z]+)([0-9]+)", end)
+    if not col_match or not end_match or col_match.group(1) != end_match.group(1):
+        raise SpreadsheetFormulaError(f"Invalid range '{range_str}' — only same-column ranges are supported.")
+    col = col_match.group(1)
+    return [spreadsheet_cell_value(grid, f"{col}{r}", visiting)
+            for r in range(int(col_match.group(2)), int(end_match.group(2)) + 1)]
+
+
+def spreadsheet_evaluate(expr, grid, visiting):
+    """Tiny recursive-descent evaluator — numbers, cell refs, +-*/with real precedence,
+    parentheses, and SUM()/AVERAGE() over a same-column range. Deliberately not a full formula
+    language: this is scoped to exactly what the sandbox challenges need."""
+    tokens = SPREADSHEET_TOKEN_RE.findall(expr.replace(" ", ""))
+    pos = [0]
+
+    def peek():
+        return tokens[pos[0]] if pos[0] < len(tokens) else None
+
+    def advance():
+        tok = tokens[pos[0]]
+        pos[0] += 1
+        return tok
+
+    def parse_expr():
+        value = parse_term()
+        while peek() in ("+", "-"):
+            op = advance()
+            rhs = parse_term()
+            value = value + rhs if op == "+" else value - rhs
+        return value
+
+    def parse_term():
+        value = parse_factor()
+        while peek() in ("*", "/"):
+            op = advance()
+            rhs = parse_factor()
+            if op == "/" and rhs == 0:
+                raise SpreadsheetFormulaError("Division by zero")
+            value = value * rhs if op == "*" else value / rhs
+        return value
+
+    def parse_factor():
+        tok = peek()
+        if tok is None:
+            raise SpreadsheetFormulaError("Incomplete formula")
+        if tok == "(":
+            advance()
+            value = parse_expr()
+            if peek() == ")":
+                advance()
+            return value
+        if tok in ("SUM", "AVERAGE"):
+            func = advance()
+            if peek() == "(":
+                advance()
+            range_tok = advance()
+            if peek() == ")":
+                advance()
+            values = spreadsheet_range_values(grid, range_tok, visiting)
+            return sum(values) if func == "SUM" else (sum(values) / len(values) if values else 0.0)
+        if SPREADSHEET_CELL_REF_RE.match(tok):
+            advance()
+            return spreadsheet_cell_value(grid, tok, visiting)
+        advance()
+        try:
+            return float(tok)
+        except ValueError:
+            raise SpreadsheetFormulaError(f"Unrecognized token '{tok}'")
+
+    return parse_expr()
+
+
+SPREADSHEET_CHALLENGES = {
+    "quarterly-budget-fix": {
+        "title": "Fix the Quarterly Budget Model",
+        "prompt": "This is a real Financial Controller task: this budget model has 2 broken formulas. "
+                   "Fix them so Total Revenue and Net Margin % compute correctly.",
+        "labels": {
+            "A1": "Q1 Sales", "A2": "Q2 Sales", "A3": "Q3 Sales", "A4": "Total Revenue",
+            "A5": "Total Costs", "A6": "Net Margin %",
+        },
+        "initialGrid": {
+            "B1": "120000", "B2": "135000", "B3": "142000",
+            "B4": "=SUM(B1:B2)",  # broken: excludes Q3
+            "B5": "180000",
+            "B6": "0.15",  # broken: hardcoded instead of computed
+        },
+        "targetCells": {"B4": 397000.0, "B6": (397000.0 - 180000.0) / 397000.0},
+    },
+}
+
+
+def spreadsheet_grade(challenge, submitted_grid):
+    """Evaluates every cell in the candidate's submitted grid with the real engine above, then
+    checks only the challenge's target cells against the real expected values (small float
+    tolerance for the percentage target). A cell that errors (bad formula, circular ref) just
+    fails that cell's check rather than 500ing the whole request."""
+    results = {}
+    all_correct = True
+    for ref, expected in challenge["targetCells"].items():
+        try:
+            actual = spreadsheet_cell_value(submitted_grid, ref, set())
+            correct = abs(actual - expected) < 0.001
+        except SpreadsheetFormulaError as e:
+            actual, correct = None, False
+        except Exception:
+            actual, correct = None, False
+        results[ref] = {"actual": actual, "correct": correct}
+        all_correct = all_correct and correct
+    return {"passed": all_correct, "results": results}
+
 
 def sql_playground_run(query):
     """Executes `query` read-only against a fresh, seeded, in-memory copy of the practice
@@ -1373,7 +1672,8 @@ def profile_row_to_json(row):
             "fullName": "", "dob": "", "sex": "", "phone": "", "address": "", "education": "",
             "careerLevel": "", "fieldOfStudy": "", "preferredLocation": "", "preferredLocations": [], "skills": [],
             "openToRemote": False, "resumeText": "", "resumeFile": None, "resumeFilename": "",
-            "university": "", "nyscStatus": "", "ppaState": "", "ppaLga": "", "pitchMedia": None,
+            "university": "", "nyscStatus": "", "ppaState": "", "ppaLga": "",
+            "powerSetup": "", "internetSetup": "", "salaryExpectation": None, "pitchMedia": None,
             "whatsappNumber": "", "whatsappAlertsEnabled": False,
             "verifiedBadges": [], "portfolioLink": "",
             "visibility": "public", "hideFromEmployer": "",
@@ -1424,6 +1724,9 @@ def profile_row_to_json(row):
         "nyscStatus": row["nysc_status"] or "",
         "ppaState": row["ppa_state"] or "",
         "ppaLga": row["ppa_lga"] or "",
+        "powerSetup": row["power_setup"] or "",
+        "internetSetup": row["internet_setup"] or "",
+        "salaryExpectation": row["salary_expectation"],
         "pitchMedia": pitch_media,
         "whatsappNumber": decrypt_field(row["whatsapp_number"] or ""),
         "whatsappAlertsEnabled": bool(row["whatsapp_alerts_enabled"]),
@@ -1469,6 +1772,7 @@ def employer_row_to_json(row):
         "corporateDomain": row["corporate_domain"] or "",
         "verified": is_verified_employer_domain(row["corporate_domain"]),
         "webhookUrl": row["webhook_url"] or "",
+        "apiKey": row["api_key"] or "",
     }
 
 
@@ -1773,7 +2077,10 @@ def parse_job_match_json(reply, valid_ids):
         job_id = m.get("id")
         if job_id not in valid_ids:
             continue
-        matches.append({"id": job_id, "reason": str(m.get("reason") or "")[:400]})
+        matches.append({
+            "id": job_id, "reason": str(m.get("reason") or "")[:400],
+            "hiddenFit": bool(m.get("hiddenFit", False)),
+        })
     return matches[:3]
 
 
@@ -1819,6 +2126,28 @@ def parse_cv_extraction_json(reply):
         "address": text_field("address", max_len=300),
         "skills": [str(s).strip()[:60] for s in skills if isinstance(s, (str, int, float)) and str(s).strip()][:15]
                   if isinstance(skills, list) else [],
+    }
+
+
+def parse_transcript_analysis_json(reply):
+    """Same markdown-fence tolerance as parse_cv_extraction_json above. tooShortToAnalyze defaults
+    true on any parse failure or malformed shape — silence/garbage should read as "nothing to
+    show", never as a real (empty) analysis result."""
+    cleaned = reply.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    concepts = data.get("conceptsMentioned")
+    return {
+        "conceptsMentioned": [str(c).strip()[:60] for c in concepts if isinstance(c, (str, int, float)) and str(c).strip()][:20]
+                             if isinstance(concepts, list) else [],
+        "tooShortToAnalyze": bool(data.get("tooShortToAnalyze", True)),
     }
 
 
@@ -2570,8 +2899,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def send_json(self, status, obj, set_cookie=None, clear_cookie=False, cookie_name=SESSION_COOKIE):
         body = json.dumps(obj).encode("utf-8")
+        # Real bandwidth savings on the slow 3G/4G connections Low Data Mode targets — JSON
+        # compresses well (typically 70-85% smaller), and virtually every real browser already
+        # sends "Accept-Encoding: gzip" on every request, so this benefits everyone, not just
+        # candidates with the toggle on. Skipped below a size floor since gzip's own overhead
+        # (header bytes, CPU) isn't worth it on a response that's already tiny.
+        gzip_body = "gzip" in self.headers.get("Accept-Encoding", "") and len(body) > 500
+        if gzip_body:
+            body = gzip.compress(body, compresslevel=6)
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        if gzip_body:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         if set_cookie:
             self.send_header("Set-Cookie", f"{cookie_name}={set_cookie}; Path=/; HttpOnly; SameSite=Lax")
@@ -2647,6 +2986,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         return row["employer_id"] if row is not None else None
 
+    def current_api_employer_id(self):
+        """Authenticates the Candidate Sourcing API (Authorization: Bearer <api_key>), not the
+        cookie session the rest of the employer dashboard uses — this is meant for a B2B client's
+        own server calling in, which has no browser session to attach a cookie to. Returns None
+        if the key is missing/unknown, or if the employer isn't on an active Pro Growth
+        subscription (same tier gate as team workspaces) — either way the caller can't tell which,
+        by design, so this can't be used to probe which API keys are real."""
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return None
+        api_key = auth[len("Bearer "):].strip()
+        if not api_key:
+            return None
+        with db_lock:
+            conn = get_db()
+            employer = conn.execute("SELECT id FROM employers WHERE api_key = ?", (api_key,)).fetchone()
+            if employer is None:
+                conn.close()
+                return None
+            sub = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer["id"],)).fetchone()
+            conn.close()
+        sub_json = subscription_row_to_json(sub)
+        if not (sub_json["tier"] == "pro_growth" and sub_json["status"] == "active"):
+            return None
+        return employer["id"]
+
     def current_team_member_info(self):
         """None means this session belongs to the workspace owner (the original employers row)
         directly, not an invited team member — same distinction handle_add_team_member and
@@ -2708,6 +3073,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_list_notifications()
         if parsed.path == "/api/notifications/job":
             return self.handle_get_notification_job(urllib.parse.parse_qs(parsed.query))
+        if parsed.path == "/api/v1/candidates":
+            return self.handle_sourcing_api_candidates(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/profile/insights":
             return self.handle_profile_insights()
         if parsed.path == "/api/certificate-url":
@@ -2730,6 +3097,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_get_skill_challenge(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/sql-playground/challenges":
             return self.handle_sql_playground_challenges()
+        if parsed.path == "/api/spreadsheet-sandbox/challenges":
+            return self.handle_spreadsheet_sandbox_challenges()
         if parsed.path == "/api/employer/me":
             return self.handle_employer_me()
         if parsed.path == "/api/employer/banks":
@@ -2738,6 +3107,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_bank_resolve(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/employer/pipeline":
             return self.handle_get_pipeline()
+        if parsed.path == "/api/employer/talent-pools":
+            return self.handle_list_talent_pools()
+        if parsed.path == "/api/employer/diversity-stats":
+            return self.handle_employer_diversity_stats()
+        if parsed.path == "/api/employer/demand-signal":
+            return self.handle_employer_demand_signal(urllib.parse.parse_qs(parsed.query))
         if parsed.path == "/api/async-interview/mine":
             return self.handle_list_my_async_interviews()
         if parsed.path == "/api/employer/hire-checkins":
@@ -2814,14 +3189,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_save_bank_account()
         if parsed.path == "/api/employer/webhook":
             return self.handle_save_employer_webhook()
+        if parsed.path == "/api/employer/api-key/generate":
+            return self.handle_generate_api_key()
         if parsed.path == "/api/employer/pipeline":
             return self.handle_set_pipeline_stage()
+        if parsed.path == "/api/employer/talent-pools/add-member":
+            return self.handle_add_talent_pool_member()
+        if parsed.path == "/api/employer/talent-pools/remove-member":
+            return self.handle_remove_talent_pool_member()
+        if parsed.path == "/api/employer/talent-pools/mark-reminded":
+            return self.handle_mark_talent_pool_reminded()
         if parsed.path == "/api/async-interview/create":
             return self.handle_create_async_interview()
         if parsed.path == "/api/hire-checkin/respond":
             return self.handle_respond_hire_checkin()
         if parsed.path == "/api/async-interview/answer":
             return self.handle_submit_async_interview_answer()
+        if parsed.path == "/api/async-interview/analyze":
+            return self.handle_analyze_async_answer()
         if parsed.path == "/api/employer/team/add":
             return self.handle_add_team_member()
         if parsed.path == "/api/employer/team/remove":
@@ -2892,6 +3277,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_submit_skill_challenge()
         if parsed.path == "/api/sql-playground/submit":
             return self.handle_sql_playground_submit()
+        if parsed.path == "/api/spreadsheet-sandbox/submit":
+            return self.handle_spreadsheet_sandbox_submit()
         return self.send_json(404, {"error": "Not found"})
 
     def do_PUT(self):
@@ -2930,8 +3317,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         content_type, _ = mimetypes.guess_type(full_path)
         with open(full_path, "rb") as f:
             body = f.read()
+        # index.html/styles.css/shared.js are the actual bulk of this app's page weight (the
+        # inline-JS SPA is ~370KB alone) — WebP images are already compressed, so gzipping those
+        # again would just add CPU for no size win, but text assets shrink by 70-80% here, the
+        # single biggest lever for the Low Data Mode "under 150KB" budget short of not sending
+        # the bytes at all. Same Accept-Encoding/size-floor logic as send_json.
+        is_text_asset = (content_type or "").startswith("text/") or content_type in (
+            "application/javascript", "application/json", "image/svg+xml",
+        )
+        gzip_body = is_text_asset and "gzip" in self.headers.get("Accept-Encoding", "") and len(body) > 500
+        if gzip_body:
+            body = gzip.compress(body, compresslevel=6)
         self.send_response(200)
         self.send_header("Content-Type", content_type or "application/octet-stream")
+        if gzip_body:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         # This is an actively-edited local prototype — always revalidate rather than
         # letting the browser silently serve a stale cached HTML/CSS/JS file.
@@ -2971,8 +3371,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 conn.execute(
                     """INSERT INTO profiles (user_id, full_name, dob, sex, phone, address,
                        education, career_level, field_of_study, preferred_location, preferred_locations, skills, open_to_remote,
-                       university, nysc_status, ppa_state, ppa_lga, whatsapp_number, whatsapp_alerts_enabled)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       university, nysc_status, ppa_state, ppa_lga, power_setup, internet_setup, salary_expectation,
+                       whatsapp_number, whatsapp_alerts_enabled)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (user_id, encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
                      encrypt_field(data.get("sex", "")), encrypt_field(data.get("phone", "")),
                      encrypt_field(data.get("address", "")), data.get("education", ""),
@@ -2981,6 +3382,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                      1 if data.get("openToRemote") else 0,
                      (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
                      (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
+                     (data.get("powerSetup") or "").strip(), (data.get("internetSetup") or "").strip(),
+                     parse_optional_positive_int(data.get("salaryExpectation")),
                      encrypt_field((data.get("whatsappNumber") or "").strip()),
                      1 if data.get("whatsappAlertsEnabled") else 0),
                 )
@@ -3250,6 +3653,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 """UPDATE profiles SET full_name=?, dob=?, sex=?, phone=?, address=?,
                    education=?, career_level=?, field_of_study=?, preferred_location=?, preferred_locations=?,
                    skills=?, open_to_remote=?, university=?, nysc_status=?, ppa_state=?, ppa_lga=?,
+                   power_setup=?, internet_setup=?, salary_expectation=?,
                    whatsapp_number=?, whatsapp_alerts_enabled=?, portfolio_link=?,
                    updated_at=datetime('now') WHERE user_id=?""",
                 (encrypt_field(data.get("fullName", "")), encrypt_field(data.get("dob", "")),
@@ -3260,6 +3664,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  1 if data.get("openToRemote") else 0,
                  (data.get("university") or "").strip(), (data.get("nyscStatus") or "").strip(),
                  (data.get("ppaState") or "").strip(), (data.get("ppaLga") or "").strip(),
+                 (data.get("powerSetup") or "").strip(), (data.get("internetSetup") or "").strip(),
+                 parse_optional_positive_int(data.get("salaryExpectation")),
                  encrypt_field((data.get("whatsappNumber") or "").strip()),
                  1 if data.get("whatsappAlertsEnabled") else 0,
                  (data.get("portfolioLink") or "").strip(), user_id),
@@ -3355,6 +3761,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "preferredLocation": ", ".join(json.loads(row["preferred_locations"] or "[]")),
             "university": row["university"] or "",
             "nyscStatus": row["nysc_status"] or "",
+            "powerSetup": row["power_setup"] or "",
+            "internetSetup": row["internet_setup"] or "",
             "skills": json.loads(row["skills"] or "[]"),
             "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
             "portfolioLink": row["portfolio_link"] or "",
@@ -3508,6 +3916,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 conn.close()
         self.send_json(200, result)
 
+    def handle_spreadsheet_sandbox_challenges(self):
+        """Target cell values never reach the client — only the prompt, labels, and the (broken)
+        starting grid — same reasoning as SQL Playground's answerSql never being sent."""
+        challenges = [
+            {"id": cid, "title": c["title"], "prompt": c["prompt"], "labels": c["labels"], "initialGrid": c["initialGrid"]}
+            for cid, c in SPREADSHEET_CHALLENGES.items()
+        ]
+        self.send_json(200, {"challenges": challenges})
+
+    def handle_spreadsheet_sandbox_submit(self):
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        challenge_id = (data.get("challengeId") or "").strip()
+        grid = data.get("grid")
+        challenge = SPREADSHEET_CHALLENGES.get(challenge_id)
+        if challenge is None:
+            return self.send_json(404, {"error": "Unknown challenge."})
+        if not isinstance(grid, dict) or len(grid) > 200:
+            return self.send_json(400, {"error": "Invalid grid submitted."})
+        clean_grid = {str(k)[:10]: str(v)[:200] for k, v in grid.items()}
+        result = spreadsheet_grade(challenge, clean_grid)
+        user_id = self.current_user_id()
+        if user_id is not None:  # same as SQL Playground — no login required, just credits a streak if signed in
+            with db_lock:
+                conn = get_db()
+                record_checkin_locked(conn, user_id)
+                conn.close()
+        self.send_json(200, result)
+
     def handle_get_skill_challenge(self, query):
         """Returns the 5 questions for a skill with the correct-answer index stripped out — the
         client never sees which option is right, so a badge can't be earned by inspecting this
@@ -3540,9 +3978,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         correct = sum(1 for given, item in zip(answers, bank) if given == item["answer"])
         passed = correct >= SKILL_CHALLENGE_PASS_THRESHOLD
 
+        webhook_targets = []
         with db_lock:
             conn = get_db()
-            row = conn.execute("SELECT verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            row = conn.execute("SELECT full_name, verified_badges FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             badges = json.loads(row["verified_badges"] or "[]") if row else []
             if passed:
                 badges = [b for b in badges if b.get("skill") != skill]
@@ -3557,9 +3996,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     (json.dumps(badges), user_id),
                 )
                 conn.commit()
+                # Only employers already actively tracking this candidate (a real pipeline row) —
+                # not every employer on the platform — get told they passed a challenge; see
+                # send_employer_webhook_event.
+                webhook_targets = conn.execute(
+                    "SELECT DISTINCT e.webhook_url, e.company_name FROM candidate_pipeline cp "
+                    "JOIN employers e ON e.id = cp.employer_id "
+                    "WHERE cp.candidate_user_id = ? AND e.webhook_url != ''",
+                    (user_id,),
+                ).fetchall()
             record_checkin_locked(conn, user_id)  # attempting a challenge is real growth, pass or fail
             conn.close()
 
+        if webhook_targets:
+            candidate_name = decrypt_field(row["full_name"]) if row else None
+            candidate_name = candidate_name or "A candidate you're tracking"
+            for emp in webhook_targets:
+                send_employer_webhook_event(
+                    emp["webhook_url"], "challenge.passed",
+                    f"Bridge NG: {candidate_name} passed the {skill} verified challenge ({correct}/{len(bank)}).",
+                    {"candidateUserId": user_id, "candidateName": candidate_name, "skill": skill,
+                     "score": correct, "total": len(bank)},
+                )
         self.send_json(200, {"score": correct, "total": len(bank), "passed": passed, "badges": badges})
 
     def handle_profile_insights(self):
@@ -4689,12 +5147,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "bankAccount": bank_account_row_to_json(row)})
 
     def handle_save_employer_webhook(self):
-        """Per-employer opt-in: a Slack or Discord incoming-webhook URL that gets a real POST when
-        a hire check-in comes back "no longer there" and backup candidates are surfaced — the one
-        employer-facing event in this app that's genuinely worth a real-time push (everything else
-        an employer sees is fine waiting for their next dashboard visit, same reasoning as
-        surface_backup_candidates' docstring). Not a global env var, since every employer has a
-        different workspace to post into."""
+        """Per-employer opt-in: a webhook URL that gets a real POST for application lifecycle
+        events (candidate.shortlisted, application.status_changed, challenge.passed) and a hire
+        check-in coming back "no longer there" with backup candidates surfaced. Slack/Discord/
+        Teams URLs are always these fixed, known domains, so they're trusted outright; anything
+        else is treated as a "custom HR portal" URL and run through is_safe_custom_webhook_url's
+        SSRF check instead of being trusted blindly — not a global env var, since every employer
+        has a different destination to post into."""
         employer_id = self.current_employer_id()
         if employer_id is None:
             return self.send_json(401, {"error": "Sign in as an employer first."})
@@ -4704,8 +5163,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
         webhook_url = (data.get("webhookUrl") or "").strip()
-        if webhook_url and not re.match(r"^https://(hooks\.slack\.com/|discord(app)?\.com/api/webhooks/)", webhook_url):
-            return self.send_json(400, {"error": "That doesn't look like a Slack or Discord webhook URL."})
+        if webhook_url and not KNOWN_WEBHOOK_HOST_RE.match(webhook_url):
+            if not is_safe_custom_webhook_url(webhook_url):
+                return self.send_json(400, {
+                    "error": "That doesn't look like a Slack/Discord/Teams webhook URL, and we couldn't "
+                             "verify it as a safe custom endpoint (must be a public HTTPS address)."
+                })
 
         with db_lock:
             conn = get_db()
@@ -4713,6 +5176,221 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.commit()
             conn.close()
         self.send_json(200, {"ok": True, "webhookUrl": webhook_url})
+
+    def handle_generate_api_key(self):
+        """Pro Growth only, owner only (same gates as team workspaces/webhooks) — issues a fresh
+        random key for the Candidate Sourcing API, overwriting any previous one (so rotating a
+        leaked key is just calling this again; there's no way to see an old key after that)."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        if self.current_team_member_info() is not None:
+            return self.send_json(403, {"error": "Only the workspace owner can manage integrations."})
+        with db_lock:
+            conn = get_db()
+            sub = conn.execute("SELECT * FROM subscriptions WHERE employer_id = ?", (employer_id,)).fetchone()
+            if not (subscription_row_to_json(sub)["tier"] == "pro_growth" and subscription_row_to_json(sub)["status"] == "active"):
+                conn.close()
+                return self.send_json(402, {"error": "The Candidate Sourcing API is a Pro Growth feature — subscribe on the pricing page first."})
+            api_key = "bng_" + secrets.token_urlsafe(32)
+            conn.execute("UPDATE employers SET api_key = ? WHERE id = ?", (api_key, employer_id))
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True, "apiKey": api_key})
+
+    def handle_sourcing_api_candidates(self, query):
+        """Read-only B2B API: anonymized candidates only — never name/email/phone/address/dob,
+        the same PII this app otherwise never lets an unauthenticated or cross-account caller see
+        (see ENCRYPTED_PROFILE_COLUMNS). Filtered exactly like the in-app employer candidate
+        search (visibility, per-company hide_from_employer, must have picked real skills) so this
+        can't surface anyone who opted out of employer search generally or of this one employer
+        specifically."""
+        employer_id = self.current_api_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Missing, invalid, or insufficient-tier API key. "
+                                                   "Generate one from your employer dashboard (Pro Growth required)."})
+        if sourcing_api_rate_limited(employer_id):
+            return self.send_json(429, {"error": f"Rate limit exceeded — max {SOURCING_API_RATE_LIMIT} requests per {SOURCING_API_RATE_WINDOW_SECONDS}s."})
+
+        with db_lock:
+            conn = get_db()
+            company_row = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            rows = conn.execute("SELECT * FROM profiles").fetchall()
+            conn.close()
+        company = company_row["company_name"] if company_row else ""
+
+        skills_filter = {s.strip().lower() for s in (query.get("skills", [""])[0] or "").split(",") if s.strip()}
+        nysc_filter = (query.get("nyscStatus", [""])[0] or "").strip().lower()
+        location_filter = (query.get("location", [""])[0] or "").strip().lower()
+        try:
+            limit = max(1, min(50, int(query.get("limit", ["25"])[0])))
+        except ValueError:
+            limit = 25
+        try:
+            offset = max(0, int(query.get("offset", ["0"])[0]))
+        except ValueError:
+            offset = 0
+
+        results = []
+        for row in rows:
+            cand_skills = json.loads(row["skills"] or "[]")
+            if not cand_skills or (row["visibility"] or "public") == "private":
+                continue
+            hidden_from = decrypt_field(row["hide_from_employer"] or "")
+            if hidden_from and hidden_from.strip().lower() == company.strip().lower():
+                continue
+            if skills_filter and not ({s.lower() for s in cand_skills} & skills_filter):
+                continue
+            nysc_status = row["nysc_status"] or ""
+            if nysc_filter and nysc_status.lower() != nysc_filter:
+                continue
+            locations = json.loads(row["preferred_locations"] or "[]")
+            if location_filter and not any(location_filter == l.lower() for l in locations):
+                continue
+            results.append({
+                "candidateId": row["user_id"],
+                "skills": cand_skills,
+                "verifiedBadges": json.loads(row["verified_badges"] or "[]"),
+                "nyscStatus": nysc_status,  # self-declared, same as everywhere else this field appears
+                "careerLevel": row["career_level"] or "",
+                "preferredLocations": locations,
+            })
+        total = len(results)
+        self.send_json(200, {"total": total, "limit": limit, "offset": offset, "candidates": results[offset:offset + limit]})
+
+    # ---------- talent pools ("Silver Medalists") ----------
+
+    def handle_list_talent_pools(self):
+        """Every pool this employer has, each with its real members' safe profile fields — the
+        same fields already shown elsewhere on the employer dashboard (fullName included: unlike
+        a fresh search result, a pool member is someone this employer already has a real
+        relationship with, not an anonymous prospect). staleDays is purely informational — a
+        computed "haven't followed up in N days" badge for the employer to see and act on
+        themselves; nothing here ever messages a candidate automatically."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        with db_lock:
+            conn = get_db()
+            pools = conn.execute(
+                "SELECT * FROM talent_pools WHERE employer_id = ? ORDER BY name", (employer_id,)
+            ).fetchall()
+            result = []
+            for pool in pools:
+                members = conn.execute(
+                    "SELECT * FROM talent_pool_members WHERE pool_id = ? ORDER BY added_at DESC", (pool["id"],)
+                ).fetchall()
+                member_list = []
+                for m in members:
+                    profile = conn.execute(
+                        "SELECT * FROM profiles WHERE user_id = ?", (m["candidate_user_id"],)
+                    ).fetchone()
+                    if profile is None:
+                        continue
+                    last_contact = m["last_reminder_at"] or m["added_at"]
+                    stale_days = None
+                    try:
+                        delta = datetime.datetime.utcnow() - datetime.datetime.strptime(last_contact, "%Y-%m-%d %H:%M:%S")
+                        stale_days = delta.days
+                    except (TypeError, ValueError):
+                        pass
+                    member_list.append({
+                        "candidateUserId": m["candidate_user_id"],
+                        "fullName": decrypt_field(profile["full_name"]) or "Bridge NG member",
+                        "skills": json.loads(profile["skills"] or "[]"),
+                        "verifiedBadges": json.loads(profile["verified_badges"] or "[]"),
+                        "nyscStatus": profile["nysc_status"] or "",
+                        "careerLevel": profile["career_level"] or "",
+                        "preferredLocations": json.loads(profile["preferred_locations"] or "[]"),
+                        "note": m["note"] or "",
+                        "addedAt": m["added_at"],
+                        "staleDays": stale_days,
+                    })
+                result.append({"id": pool["id"], "name": pool["name"], "members": member_list})
+            conn.close()
+        self.send_json(200, {"pools": result})
+
+    def handle_add_talent_pool_member(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        candidate_user_id = data.get("candidateUserId")
+        pool_name = (data.get("poolName") or "").strip()[:80]
+        note = (data.get("note") or "").strip()[:500]
+        if not candidate_user_id or not pool_name:
+            return self.send_json(400, {"error": "A candidate and a pool name are required."})
+        with db_lock:
+            conn = get_db()
+            candidate = conn.execute("SELECT 1 FROM users WHERE id = ?", (candidate_user_id,)).fetchone()
+            if candidate is None:
+                conn.close()
+                return self.send_json(404, {"error": "Candidate not found."})
+            conn.execute(
+                "INSERT INTO talent_pools (employer_id, name) VALUES (?, ?) ON CONFLICT(employer_id, name) DO NOTHING",
+                (employer_id, pool_name),
+            )
+            pool = conn.execute(
+                "SELECT id FROM talent_pools WHERE employer_id = ? AND name = ?", (employer_id, pool_name)
+            ).fetchone()
+            conn.execute(
+                """INSERT INTO talent_pool_members (pool_id, candidate_user_id, note) VALUES (?, ?, ?)
+                   ON CONFLICT(pool_id, candidate_user_id) DO UPDATE SET note=excluded.note""",
+                (pool["id"], candidate_user_id, note),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True, "poolId": pool["id"]})
+
+    def handle_remove_talent_pool_member(self):
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        pool_id = data.get("poolId")
+        candidate_user_id = data.get("candidateUserId")
+        with db_lock:
+            conn = get_db()
+            pool = conn.execute("SELECT id FROM talent_pools WHERE id = ? AND employer_id = ?", (pool_id, employer_id)).fetchone()
+            if pool is None:
+                conn.close()
+                return self.send_json(404, {"error": "Pool not found."})
+            conn.execute(
+                "DELETE FROM talent_pool_members WHERE pool_id = ? AND candidate_user_id = ?",
+                (pool_id, candidate_user_id),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
+
+    def handle_mark_talent_pool_reminded(self):
+        """The employer telling us "I just followed up with this person" — the only thing that
+        ever resets the staleness badge; this app never sends that follow-up itself."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        pool_id = data.get("poolId")
+        candidate_user_id = data.get("candidateUserId")
+        with db_lock:
+            conn = get_db()
+            pool = conn.execute("SELECT id FROM talent_pools WHERE id = ? AND employer_id = ?", (pool_id, employer_id)).fetchone()
+            if pool is None:
+                conn.close()
+                return self.send_json(404, {"error": "Pool not found."})
+            conn.execute(
+                "UPDATE talent_pool_members SET last_reminder_at = datetime('now') WHERE pool_id = ? AND candidate_user_id = ?",
+                (pool_id, candidate_user_id),
+            )
+            conn.commit()
+            conn.close()
+        self.send_json(200, {"ok": True})
 
     def handle_get_pipeline(self):
         """Only ever available to employers with a real account — the anonymous job-posting flow
@@ -4730,6 +5408,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
         stages = {str(r["candidate_user_id"]): {"stage": r["stage"], "updatedAt": r["updated_at"]} for r in rows}
         self.send_json(200, {"loggedIn": True, "stages": stages})
 
+    def handle_employer_diversity_stats(self):
+        """Aggregate-only, self-declared: counts across every candidate who's ever been in this
+        employer's pipeline (any stage), grouped by self-declared sex and primary preferred
+        location. Never an individual-level breakdown — a single candidate's row is folded into
+        these counts and never separately identifiable in the response. sex is empty for anyone
+        who picked "Prefer not to say" or never set it; folded into that same bucket rather than
+        silently dropped, so the total always accounts for every real pipeline entry."""
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT p.sex, p.preferred_locations FROM candidate_pipeline cp "
+                "JOIN profiles p ON p.user_id = cp.candidate_user_id WHERE cp.employer_id = ?",
+                (employer_id,),
+            ).fetchall()
+            conn.close()
+        sex_counts, region_counts = {}, {}
+        for row in rows:
+            sex = decrypt_field(row["sex"] or "").strip() or "Prefer not to say"
+            sex_counts[sex] = sex_counts.get(sex, 0) + 1
+            locations = json.loads(row["preferred_locations"] or "[]")
+            region = locations[0] if locations else "Not specified"
+            region_counts[region] = region_counts.get(region, 0) + 1
+        self.send_json(200, {
+            "totalCandidates": len(rows),
+            "sexBreakdown": sex_counts,
+            "regionBreakdown": region_counts,
+        })
+
     def handle_set_pipeline_stage(self):
         employer_id = self.current_employer_id()
         if employer_id is None:
@@ -4744,9 +5453,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         with db_lock:
             conn = get_db()
-            employer = conn.execute("SELECT company_name FROM employers WHERE id = ?", (employer_id,)).fetchone()
+            employer = conn.execute("SELECT company_name, webhook_url FROM employers WHERE id = ?", (employer_id,)).fetchone()
             candidate = conn.execute(
-                "SELECT whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_messages FROM profiles WHERE user_id = ?",
+                "SELECT full_name, whatsapp_number, whatsapp_alerts_enabled, whatsapp_notify_messages FROM profiles WHERE user_id = ?",
                 (candidate_user_id,),
             ).fetchone()
             if candidate is None:
@@ -4790,6 +5499,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
         if notif_message and candidate["whatsapp_alerts_enabled"] and candidate["whatsapp_notify_messages"]:
             send_whatsapp_alert(decrypt_field(candidate["whatsapp_number"]), notif_message)
+        candidate_name = decrypt_field(candidate["full_name"]) or "A candidate"
+        webhook_event_data = {"candidateUserId": candidate_user_id, "candidateName": candidate_name,
+                               "company": employer["company_name"], "stage": stage}
+        send_employer_webhook_event(
+            employer["webhook_url"], "application.status_changed",
+            f"Bridge NG: {candidate_name}'s application at {employer['company_name']} moved to '{stage}'.",
+            webhook_event_data,
+        )
+        if stage == "shortlisted":
+            send_employer_webhook_event(
+                employer["webhook_url"], "candidate.shortlisted",
+                f"Bridge NG: {candidate_name} was shortlisted at {employer['company_name']}.",
+                webhook_event_data,
+            )
         self.send_json(200, {"ok": True, "stage": stage})
 
     # ---------- 90-day hire check-ins: real day-30/60/90 pings, and if one comes back "no longer
@@ -4972,6 +5695,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         media_kind = (data.get("mediaKind") or "").strip()
         media_type = (data.get("mediaType") or "").strip()
         base64_data = data.get("base64") or ""
+        # Real speech-to-text captured live in the browser while recording — never re-generated
+        # or summarized here; whatever the browser's Web Speech API actually heard, or blank if
+        # that API isn't supported (Safari/Firefox) or the candidate denied mic access to it.
+        transcript = (data.get("transcript") or "").strip()[:5000]
         if not interview_id or question_index is None or media_kind not in ("video", "audio") or not base64_data:
             return self.send_json(400, {"error": "Missing interview, question, or recording."})
         try:
@@ -4997,11 +5724,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 conn.close()
                 return self.send_json(400, {"error": "Invalid question."})
             conn.execute(
-                """INSERT INTO async_interview_answers (interview_id, question_index, media_kind, media_type, media_base64)
-                   VALUES (?, ?, ?, ?, ?)
+                """INSERT INTO async_interview_answers (interview_id, question_index, media_kind, media_type, media_base64, transcript)
+                   VALUES (?, ?, ?, ?, ?, ?)
                    ON CONFLICT(interview_id, question_index) DO UPDATE SET
-                   media_kind=excluded.media_kind, media_type=excluded.media_type, media_base64=excluded.media_base64, created_at=datetime('now')""",
-                (interview_id, question_index, media_kind, media_type, encrypt_field(base64_data)),
+                   media_kind=excluded.media_kind, media_type=excluded.media_type, media_base64=excluded.media_base64,
+                   transcript=excluded.transcript, created_at=datetime('now')""",
+                (interview_id, question_index, media_kind, media_type, encrypt_field(base64_data), encrypt_field(transcript)),
             )
             conn.commit()
             conn.close()
@@ -5030,8 +5758,72 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "answers": [{
                 "questionIndex": a["question_index"], "mediaKind": a["media_kind"],
                 "mediaType": a["media_type"], "base64": decrypt_field(a["media_base64"]),
+                "transcript": decrypt_field(a["transcript"] or ""),
             } for a in answers],
         })
+
+    def handle_analyze_async_answer(self):
+        """Grounded, not scored: the model is asked to list only the concrete technical concepts
+        actually present in a real transcript (captured live via the Web Speech API while the
+        candidate recorded — see handle_submit_async_interview_answer), never to invent a
+        confidence percentage or a "clarity" rating that has no real signal behind it. That's a
+        deliberate scope limit, not a missing feature — see PITCH_TONE_INSTRUCTIONS' neighbors for
+        this app's general stance against fabricated-sounding metrics."""
+        if not NVIDIA_API_KEY:
+            return self.send_json(503, {"error": "Ask Bridge AI is still getting set up and isn't quite ready yet — please check back soon!"})
+        employer_id = self.current_employer_id()
+        if employer_id is None:
+            return self.send_json(401, {"error": "Sign in as an employer first."})
+        data = self.read_json_body()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        interview_id = data.get("interviewId")
+        question_index = data.get("questionIndex")
+        with db_lock:
+            conn = get_db()
+            interview = conn.execute(
+                "SELECT * FROM async_interviews WHERE id = ? AND employer_id = ?", (interview_id, employer_id)
+            ).fetchone()
+            if interview is None:
+                conn.close()
+                return self.send_json(404, {"error": "Interview not found."})
+            questions = json.loads(interview["questions"])
+            if not isinstance(question_index, int) or question_index < 0 or question_index >= len(questions):
+                conn.close()
+                return self.send_json(400, {"error": "Invalid question."})
+            answer = conn.execute(
+                "SELECT transcript FROM async_interview_answers WHERE interview_id = ? AND question_index = ?",
+                (interview_id, question_index),
+            ).fetchone()
+            conn.close()
+        transcript = decrypt_field(answer["transcript"] or "") if answer else ""
+        if len(transcript.strip()) < 15:
+            return self.send_json(200, {"conceptsMentioned": [], "tooShortToAnalyze": True})
+
+        question_text = questions[question_index]
+        prompt = (
+            f'A candidate was asked this interview question: "{question_text}"\n\n'
+            f'Speech-to-text transcript of their spoken answer (may contain recognition errors — '
+            f'use your judgment for garbled technical terms, but never add a concept that genuinely '
+            f'is not there):\n"""\n{transcript}\n"""\n\n'
+            'List ONLY the concrete technical concepts, tools, or terms the candidate actually said '
+            'or unambiguously referred to. Never invent or infer anything not genuinely present.\n\n'
+            'Respond with ONLY a JSON object (no markdown fences, no commentary) matching exactly:\n'
+            '{"conceptsMentioned": ["term1", "term2"], "tooShortToAnalyze": false}\n'
+            'Set tooShortToAnalyze to true only if the transcript is too short, garbled, or off-topic '
+            'to say anything meaningful about — in that case conceptsMentioned must be [].'
+        )
+        try:
+            reply = call_nvidia_with_fallbacks(
+                [{"role": "user", "content": prompt}], [NVIDIA_MODEL], timeout=45, source="async-interview-analyze",
+            )
+        except urllib.error.HTTPError as e:
+            print("NVIDIA async-interview-analyze error:", e.code, e.read().decode("utf-8", errors="replace"))
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        except Exception as e:
+            print("NVIDIA async-interview-analyze request failed:", e)
+            return self.send_json(502, {"error": CHAT_FALLBACK_MESSAGE})
+        self.send_json(200, parse_transcript_analysis_json(reply))
 
     # ---------- employer workspaces: team members, candidate notes, votes ----------
 
@@ -5357,6 +6149,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "preferredLocations": cand_locations,
                     "ppaState": row["ppa_state"] or "",
                     "nyscStatus": row["nysc_status"] or "",
+                    "powerSetup": row["power_setup"] or "",
+                    "internetSetup": row["internet_setup"] or "",
+                    "salaryExpectation": row["salary_expectation"],
                     "hasPitch": bool(row["pitch_media_kind"]),
                     "skills": cand_skills,
                     "score": score,
@@ -5391,6 +6186,51 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "realMatches": matches[:10],
             "notifiedCount": notified,
             "perks": perks,
+        })
+
+    def handle_employer_demand_signal(self, query):
+        """Real current-demand signal, computed from Bridge NG's own real data — deliberately NOT
+        "your competitors are hiring" (this app has no actual competitor/market intelligence feed,
+        and won't fabricate one). Same unauthenticated access as handle_post_employer_job above
+        (the free-form "Post a role" flow needs no account), so excludeCompany is a plain string
+        match rather than a session lookup — matches the trust model already used there."""
+        skills_filter = {s.strip().lower() for s in (query.get("skills", [""])[0] or "").split(",") if s.strip()}
+        if not skills_filter:
+            return self.send_json(400, {"error": "Provide at least one skill."})
+        exclude_company = (query.get("excludeCompany", [""])[0] or "").strip().lower()
+        cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        with db_lock:
+            conn = get_db()
+            imported_rows = conn.execute(
+                "SELECT company, skills FROM imported_jobs WHERE created_at >= ?", (cutoff,)
+            ).fetchall()
+            posted_rows = conn.execute(
+                "SELECT company, skills FROM employer_posted_jobs WHERE created_at >= ?", (cutoff,)
+            ).fetchall()
+            profile_rows = conn.execute("SELECT skills, visibility, hide_from_employer FROM profiles").fetchall()
+            conn.close()
+        companies = set()
+        for row in list(imported_rows) + list(posted_rows):
+            company = (row["company"] or "").strip()
+            if not company or company.lower() == exclude_company:
+                continue
+            job_skills = {s.lower() for s in json.loads(row["skills"] or "[]")}
+            if job_skills & skills_filter:
+                companies.add(company.lower())
+        candidate_count = 0
+        for row in profile_rows:
+            if (row["visibility"] or "public") == "private":
+                continue
+            hidden_from = decrypt_field(row["hide_from_employer"] or "")
+            if hidden_from and exclude_company and hidden_from.strip().lower() == exclude_company:
+                continue
+            cand_skills = {s.lower() for s in json.loads(row["skills"] or "[]")}
+            if cand_skills & skills_filter:
+                candidate_count += 1
+        self.send_json(200, {
+            "skills": sorted(skills_filter),
+            "companiesHiringLast30Days": len(companies),
+            "realCandidatesAvailable": candidate_count,
         })
 
     # ---------- messaging (Smart Sourcing) ----------
@@ -5726,9 +6566,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "this list — never invent a company, title, or role that isn't in it. If nothing in "
             "the list is a reasonable fit, say so honestly by returning an empty matches list "
             "rather than forcing a bad match.\n\n"
+            "Consider trajectory, not just literal title/keyword overlap: a candidate's real skill "
+            "combination can genuinely fit a role their past titles don't obviously suggest (e.g. "
+            "heavy spreadsheet/data-modeling experience plus a real Python skill is a legitimate "
+            "signal for an entry-level data role, even with no 'data' job title in their history). "
+            "Only surface this kind of match when the skills genuinely support it — never stretch "
+            "to fill the list. Mark any such match hiddenFit: true so the candidate understands "
+            "why a role with no obvious title match showed up.\n\n"
             "Return ONLY a JSON object (no markdown fences, no commentary) matching exactly this "
             'shape:\n{"matches": [{"id": <integer id from the list>, "reason": "one or two '
-            'sentence explanation referencing specific skills/experience"}, ...]}\n\n'
+            'sentence explanation referencing specific skills/experience", "hiddenFit": false}, ...]}\n\n'
             "Return at most 3 matches, best fit first. Only include a job if it's a genuinely "
             "reasonable fit given the skills/resume — do not pad the list to reach 3."
         )
@@ -5851,10 +6698,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "Return only the tailored resume in this format — no commentary before or after."
             )
         else:
+            tone = data.get("tone") if data.get("tone") in PITCH_TONE_INSTRUCTIONS else "formal"
             instruction = (
-                f'Write a concise, specific, professional cover letter (under 350 words) for {candidate_name}, '
-                'applying to the role below. Base it only on the resume content given — do not invent experience. '
-                'Warm and confident tone, no generic filler phrases like "I am writing to express my interest".\n\n'
+                f"{PITCH_TONE_INSTRUCTIONS[tone].format(name=candidate_name)}\n\n"
                 f"{job_desc}\n\n"
                 "Write each paragraph as a single line (no manual line wrapping) and separate paragraphs with a "
                 "blank line. Use no markdown headings or bullets — this is prose.\n\n"

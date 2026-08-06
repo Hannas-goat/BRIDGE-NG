@@ -41,7 +41,10 @@ if('serviceWorker' in navigator){
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="brand">
-          <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
+          <picture>
+            <source srcset="images/bridgeng-logo-wordmark.webp" type="image/webp">
+            <img class="brand-logo" src="images/bridgeng-logo-wordmark.png" alt="Bridge NG — closing the gap between graduating and getting hired">
+          </picture>
         </div>
       </div>
       <nav class="mega-nav" id="mega-nav">
@@ -177,7 +180,7 @@ if('serviceWorker' in navigator){
         </button>
         <button type="button" class="low-data-toggle" id="low-data-toggle" onclick="toggleLowDataMode()"></button>
         <div class="notif-area" id="notif-area" style="display:none;">
-          <button class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown()" aria-label="Notifications">
+          <button class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown()" aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
           </button>
@@ -190,7 +193,7 @@ if('serviceWorker' in navigator){
           </div>
         </div>
         <div class="profile-meter-area" id="profile-meter-area" style="display:none;">
-          <button class="profile-meter-badge" id="profile-meter-badge" onclick="toggleProfileMeterDropdown()" aria-label="Profile strength">
+          <button class="profile-meter-badge" id="profile-meter-badge" onclick="toggleProfileMeterDropdown()" aria-label="Profile strength" aria-haspopup="true" aria-expanded="false">
             <svg width="34" height="34" viewBox="0 0 34 34" class="profile-meter-ring">
               <defs>
                 <linearGradient id="header-meter-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -303,11 +306,11 @@ if('serviceWorker' in navigator){
       <p class="hero-cta-line">One click away from a tailored resume for that exact role.</p>
     </div>
     <div class="hero-photo-single" id="hero-photo-single">
-      <img id="hero-photo-img" src="images/Bridge NG - New Hire.png" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
+      <img id="hero-photo-img" data-src="images/Bridge NG - New Hire.webp" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
     </div>
   </div>
 
-  <div class="activity-ticker" id="activity-ticker">
+  <div class="activity-ticker" id="activity-ticker" aria-hidden="true">
     <div class="activity-ticker-track" id="activity-ticker-track"></div>
   </div>
 
@@ -319,6 +322,7 @@ if('serviceWorker' in navigator){
     <div id="streak-widget"></div>
     <div class="milestone-badges" id="milestone-badges"></div>
     <div class="milestone-badges" id="nysc-badge"></div>
+    <div class="milestone-badges" id="workstation-badge"></div>
     <div id="profile-completion"></div>
     <div id="profile-insights"></div>
     <div class="card" id="referrals-card" style="display:none;">
@@ -451,6 +455,34 @@ if('serviceWorker' in navigator){
         <div>
           <label>PPA local government area (LGA)</label>
           <input type="text" id="s-ppa-lga" placeholder="e.g. Ikeja">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Backup power (self-declared — not verified)</label>
+          <select id="s-power">
+            <option value="">Prefer not to say</option>
+            <option>Solar / inverter backup</option>
+            <option>Generator backup</option>
+            <option>24/7 grid power — no backup needed</option>
+            <option>No reliable backup</option>
+          </select>
+        </div>
+        <div>
+          <label>Internet connection (self-declared — not verified)</label>
+          <select id="s-internet">
+            <option value="">Prefer not to say</option>
+            <option>Fiber broadband</option>
+            <option>4G / mobile data</option>
+            <option>Unreliable / intermittent</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label>Expected monthly pay, ₦ (self-declared, optional)</label>
+          <input type="number" id="s-salary-expectation" min="0" step="1000" placeholder="e.g. 350000">
+          <p class="whatsapp-status-note">Only ever shown to a signed-in employer looking at your profile — never on your public profile link.</p>
         </div>
       </div>
       <div class="whatsapp-card">
@@ -604,6 +636,20 @@ if('serviceWorker' in navigator){
         <button class="go-btn" style="margin-top:0;" onclick="submitSqlPlaygroundQuery()">Run query →</button>
       </div>
       <div id="sqlpg-result" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h3 style="margin-bottom:6px;color:var(--indigo);">Financial Modeling Sandbox</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">A real, live spreadsheet — your formulas actually compute. Graded server-side by re-evaluating your submitted formulas against the real expected values, the same "never trust a client-reported score" rule as the SQL Playground above.</p>
+      <div id="sheetsb-challenge-list"></div>
+    </div>
+    <div class="card" id="sheetsb-editor-card" style="display:none;margin-top:16px;">
+      <p class="completion-title" id="sheetsb-active-prompt" style="margin-bottom:10px;"></p>
+      <div id="sheetsb-grid" style="overflow-x:auto;"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="go-btn" style="margin-top:0;" onclick="submitSpreadsheetSandbox()">Submit for grading →</button>
+      </div>
+      <div id="sheetsb-result" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -1237,8 +1283,11 @@ if('serviceWorker' in navigator){
       </label>
       <button class="go-btn" onclick="findCandidates()">Find matching candidates →</button>
     </div>
+    <div id="demand-signal-card"></div>
     <div id="employer-results"></div>
     <div id="employer-sent-messages"></div>
+    <div id="talent-pools-section"></div>
+    <div id="diversity-dashboard-section"></div>
 
     <!-- Employer Workspace: only for employers with a real account (see pricing.html) — the
          anonymous "type any company name" flow above has no durable identity for a shared team
@@ -1282,7 +1331,10 @@ if('serviceWorker' in navigator){
   <footer class="site-footer">
     <div class="footer-top">
       <div class="footer-brand">
-        <img src="images/bridgeng-logo-wordmark.png" alt="Bridge NG" loading="lazy">
+        <picture>
+          <source srcset="images/bridgeng-logo-wordmark.webp" type="image/webp">
+          <img src="images/bridgeng-logo-wordmark.png" alt="Bridge NG" loading="lazy">
+        </picture>
         <p>Closing the gap between graduating and getting hired.</p>
       </div>
       <nav class="footer-links" aria-label="Company">
@@ -1469,6 +1521,11 @@ if('serviceWorker' in navigator){
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <div class="pitch-tone-row" id="pitch-tone-row">
+      <button type="button" class="pitch-tone-btn active" data-tone="formal" onclick="setPitchTone('formal')">Formal &amp; Professional</button>
+      <button type="button" class="pitch-tone-btn" data-tone="direct" onclick="setPitchTone('direct')">Short &amp; Direct</button>
+      <button type="button" class="pitch-tone-btn" data-tone="creative" onclick="setPitchTone('creative')">Creative &amp; Startup</button>
+    </div>
     <div class="pitch-modal-loading" id="pitch-modal-loading">Writing a pitch based on your real resume and this role…</div>
     <div class="pitch-modal-error" id="pitch-modal-error" style="display:none;"></div>
     <textarea class="form-textarea pitch-modal-text" id="pitch-modal-text" style="display:none;"></textarea>
@@ -1545,6 +1602,24 @@ if('serviceWorker' in navigator){
       <p style="font-size:28px;margin:0 0 6px;">🎉</p>
       <p style="color:var(--ink);font-weight:600;margin:0 0 4px;">You're on the list!</p>
       <p style="font-size:13px;color:var(--ink-soft);margin:0;">We'll email you the moment the app is ready to download.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pitch-modal-overlay" id="compare-modal-overlay" onclick="if(event.target === this) closeCompareModal()">
+  <div class="pitch-modal" style="width:min(760px, 100%);">
+    <div class="pitch-modal-head">
+      <div>
+        <h3>Compare candidates</h3>
+        <p class="pitch-modal-sub">Side by side, straight from your current shortlist</p>
+      </div>
+      <button class="pitch-modal-close" onclick="closeCompareModal()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="compare-modal-body"></div>
+    <div class="pitch-modal-actions">
+      <button class="upload-btn" onclick="closeCompareModal()">Close</button>
     </div>
   </div>
 </div>
@@ -2119,6 +2194,7 @@ function pitchButtonHtml(job){
 }
 
 let pitchModalJob = null;
+let pitchTone = 'formal';
 
 function openPitchGenerator(jobId){
   if(!currentAccount){
@@ -2132,6 +2208,8 @@ function openPitchGenerator(jobId){
   const job = JOBS[jobId];
   if(!job) return;
   pitchModalJob = job;
+  pitchTone = 'formal';
+  document.querySelectorAll('.pitch-tone-btn').forEach(b => b.classList.toggle('active', b.dataset.tone === 'formal'));
   document.getElementById('pitch-modal-sub').textContent = `${job.title} at ${job.company}`;
   document.getElementById('pitch-modal-overlay').classList.add('open');
   document.getElementById('pitch-modal-loading').style.display = '';
@@ -2141,18 +2219,32 @@ function openPitchGenerator(jobId){
   generatePitchForModal(job);
 }
 
+// Switching tone re-generates for real (a different tone is a genuinely different prompt server-
+// side, see PITCH_TONE_INSTRUCTIONS) rather than trying to reword the already-written text client-side.
+function setPitchTone(tone){
+  if(pitchTone === tone || !pitchModalJob) return;
+  pitchTone = tone;
+  document.querySelectorAll('.pitch-tone-btn').forEach(b => b.classList.toggle('active', b.dataset.tone === tone));
+  document.getElementById('pitch-modal-loading').style.display = '';
+  document.getElementById('pitch-modal-text').style.display = 'none';
+  document.getElementById('pitch-modal-error').style.display = 'none';
+  document.getElementById('pitch-modal-actions').style.display = 'none';
+  generatePitchForModal(pitchModalJob);
+}
+
 async function generatePitchForModal(job){
   const jobInfo = jobInfoFromKnownJob(job);
   const name = currentAccount.profile.fullName || 'the candidate';
+  const tone = pitchTone;
   try{
-    const { text } = await apiGenerateResumeDoc({ mode: 'cover', jobInfo, candidateName: name, ...currentResumePayload() });
-    if(pitchModalJob !== job) return; // modal was closed/reopened for a different job while this was in flight
+    const { text } = await apiGenerateResumeDoc({ mode: 'cover', tone, jobInfo, candidateName: name, ...currentResumePayload() });
+    if(pitchModalJob !== job || pitchTone !== tone) return; // modal closed/reopened, or tone changed again, while this was in flight
     document.getElementById('pitch-modal-loading').style.display = 'none';
     document.getElementById('pitch-modal-text').value = text;
     document.getElementById('pitch-modal-text').style.display = '';
     document.getElementById('pitch-modal-actions').style.display = '';
   }catch(err){
-    if(pitchModalJob !== job) return;
+    if(pitchModalJob !== job || pitchTone !== tone) return;
     document.getElementById('pitch-modal-loading').style.display = 'none';
     document.getElementById('pitch-modal-error').textContent = (err && err.message) || friendlyErrorMessage('generic');
     document.getElementById('pitch-modal-error').style.display = '';
@@ -2752,7 +2844,8 @@ function closeNotifJobModal(){
 }
 
 function toggleNotifDropdown(){
-  document.getElementById('notif-dropdown').classList.toggle('open');
+  const open = document.getElementById('notif-dropdown').classList.toggle('open');
+  document.getElementById('notif-bell').setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 // Mega menu — hover-with-delay on desktop (fine pointer + real hover support), click/tap
@@ -2879,8 +2972,9 @@ function renderHeaderProfileMeter(){
 
 function toggleProfileMeterDropdown(force){
   const dd = document.getElementById('profile-meter-dropdown');
-  if(typeof force === 'boolean') dd.classList.toggle('open', force);
-  else dd.classList.toggle('open');
+  const open = typeof force === 'boolean' ? dd.classList.toggle('open', force) : dd.classList.toggle('open');
+  const badge = document.getElementById('profile-meter-badge');
+  if(badge) badge.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 // Mirrors dockNavigate('profile')'s pattern: switch to the seeker panel first (the field being
@@ -2949,10 +3043,6 @@ document.addEventListener('click', (e) => {
     document.getElementById('whatsapp-header-dropdown').classList.remove('open');
   }
 });
-
-// Real, server-scored skill challenges (see SKILL_CHALLENGES in server.py) — this list just
-// mirrors which skill names the server has a question bank for, nothing else.
-const SKILL_CHALLENGE_SKILLS = ['Python', 'SQL', 'Excel', 'Customer Service', 'JavaScript'];
 
 function renderSkillChallenges(){
   const el = document.getElementById('skill-challenges-list');
@@ -3158,6 +3248,34 @@ const ASYNC_ANSWER_MAX_SECONDS = 60;
 let myAsyncInterviews = [];
 let asyncStream = null, asyncRecorder = null, asyncChunks = [], asyncTimerInterval = null, asyncBlob = null, asyncKind = 'video';
 let asyncAnswerContext = null; // {interviewId, questionIndex}
+let asyncSpeechRecognizer = null, asyncTranscript = '';
+
+// Real live transcript via the browser's own speech recognition (Chrome/Edge only — Safari/
+// Firefox don't implement it, same "real where available, silently absent otherwise" pattern as
+// navigator.connection elsewhere in this app) — never a fabricated/regenerated transcript.
+function startAsyncSpeechCapture(){
+  asyncTranscript = '';
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return;
+  asyncSpeechRecognizer = new SR();
+  asyncSpeechRecognizer.continuous = true;
+  asyncSpeechRecognizer.interimResults = false;
+  asyncSpeechRecognizer.lang = 'en-US';
+  asyncSpeechRecognizer.onresult = (e) => {
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      if(e.results[i].isFinal) asyncTranscript += e.results[i][0].transcript + ' ';
+    }
+  };
+  asyncSpeechRecognizer.onerror = () => {}; // best-effort — the recording itself never depends on this
+  try{ asyncSpeechRecognizer.start(); }catch(e){}
+}
+
+function stopAsyncSpeechCapture(){
+  if(asyncSpeechRecognizer){
+    try{ asyncSpeechRecognizer.stop(); }catch(e){}
+    asyncSpeechRecognizer = null;
+  }
+}
 
 async function loadAsyncInterviews(){
   if(!currentAccount){ myAsyncInterviews = []; renderAsyncInterviews(); return; }
@@ -3258,6 +3376,7 @@ async function startAsyncRecording(kind){
   asyncRecorder.ondataavailable = e => { if(e.data.size > 0) asyncChunks.push(e.data); };
   asyncRecorder.onstop = onAsyncRecordingStopped;
   asyncRecorder.start();
+  startAsyncSpeechCapture();
 
   document.getElementById('async-record-video-btn').style.display = 'none';
   document.getElementById('async-record-audio-btn').style.display = 'none';
@@ -3275,6 +3394,7 @@ async function startAsyncRecording(kind){
 }
 
 function onAsyncRecordingStopped(){
+  stopAsyncSpeechCapture();
   asyncBlob = new Blob(asyncChunks, {type: asyncRecorder.mimeType});
   if(asyncStream){ asyncStream.getTracks().forEach(t => t.stop()); asyncStream = null; }
   const url = URL.createObjectURL(asyncBlob);
@@ -3305,6 +3425,8 @@ function stopAsyncRecording(){
 
 function discardAsyncRecording(){
   clearInterval(asyncTimerInterval);
+  stopAsyncSpeechCapture();
+  asyncTranscript = '';
   if(asyncRecorder && asyncRecorder.state !== 'inactive'){ asyncRecorder.onstop = null; asyncRecorder.stop(); }
   if(asyncStream){ asyncStream.getTracks().forEach(t => t.stop()); asyncStream = null; }
   asyncBlob = null;
@@ -3336,6 +3458,7 @@ async function saveAsyncAnswer(){
       mediaKind: asyncKind,
       mediaType: asyncRecorder.mimeType,
       base64,
+      transcript: asyncTranscript.trim(),
     });
     closeAsyncAnswerModal();
     showToast('Answer submitted.');
@@ -3419,15 +3542,31 @@ async function sendConversationReply(id){
   }
 }
 
+function closeNotifAndMeterDropdowns(){
+  document.getElementById('notif-dropdown').classList.remove('open');
+  const bell = document.getElementById('notif-bell');
+  if(bell) bell.setAttribute('aria-expanded', 'false');
+  document.getElementById('profile-meter-dropdown').classList.remove('open');
+  const meterBadge = document.getElementById('profile-meter-badge');
+  if(meterBadge) meterBadge.setAttribute('aria-expanded', 'false');
+}
+
 document.addEventListener('click', (e)=>{
   const area = document.getElementById('notif-area');
   if(area && !area.contains(e.target)){
     document.getElementById('notif-dropdown').classList.remove('open');
+    const bell = document.getElementById('notif-bell');
+    if(bell) bell.setAttribute('aria-expanded', 'false');
   }
   const meterArea = document.getElementById('profile-meter-area');
   if(meterArea && !meterArea.contains(e.target)){
     document.getElementById('profile-meter-dropdown').classList.remove('open');
+    const meterBadge = document.getElementById('profile-meter-badge');
+    if(meterBadge) meterBadge.setAttribute('aria-expanded', 'false');
   }
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape') closeNotifAndMeterDropdowns();
 });
 
 let currentAccount = null; // {email, profile} when signed in, else null
@@ -4015,11 +4154,185 @@ async function viewAsyncInterviewAnswers(interviewId, candidateUserId){
       const player = a.mediaKind === 'video'
         ? `<video src="${url}" controls style="width:100%;max-width:360px;border-radius:10px;margin-top:6px;"></video>`
         : `<audio src="${url}" controls style="width:100%;margin-top:6px;"></audio>`;
-      return `<div style="margin-top:10px;"><p style="font-size:12.5px;color:var(--ink);margin:0;">${i + 1}. ${escapeHtml(q)}</p>${player}</div>`;
+      const analyzeId = `async-analysis-${interviewId}-${i}`;
+      const transcriptHtml = a.transcript
+        ? `<p style="font-size:11.5px;color:var(--ink-soft);margin:6px 0 0;font-style:italic;">"${escapeHtml(a.transcript)}"</p>
+           <button type="button" class="upload-btn" style="margin-top:6px;" onclick="analyzeAsyncAnswer(${interviewId}, ${i}, '${analyzeId}')">🔍 Analyze real concepts mentioned</button>
+           <div id="${analyzeId}" style="margin-top:6px;"></div>`
+        : `<p style="font-size:11px;color:var(--ink-soft);margin:6px 0 0;opacity:.75;">No live transcript captured for this answer (needs Chrome/Edge on the candidate's side).</p>`;
+      return `<div style="margin-top:10px;"><p style="font-size:12.5px;color:var(--ink);margin:0;">${i + 1}. ${escapeHtml(q)}</p>${player}${transcriptHtml}</div>`;
     }).join('');
   }catch(e){
     el.innerHTML = '<p class="fit-none">Could not load answers.</p>';
   }
+}
+
+async function analyzeAsyncAnswer(interviewId, questionIndex, targetId){
+  const el = document.getElementById(targetId);
+  if(!el) return;
+  el.innerHTML = '<p class="loading-line">Analyzing…</p>';
+  try{
+    const result = await apiAnalyzeAsyncAnswer(interviewId, questionIndex);
+    if(result.tooShortToAnalyze || !result.conceptsMentioned.length){
+      el.innerHTML = '<p style="font-size:11.5px;color:var(--ink-soft);">Not enough in the transcript to identify real concepts.</p>';
+      return;
+    }
+    el.innerHTML = `<p style="font-size:11px;color:var(--ink-soft);margin:0 0 4px;">Real concepts identified in the transcript (grounded — never a fabricated score):</p>
+      <div class="skill-row" style="margin:0;">${result.conceptsMentioned.map(c => `<span class="skill-pill match">${escapeHtml(c)}</span>`).join('')}</div>`;
+  }catch(e){
+    el.innerHTML = `<p class="fit-none">${escapeHtml((e && e.message) || 'Could not analyze this answer.')}</p>`;
+  }
+}
+
+// --- Talent pools ("Silver Medalists") ---
+
+let talentPools = [];
+
+// Distinct from toggleMessageComposer('msg-composer-'+userId) on purpose — a pool member can
+// also be a live search result on the same page at once, and both would otherwise render an
+// element with the exact same id.
+function toggleElementDisplay(id){
+  const el = document.getElementById(id);
+  if(el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function toggleSaveToPoolForm(userId){
+  const el = document.getElementById('save-to-pool-' + userId);
+  if(!el) return;
+  const opening = el.style.display === 'none';
+  el.style.display = opening ? '' : 'none';
+  if(opening){
+    const list = document.getElementById('talent-pool-names');
+    if(list) list.innerHTML = talentPools.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
+  }
+}
+
+async function saveCandidateToPool(userId, btn){
+  const form = btn.closest('.message-composer');
+  const input = form.querySelector('.save-to-pool-input');
+  const poolName = input.value.trim();
+  const msg = document.getElementById('save-to-pool-msg-' + userId);
+  if(!poolName){ msg.textContent = 'Name the pool first.'; msg.className = 'form-msg error'; return; }
+  try{
+    await apiAddTalentPoolMember(userId, poolName);
+    msg.textContent = `✓ Saved to "${poolName}".`;
+    msg.className = 'form-msg success';
+    input.value = '';
+    loadTalentPools();
+  }catch(e){
+    msg.textContent = (e && e.message) || "Couldn't save — try again.";
+    msg.className = 'form-msg error';
+  }
+}
+
+async function loadTalentPools(){
+  const el = document.getElementById('talent-pools-section');
+  if(!el || !employerAccountLoggedIn) return;
+  try{
+    const data = await apiListTalentPools();
+    talentPools = data.pools || [];
+    renderTalentPools();
+  }catch(e){
+    // best-effort — the rest of the employer dashboard works fine without this
+  }
+}
+
+function renderTalentPools(){
+  const el = document.getElementById('talent-pools-section');
+  if(!el) return;
+  if(talentPools.length === 0){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">🗂 Talent pools</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Candidates you've already met but hired someone else for — save them here instead of losing them. Bridge NG never contacts them for you; the "overdue" badge is just a reminder for you to reach out yourself.</p>
+      ${talentPools.map(pool => `
+        <div style="margin-bottom:18px;">
+          <p style="font-weight:700;font-size:13.5px;margin:0 0 8px;">${escapeHtml(pool.name)} <span class="company-card-tag">${pool.members.length} candidate${pool.members.length === 1 ? '' : 's'}</span></p>
+          ${pool.members.map(m => `
+            <div class="res-card" style="margin-bottom:8px;padding:12px;">
+              <p class="res-title" style="font-size:13.5px;">${escapeHtml(m.fullName)} ${m.staleDays !== null && m.staleDays >= 90 ? `<span class="company-card-tag" style="background:var(--gold-pale);color:var(--gold-deep);">Overdue — ${m.staleDays}d since last contact</span>` : ''}</p>
+              <p class="res-sub">${escapeHtml((m.preferredLocations || []).join(', ') || 'Location not specified')} · ${escapeHtml(m.careerLevel || 'Level not specified')}</p>
+              ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
+              <div class="skill-row">${skillPills(m.skills, new Set())}</div>
+              <div class="btn-row">
+                <button class="ai-btn" onclick="toggleElementDisplay('pool-msg-composer-${m.candidateUserId}')">✉ Message</button>
+                <button class="upload-btn" onclick="markTalentPoolReminded(${pool.id}, ${m.candidateUserId})">✓ Mark as followed up</button>
+                <button class="upload-btn" onclick="removeFromTalentPool(${pool.id}, ${m.candidateUserId})">Remove</button>
+              </div>
+              <div class="message-composer" id="pool-msg-composer-${m.candidateUserId}" style="display:none;" data-user-id="${m.candidateUserId}" data-company="${escapeAttr((employerAccountInfo && employerAccountInfo.companyName) || '')}" data-job-title="">
+                <textarea class="form-textarea" placeholder="e.g. We're hiring again and thought of you — still open to chatting?"></textarea>
+                <button class="go-btn" style="margin-top:8px;" onclick="sendEmployerMessage(this)">Send message →</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function markTalentPoolReminded(poolId, candidateUserId){
+  try{
+    await apiMarkTalentPoolReminded(poolId, candidateUserId);
+    showToast('Marked as followed up.');
+    loadTalentPools();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+async function removeFromTalentPool(poolId, candidateUserId){
+  try{
+    await apiRemoveTalentPoolMember(poolId, candidateUserId);
+    loadTalentPools();
+  }catch(e){
+    showToast(friendlyErrorMessage('generic'));
+  }
+}
+
+// --- Diversity dashboard: aggregate-only, self-declared, across this employer's real pipeline
+// (every candidate they've ever shortlisted/interviewed/hired/rejected, any stage) — never an
+// individual-level breakdown, and always labeled self-declared since Bridge NG can't verify sex
+// against anything real. ---
+
+async function loadDiversityDashboard(){
+  const el = document.getElementById('diversity-dashboard-section');
+  if(!el || !employerAccountLoggedIn) return;
+  try{
+    const data = await apiGetDiversityStats();
+    renderDiversityDashboard(data);
+  }catch(e){
+    // best-effort — the rest of the employer dashboard works fine without this
+  }
+}
+
+function renderDiversityDashboard(data){
+  const el = document.getElementById('diversity-dashboard-section');
+  if(!el) return;
+  if(!data.totalCandidates){
+    el.innerHTML = '';
+    return;
+  }
+  const barRow = (label, count) => {
+    const pct = Math.round(count / data.totalCandidates * 100);
+    return `<div style="margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-bottom:2px;"><span>${escapeHtml(label)}</span><span>${count} (${pct}%)</span></div>
+      <div style="background:var(--surface-3);border-radius:999px;height:6px;overflow:hidden;"><div style="background:var(--indigo);height:100%;width:${pct}%;"></div></div>
+    </div>`;
+  };
+  el.innerHTML = `
+    <div class="card">
+      <h3 style="margin-bottom:4px;color:var(--indigo);">📊 Pipeline diversity overview</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0 0 16px;">Aggregate only, across all ${data.totalCandidates} candidate${data.totalCandidates === 1 ? '' : 's'} who've ever been in your pipeline (any stage) — never an individual breakdown. Sex is self-declared; Bridge NG has no way to verify it.</p>
+      <p style="font-size:12px;font-weight:700;color:var(--ink);margin:0 0 6px;">Self-declared sex</p>
+      ${Object.entries(data.sexBreakdown).map(([label, count]) => barRow(label, count)).join('')}
+      <p style="font-size:12px;font-weight:700;color:var(--ink);margin:14px 0 6px;">Preferred location</p>
+      ${Object.entries(data.regionBreakdown).map(([label, count]) => barRow(label, count)).join('')}
+    </div>
+  `;
 }
 
 async function sendEmployerMessage(btn){
@@ -4789,11 +5102,26 @@ function renderNyscBadge(){
     : '';
 }
 
+// Same self-declared honesty rule as NYSC status above — Bridge NG has no way to actually
+// inspect anyone's power/internet setup, so this is never shown as "verified".
+function renderWorkstationBadge(){
+  const el = document.getElementById('workstation-badge');
+  if(!el) return;
+  const profile = currentAccount && currentAccount.profile;
+  const parts = [];
+  if(profile && profile.powerSetup) parts.push(`⚡ ${profile.powerSetup}`);
+  if(profile && profile.internetSetup) parts.push(`📶 ${profile.internetSetup}`);
+  el.innerHTML = parts.length
+    ? `<span class="milestone-badge self-declared" title="Self-declared by the candidate — Bridge NG has no way to verify this.">${parts.join(' · ')} (self-declared)</span>`
+    : '';
+}
+
 function renderProfileCompletion(){
   const el = document.getElementById('profile-completion');
   if(!el) return;
   renderMilestoneBadges();
   renderNyscBadge();
+  renderWorkstationBadge();
   renderMegaProfileMeter();
   renderHeaderProfileMeter();
   renderWhatsappHeaderArea();
@@ -4969,6 +5297,9 @@ function fillSeekerFormFromProfile(profile){
   if(profile.nyscStatus) document.getElementById('s-nysc').value = profile.nyscStatus;
   if(profile.ppaState) document.getElementById('s-ppa-state').value = profile.ppaState;
   document.getElementById('s-ppa-lga').value = profile.ppaLga || '';
+  if(profile.powerSetup) document.getElementById('s-power').value = profile.powerSetup;
+  if(profile.internetSetup) document.getElementById('s-internet').value = profile.internetSetup;
+  document.getElementById('s-salary-expectation').value = profile.salaryExpectation || '';
   onNyscStatusChange();
   const whatsappSplit = splitPhoneCountryCode(profile.whatsappNumber);
   document.getElementById('s-whatsapp-cc').value = whatsappSplit.cc;
@@ -5218,6 +5549,9 @@ async function saveProfile(){
     nyscStatus: document.getElementById('s-nysc').value,
     ppaState: document.getElementById('s-ppa-state').value,
     ppaLga: document.getElementById('s-ppa-lga').value,
+    powerSetup: document.getElementById('s-power').value,
+    internetSetup: document.getElementById('s-internet').value,
+    salaryExpectation: document.getElementById('s-salary-expectation').value || null,
     whatsappNumber: formatPhoneWithCountryCode(document.getElementById('s-whatsapp-cc').value, document.getElementById('s-whatsapp-number').value),
     whatsappAlertsEnabled: document.getElementById('s-whatsapp-enabled').checked,
     portfolioLink: document.getElementById('s-portfolio-link').value,
@@ -5343,6 +5677,180 @@ async function submitSqlPlaygroundQuery(){
   }
 }
 
+// --- Financial Modeling Sandbox: a real, tiny formula engine mirroring server.py's
+// spreadsheet_evaluate exactly (same grammar: SUM/AVERAGE over a same-column range, +-*/ with
+// real precedence, parens, cell refs) — this is what drives the live "as you type" preview, but
+// grading always re-runs the submitted grid through the server's own copy of this same engine,
+// never trusting a client-computed pass/fail. ---
+
+let spreadsheetChallenges = [];
+let spreadsheetActiveChallenge = null;
+let spreadsheetGrid = {};
+
+async function loadSpreadsheetSandboxChallenges(){
+  if(spreadsheetChallenges.length) return; // static challenge set — no need to re-fetch every visit
+  try{
+    const data = await apiGetSpreadsheetSandboxChallenges();
+    spreadsheetChallenges = data.challenges || [];
+    renderSpreadsheetChallengeList();
+  }catch(e){
+    document.getElementById('sheetsb-challenge-list').innerHTML = '<p class="fit-none">Could not load challenges.</p>';
+  }
+}
+
+function renderSpreadsheetChallengeList(){
+  const el = document.getElementById('sheetsb-challenge-list');
+  el.innerHTML = `
+    <label>Pick a challenge</label>
+    <div class="chip-field">
+      ${spreadsheetChallenges.map(c => `<button type="button" class="chip${spreadsheetActiveChallenge === c.id ? ' selected' : ''}" onclick="selectSpreadsheetChallenge('${jsStr(c.id)}')">${escapeHtml(c.title)}</button>`).join('')}
+    </div>
+  `;
+}
+
+function selectSpreadsheetChallenge(id){
+  const challenge = spreadsheetChallenges.find(c => c.id === id);
+  if(!challenge) return;
+  spreadsheetActiveChallenge = id;
+  spreadsheetGrid = {...challenge.initialGrid};
+  renderSpreadsheetChallengeList();
+  document.getElementById('sheetsb-editor-card').style.display = '';
+  document.getElementById('sheetsb-active-prompt').textContent = challenge.prompt;
+  document.getElementById('sheetsb-result').innerHTML = '';
+  renderSpreadsheetGrid(challenge);
+  document.getElementById('sheetsb-editor-card').scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
+function renderSpreadsheetGrid(challenge){
+  const el = document.getElementById('sheetsb-grid');
+  const maxRow = Math.max(...Object.keys(challenge.labels).map(ref => parseInt(ref.slice(1), 10)));
+  let rows = '';
+  for(let r = 1; r <= maxRow; r++){
+    const labelRef = 'A' + r, valueRef = 'B' + r;
+    const label = challenge.labels[labelRef] || '';
+    const value = spreadsheetGrid[valueRef] || '';
+    rows += `<tr>
+      <td style="padding:6px 10px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">${escapeHtml(label)}</td>
+      <td style="padding:4px;"><input type="text" style="width:140px;font-family:monospace;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);color:var(--ink);" value="${escapeAttr(value)}" oninput="updateSpreadsheetCell('${valueRef}', this.value)"></td>
+      <td style="padding:6px 10px;font-size:12.5px;font-family:monospace;color:var(--indigo);" id="sheetsb-live-${valueRef}"></td>
+    </tr>`;
+  }
+  el.innerHTML = `<table style="border-collapse:collapse;"><tbody>${rows}</tbody></table>`;
+  recalcSpreadsheetPreview(challenge);
+}
+
+function updateSpreadsheetCell(ref, value){
+  spreadsheetGrid[ref] = value;
+  const challenge = spreadsheetChallenges.find(c => c.id === spreadsheetActiveChallenge);
+  if(challenge) recalcSpreadsheetPreview(challenge);
+}
+
+function recalcSpreadsheetPreview(challenge){
+  Object.keys(challenge.labels).forEach(labelRef => {
+    const ref = 'B' + labelRef.slice(1);
+    const el = document.getElementById('sheetsb-live-' + ref);
+    if(!el) return;
+    try{
+      const value = evalSpreadsheetCell(spreadsheetGrid, ref, new Set());
+      el.textContent = value.toLocaleString('en-NG', {maximumFractionDigits: 4});
+    }catch(e){
+      el.textContent = '#ERR';
+    }
+  });
+}
+
+function evalSpreadsheetCell(grid, ref, visiting){
+  if(visiting.has(ref)) throw new Error('Circular reference at ' + ref);
+  const raw = (grid[ref] || '').trim();
+  if(raw === '') return 0;
+  if(raw.startsWith('=')) return evalSpreadsheetFormula(raw.slice(1), grid, new Set([...visiting, ref]));
+  const n = parseFloat(raw);
+  if(isNaN(n)) throw new Error(`'${raw}' in ${ref} is not a number or formula`);
+  return n;
+}
+
+function spreadsheetRangeValues(grid, rangeStr, visiting){
+  const [start, end] = rangeStr.split(':');
+  const colStart = start.match(/[A-Z]+/)[0], rowStart = parseInt(start.match(/[0-9]+/)[0], 10);
+  const colEnd = end.match(/[A-Z]+/)[0], rowEnd = parseInt(end.match(/[0-9]+/)[0], 10);
+  if(colStart !== colEnd) throw new Error(`Invalid range '${rangeStr}'`);
+  const values = [];
+  for(let r = rowStart; r <= rowEnd; r++) values.push(evalSpreadsheetCell(grid, colStart + r, visiting));
+  return values;
+}
+
+function evalSpreadsheetFormula(expr, grid, visiting){
+  const tokens = expr.replace(/\s/g, '').match(/SUM|AVERAGE|[A-Z]+[0-9]+:[A-Z]+[0-9]+|[A-Z]+[0-9]+|[0-9]+\.?[0-9]*|[()+\-*/]/g) || [];
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const advance = () => tokens[pos++];
+
+  function parseExpr(){
+    let value = parseTerm();
+    while(peek() === '+' || peek() === '-'){
+      const op = advance();
+      const rhs = parseTerm();
+      value = op === '+' ? value + rhs : value - rhs;
+    }
+    return value;
+  }
+  function parseTerm(){
+    let value = parseFactor();
+    while(peek() === '*' || peek() === '/'){
+      const op = advance();
+      const rhs = parseFactor();
+      if(op === '/' && rhs === 0) throw new Error('Division by zero');
+      value = op === '*' ? value * rhs : value / rhs;
+    }
+    return value;
+  }
+  function parseFactor(){
+    const tok = peek();
+    if(tok === undefined) throw new Error('Incomplete formula');
+    if(tok === '('){
+      advance();
+      const value = parseExpr();
+      if(peek() === ')') advance();
+      return value;
+    }
+    if(tok === 'SUM' || tok === 'AVERAGE'){
+      const func = advance();
+      if(peek() === '(') advance();
+      const rangeTok = advance();
+      if(peek() === ')') advance();
+      const values = spreadsheetRangeValues(grid, rangeTok, visiting);
+      return func === 'SUM' ? values.reduce((a,b) => a+b, 0) : (values.length ? values.reduce((a,b) => a+b, 0) / values.length : 0);
+    }
+    if(/^[A-Z]+[0-9]+$/.test(tok)){
+      advance();
+      return evalSpreadsheetCell(grid, tok, visiting);
+    }
+    advance();
+    const n = parseFloat(tok);
+    if(isNaN(n)) throw new Error(`Unrecognized token '${tok}'`);
+    return n;
+  }
+  return parseExpr();
+}
+
+async function submitSpreadsheetSandbox(){
+  const resultEl = document.getElementById('sheetsb-result');
+  resultEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Grading…</p>';
+  try{
+    const data = await apiSubmitSpreadsheetSandbox(spreadsheetActiveChallenge, spreadsheetGrid);
+    loadCheckinStatus();
+    const rows = Object.entries(data.results).map(([ref, r]) =>
+      `<li>${escapeHtml(ref)}: ${r.correct ? '✓' : '✗'} ${r.actual !== null ? '(got ' + Number(r.actual).toLocaleString('en-NG', {maximumFractionDigits: 4}) + ')' : '(formula error)'}</li>`
+    ).join('');
+    resultEl.innerHTML = `
+      <div class="form-msg ${data.passed ? 'success' : 'error'}">${data.passed ? '✓ Correct — both target cells now compute the right value.' : '✗ Not quite yet — check the target cells below.'}</div>
+      <ul style="font-size:12.5px;margin-top:8px;padding-left:18px;">${rows}</ul>
+    `;
+  }catch(e){
+    resultEl.innerHTML = '<div class="form-msg error">Something went wrong grading that — try again.</div>';
+  }
+}
+
 function renderTrainResources(skill){
   const resources = trainingResourcesFor(skill);
   const el = document.getElementById('train-resources');
@@ -5385,15 +5893,18 @@ function addSkillToProfileFromTraining(skill){
   msg.className = 'form-msg success';
 }
 
+// .webp, not .png — see applyLowDataMode below for why these are the real weight to worry
+// about. WebP has had universal evergreen-browser support since 2020, same bar this codebase
+// already assumes elsewhere (backdrop-filter, mask-image), so there's no PNG fallback needed here.
 const HERO_PHOTOS = {
-  default: { src: 'images/Bridge NG - New Hire.png', alt: 'A newly hired graduate celebrating his first day, cheered on by his new team' },
-  resume: { src: 'images/CV-Resume Photo.png', alt: 'A tailored resume and cover letter laid out next to a laptop showing the Bridge NG resume studio' },
-  train: { src: 'images/Train Yourself Photo.png', alt: 'Learn Today. Lead Tomorrow. Self-paced learning for Nigerian professionals who want to grow, upskill, and stay ahead.', noMask: true },
-  employer: { src: 'images/Employer Photo.png', alt: 'Find the Right Hire. Faster. Smarter. Bridge NG matches employers with pre-vetted candidates based on real skills and role fit.', noMask: true },
-  abroad: { src: 'images/Remote Worker.png', alt: 'Your Skills. Global Opportunities. Work remotely for top companies abroad while living in Nigeria.', noMask: true },
-  explore: { src: 'images/explore jobs.png', alt: 'A newly hired candidate celebrating a job offer with a handshake, next to a "Congratulations! You\'re hired!" sign' },
-  career: { src: 'images/Bridge NG - New Hire2.png', alt: 'A Nigerian graduate reviewing global scholarship, remote job, and visa pathway matches on a laptop' },
-  jobmatch: { src: 'images/CV-Resume Photo.png', alt: 'A tailored resume matched to an open job listing, ready to submit' }
+  default: { src: 'images/Bridge NG - New Hire.webp', alt: 'A newly hired graduate celebrating his first day, cheered on by his new team' },
+  resume: { src: 'images/CV-Resume Photo.webp', alt: 'A tailored resume and cover letter laid out next to a laptop showing the Bridge NG resume studio' },
+  train: { src: 'images/Train Yourself Photo.webp', alt: 'Learn Today. Lead Tomorrow. Self-paced learning for Nigerian professionals who want to grow, upskill, and stay ahead.', noMask: true },
+  employer: { src: 'images/Employer Photo.webp', alt: 'Find the Right Hire. Faster. Smarter. Bridge NG matches employers with pre-vetted candidates based on real skills and role fit.', noMask: true },
+  abroad: { src: 'images/Remote Worker.webp', alt: 'Your Skills. Global Opportunities. Work remotely for top companies abroad while living in Nigeria.', noMask: true },
+  explore: { src: 'images/explore jobs.webp', alt: 'A newly hired candidate celebrating a job offer with a handshake, next to a "Congratulations! You\'re hired!" sign' },
+  career: { src: 'images/Bridge NG - New Hire2.webp', alt: 'A Nigerian graduate reviewing global scholarship, remote job, and visa pathway matches on a laptop' },
+  jobmatch: { src: 'images/CV-Resume Photo.webp', alt: 'A tailored resume matched to an open job listing, ready to submit' }
 };
 
 function playFadeIn(el){
@@ -5407,14 +5918,24 @@ const HERO_NO_PHOTO_PAGES = ['interview', 'appointment'];
 // Low-data mode: user-toggleable (works everywhere, persisted in localStorage) and
 // auto-suggested on first visit via the Network Information API where the browser supports it
 // (Chrome/Edge/Android WebView — not Safari/Firefox, which don't expose navigator.connection).
-// The real bandwidth savings is skipping the hero photo swap below: each panel has its own
-// ~2MB decorative photo, so browsing through several tabs on a slow connection can pull down
-// 5-10MB+ of images that are never re-used. Skipping the swap keeps whichever one loaded first.
+// Three real savings, not cosmetic: (1) the hero photo (~80-150KB WebP) is never fetched at all —
+// see updateHeroPhoto's data-src handling below — instead of just skipping the swap between
+// panels; (2) the 60s notification/message poll (startNotifPolling) stops outright, since polling
+// itself burns data on a metered connection even when nothing new ever arrives; (3) decorative,
+// continuously-running CSS animations (gradient text, drifting background orbs) are cut via the
+// .low-data-mode class below — CPU/battery cost, not bandwidth, but real on the low-end devices
+// this mode targets.
 function applyLowDataMode(enabled){
   document.body.classList.toggle('low-data-mode', enabled);
   localStorage.setItem('bridgeng_low_data', enabled ? '1' : '0');
   const btn = document.getElementById('low-data-toggle');
   if(btn) btn.textContent = enabled ? '📶 Low data mode: ON' : '📶 Low data mode: OFF';
+  if(enabled){
+    clearInterval(notifTimer);
+    notifTimer = null;
+  }else if(currentAccount){
+    startNotifPolling();
+  }
 }
 
 function toggleLowDataMode(){
@@ -5428,6 +5949,13 @@ function initLowDataMode(){
     enabled = ['slow-2g', '2g'].includes(navigator.connection.effectiveType);
   }
   applyLowDataMode(enabled);
+  // The default hero photo has no static src (see the hero-photo-img tag) specifically so a
+  // fresh page load with low data mode already on never fetches it at all — only promote
+  // data-src to src here, once, when it turns out we're NOT in low-data mode.
+  if(!enabled){
+    const img = document.getElementById('hero-photo-img');
+    if(img && img.dataset.src) img.src = img.dataset.src;
+  }
 }
 initLowDataMode();
 
@@ -5474,7 +6002,7 @@ function showPage(page){
   });
   updateHeroPhoto(page);
   updateHeroLeft(page);
-  if(page === 'sqlplayground') loadSqlPlaygroundChallenges();
+  if(page === 'sqlplayground'){ loadSqlPlaygroundChallenges(); loadSpreadsheetSandboxChallenges(); }
   if(page === 'explore') renderExploreResults();
   if(page === 'jobmatch') updateJobMatchResumeNote();
   if(page === 'employer') renderEmployerSentMessages();
@@ -5689,6 +6217,7 @@ function matchScoreExplainHtml(breakdown){
         ${breakdown.missingSkills.length ? `<span class="overlap-popover-title">Missing</span><span class="overlap-skill-group">${breakdown.missingSkills.map(s => `<span class="skill-pill miss">${escapeHtml(s)}</span>`).join('')}</span>` : ''}
         <span class="overlap-popover-title">${breakdown.levelExact ? 'Career level matches exactly (no penalty)' : `Career level ${breakdown.levelPenaltyPoints}pt penalty for the gap`}</span>
         <span class="overlap-popover-title">${breakdown.locMatches ? `Location matches (+${breakdown.locBonusPoints}pt)` : 'Location doesn’t match (no bonus, not a penalty)'}</span>
+        <span class="overlap-popover-title" style="opacity:.75;font-weight:400;">Never a factor: age, sex, ethnicity, university name — this score is skills, career level, and location only.</span>
       </span>
     </span>`;
 }
@@ -6536,13 +7065,13 @@ function renderJobMatchResults(resolved){
   results.innerHTML = `
     <div class="results-head"><h2>Your best-fit roles</h2><span>${resolved.length} match${resolved.length > 1 ? 'es' : ''}, picked by Bridge AI from real open roles</span></div>
     <div class="grid">
-      ${resolved.map(({job, reason})=>`
+      ${resolved.map(({job, reason, hiddenFit})=>`
         <div class="res-card">
           <div class="res-body">
-            <p class="res-title">${escapeHtml(job.title)}${job.imported ? ' <span class="new-badge">New</span>' : ''}</p>
+            <p class="res-title">${escapeHtml(job.title)}${job.imported ? ' <span class="new-badge">New</span>' : ''}${hiddenFit ? ' <span class="new-badge" style="background:var(--indigo);">🔍 Hidden fit</span>' : ''}</p>
             <p class="res-sub">${companyHoverSpan(job.company)} · ${escapeHtml(job.loc)} · ${escapeHtml(job.level)}</p>
             <span class="pay-pill">${payLabel(job)}</span>
-            <p class="fit-skill-label" style="margin-top:10px;">Why this fits</p>
+            <p class="fit-skill-label" style="margin-top:10px;">${hiddenFit ? 'Why this fits (not an obvious title match)' : 'Why this fits'}</p>
             <p style="font-size:13px;color:var(--ink-soft);margin:2px 0 10px;">${escapeHtml(reason)}</p>
             <div class="skill-row">${skillPills(job.skills, jobMatchSkills)}</div>
             <div class="btn-row">
@@ -6578,7 +7107,7 @@ async function runJobMatch(){
     };
     const { matches } = await apiFindJobMatches(payload);
     const resolved = matches
-      .map(m => ({ job: JOBS.find(j => j.id === m.id), reason: m.reason }))
+      .map(m => ({ job: JOBS.find(j => j.id === m.id), reason: m.reason, hiddenFit: m.hiddenFit }))
       .filter(m => m.job);
     renderJobMatchResults(resolved);
   }catch(err){
@@ -6848,7 +7377,29 @@ async function findCandidates(){
 
   lastEmployerResults = {matches: realMatches, company, title, notifiedCount, perks: confirmedPerks};
   blindedUnmasked = new Set();
+  compareSelection.clear(); // a fresh search replaces the matches list; old selections wouldn't refer to anything still visible
   renderEmployerResultsSection();
+  loadDemandSignal(skills, company);
+}
+
+// Real current-demand signal computed from Bridge NG's own posting/candidate data — never "your
+// competitors are hiring" (this app has no real market-intelligence feed for that claim).
+async function loadDemandSignal(skills, company){
+  const el = document.getElementById('demand-signal-card');
+  if(!el) return;
+  el.innerHTML = '';
+  try{
+    const data = await apiGetDemandSignal(skills, company);
+    if(data.companiesHiringLast30Days === 0 && data.realCandidatesAvailable === 0) return;
+    el.innerHTML = `
+      <div class="card" style="border-left:3px solid var(--indigo);">
+        <p style="font-weight:700;font-size:13px;margin:0 0 4px;color:var(--indigo);">📈 Real demand signal</p>
+        <p style="font-size:13px;color:var(--ink-soft);margin:0;">In the last 30 days, <b>${data.companiesHiringLast30Days}</b> other compan${data.companiesHiringLast30Days === 1 ? 'y' : 'ies'} posted roles needing similar skills (${escapeHtml(data.skills.join(', '))}), and Bridge NG has <b>${data.realCandidatesAvailable}</b> real candidate${data.realCandidatesAvailable === 1 ? '' : 's'} with matching skills right now.</p>
+      </div>
+    `;
+  }catch(e){
+    // best-effort — the rest of the results render fine without this
+  }
 }
 
 // Blinded screening: masks name + field of study (the two most identity-adjacent fields) for
@@ -6899,6 +7450,7 @@ function renderEmployerResultsSection(){
             <p class="res-title">${escapeHtml(name)} <span class="match-badge">Real member</span> ${verifiedBadgesHtml(m)}</p>
             <p class="res-sub">${escapeHtml(candidateFieldOfStudy(m, blinded))} · ${escapeHtml((m.preferredLocations || []).join(', ') || 'Location not specified')} · ${escapeHtml(m.careerLevel || 'Level not specified')}</p>
             ${m.nyscStatus ? `<p class="res-sub" style="margin-top:-6px;">📋 ${escapeHtml(m.nyscStatus)}${m.ppaState ? ' · PPA: ' + escapeHtml(m.ppaState) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
+            ${(m.powerSetup || m.internetSetup) ? `<p class="res-sub" style="margin-top:-6px;">${m.powerSetup ? '⚡ ' + escapeHtml(m.powerSetup) : ''}${m.powerSetup && m.internetSetup ? ' · ' : ''}${m.internetSetup ? '📶 ' + escapeHtml(m.internetSetup) : ''} <em style="opacity:.7;">(self-declared)</em></p>` : ''}
             ${reliabilityBadgeHtml(m)}
             <div class="skill-row">${skillPills(m.skills, employerSkills)}</div>
             <div class="btn-row" style="margin-top:10px;">
@@ -6907,6 +7459,14 @@ function renderEmployerResultsSection(){
               ${m.hasPitch ? `<button class="ai-btn" onclick="watchCandidatePitch(${m.userId}, this)">▶ Watch pitch</button>` : ''}
               <button class="ai-btn" onclick="toggleAsyncInterviewForm(${m.userId})">🎥 Video questions</button>
               ${githubUsernameFromUrl(m.portfolioLink) ? `<button class="ai-btn" onclick="watchCandidateGithub(${m.userId}, '${jsStr(m.portfolioLink)}', this)">🐙 View GitHub activity</button>` : ''}
+              <button class="ai-btn" onclick="toggleSaveToPoolForm(${m.userId})">🗂 Save to talent pool</button>
+            </div>
+            <div class="message-composer" id="save-to-pool-${m.userId}" style="display:none;">
+              <label>Pool name (existing or new)</label>
+              <input type="text" class="form-textarea save-to-pool-input" style="min-height:auto;" list="talent-pool-names" placeholder="e.g. Strong Q3 React Devs">
+              <datalist id="talent-pool-names"></datalist>
+              <button class="go-btn" style="margin-top:8px;" onclick="saveCandidateToPool(${m.userId}, this)">Save →</button>
+              <p class="form-msg" id="save-to-pool-msg-${m.userId}"></p>
             </div>
             <div class="pitch-watch-panel" id="pitch-watch-${m.userId}" style="display:none;"></div>
             <div class="github-watch-panel" id="github-watch-${m.userId}" style="display:none;"></div>
@@ -6947,14 +7507,20 @@ function renderEmployerResultsSection(){
 // it just opens that candidate's composer pre-filled with an interview-invite template.
 function shortlistMatrixHtml(matches, blinded){
   return `
+    <div class="compare-bar" id="compare-bar" style="display:none;">
+      <span id="compare-bar-count"></span>
+      <button type="button" class="ai-btn" onclick="openCompareModal()">⇄ Compare selected</button>
+      <button type="button" class="upload-btn" onclick="clearCompareSelection()">Clear</button>
+    </div>
     <div class="shortlist-matrix-wrap">
       <table class="shortlist-matrix">
         <thead>
-          <tr><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th>Hiring stage</th><th>Team</th><th></th></tr>
+          <tr><th></th><th>Candidate</th><th>Skill match</th><th>NYSC / PPA</th><th>Location</th><th>Badges</th><th>Hiring stage</th><th>Team</th><th></th></tr>
         </thead>
         <tbody>
           ${matches.map((m, i) => `
             <tr>
+              <td><input type="checkbox" aria-label="Select ${escapeAttr(candidateDisplayName(m, blinded, i))} for comparison" onchange="toggleCompareCandidate(${m.userId})" ${compareSelection.has(m.userId) ? 'checked' : ''}></td>
               <td>${escapeHtml(candidateDisplayName(m, blinded, i))}</td>
               <td><span class="matrix-score-pill" style="background:${gaugeColor(m.score).bg};color:${gaugeColor(m.score).fg};">${m.score}%</span></td>
               <td>${m.nyscStatus ? escapeHtml(m.nyscStatus) + (m.ppaState ? ' · ' + escapeHtml(m.ppaState) : '') : '—'}</td>
@@ -6965,16 +7531,81 @@ function shortlistMatrixHtml(matches, blinded){
               <td><button type="button" class="ai-btn" style="white-space:nowrap;" onclick="inviteToInterview(${m.userId})">📅 Invite to Interview</button></td>
             </tr>
             <tr id="notes-row-${m.userId}" style="display:none;">
-              <td colspan="8"><div class="candidate-notes-panel" id="notes-panel-${m.userId}"></div></td>
+              <td colspan="9"><div class="candidate-notes-panel" id="notes-panel-${m.userId}"></div></td>
             </tr>
             <tr id="scorecard-row-${m.userId}" style="display:none;">
-              <td colspan="8"><div class="candidate-scorecard-panel" id="scorecard-panel-${m.userId}"></div></td>
+              <td colspan="9"><div class="candidate-scorecard-panel" id="scorecard-panel-${m.userId}"></div></td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>
   `;
+}
+
+// Side-by-side comparison of up to 4 candidates from the current shortlist matrix — reads
+// straight from lastEmployerResults.matches by userId rather than keeping a separate copy, so it
+// can't go stale relative to what's actually on screen. Cleared whenever a fresh search replaces
+// the matches list (see renderEmployerResultsSection) since old selections wouldn't refer to
+// anything still visible.
+let compareSelection = new Set();
+const COMPARE_MAX = 4;
+
+function toggleCompareCandidate(userId){
+  if(compareSelection.has(userId)){
+    compareSelection.delete(userId);
+  }else{
+    if(compareSelection.size >= COMPARE_MAX){
+      showToast(`You can compare up to ${COMPARE_MAX} candidates at a time.`);
+      renderEmployerResultsSection(); // re-render to uncheck the box that just got blocked
+      return;
+    }
+    compareSelection.add(userId);
+  }
+  updateCompareBar();
+}
+
+function clearCompareSelection(){
+  compareSelection.clear();
+  updateCompareBar();
+  renderEmployerResultsSection();
+}
+
+function updateCompareBar(){
+  const bar = document.getElementById('compare-bar');
+  if(!bar) return;
+  bar.style.display = compareSelection.size ? '' : 'none';
+  const countEl = document.getElementById('compare-bar-count');
+  if(countEl) countEl.textContent = `${compareSelection.size} of ${COMPARE_MAX} selected`;
+}
+
+function openCompareModal(){
+  if(!lastEmployerResults || compareSelection.size < 2){
+    showToast('Select at least 2 candidates to compare.');
+    return;
+  }
+  const blindedEl = document.getElementById('e-blinded-screening');
+  const blinded = blindedEl ? blindedEl.checked : false;
+  const picked = lastEmployerResults.matches.filter(m => compareSelection.has(m.userId));
+  document.getElementById('compare-modal-body').innerHTML = `
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead><tr><th></th>${picked.map((m, i) => `<th>${escapeHtml(candidateDisplayName(m, blinded, i))}</th>`).join('')}</tr></thead>
+        <tbody>
+          <tr><td>Skill match</td>${picked.map(m => `<td><span class="matrix-score-pill" style="background:${gaugeColor(m.score).bg};color:${gaugeColor(m.score).fg};">${m.score}%</span></td>`).join('')}</tr>
+          <tr><td>Verified test scores</td>${picked.map(m => `<td>${(m.verifiedBadges || []).length ? m.verifiedBadges.map(b => `<span class="verified-badge" style="margin:0 4px 4px 0;display:inline-block;" onclick="showBadgeDetail('${escapeHtml(b.skill)}', ${b.score}, ${b.total}, '${escapeHtml(b.date)}')">✓ ${escapeHtml(b.skill)} ${b.score}/${b.total}</span>`).join('') : '<span class="overlap-popover-empty">None yet</span>'}</td>`).join('')}</tr>
+          <tr><td>NYSC status</td>${picked.map(m => `<td>${m.nyscStatus ? escapeHtml(m.nyscStatus) + (m.ppaState ? ' · ' + escapeHtml(m.ppaState) : '') + ' <em style="opacity:.7;font-size:11px;">(self-declared)</em>' : '—'}</td>`).join('')}</tr>
+          <tr><td>Location preference</td>${picked.map(m => `<td>${escapeHtml((m.preferredLocations || []).join(', ') || '—')}</td>`).join('')}</tr>
+          <tr><td>Salary expectation</td>${picked.map(m => `<td>${m.salaryExpectation ? '₦' + Number(m.salaryExpectation).toLocaleString('en-NG') + '/mo <em style="opacity:.7;font-size:11px;">(self-declared)</em>' : 'Not given'}</td>`).join('')}</tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('compare-modal-overlay').classList.add('open');
+}
+
+function closeCompareModal(){
+  document.getElementById('compare-modal-overlay').classList.remove('open');
 }
 
 // Team collaboration (votes + shared notes) — only for employers with a real workspace account;
@@ -7195,6 +7826,8 @@ async function initEmployerAccountState(){
       employerPipelineStages = pipe.stages || {};
       await loadEmployerTeam();
       await loadHireCheckins();
+      await loadTalentPools();
+      await loadDiversityDashboard();
     }
   }catch(e){
     employerAccountLoggedIn = false;
