@@ -410,7 +410,12 @@ if('serviceWorker' in navigator){
         </div>
       </div>
 
-      <p style="font-size:13px;color:var(--ink-soft);margin:20px 0 18px;border-top:1px solid var(--line);padding-top:16px;">Background &amp; preferences</p>
+      <details class="profile-accordion">
+      <summary>
+        <span><span>Background, location &amp; preferences</span><span class="accordion-sub">Education, locations, NYSC, backup power &amp; more</span></span>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="profile-accordion-body">
       <div class="field-row">
         <div>
           <label>Highest level of education</label>
@@ -512,6 +517,8 @@ if('serviceWorker' in navigator){
           <p class="whatsapp-status-note">Only ever shown to a signed-in employer looking at your profile — never on your public profile link.</p>
         </div>
       </div>
+      </div>
+      </details>
       <div class="whatsapp-card">
         <div class="whatsapp-card-head">
           <div>
@@ -538,11 +545,19 @@ if('serviceWorker' in navigator){
         <button class="upload-btn" onclick="addCustomSkill('s-skills', seekerSkills, 's-skill-input')">Add skill</button>
       </div>
       <div id="skill-radar"></div>
+      <details class="profile-accordion">
+      <summary>
+        <span><span>Portfolio &amp; skill challenges</span><span class="accordion-sub">Optional — add a project link or earn a verified skill badge</span></span>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="profile-accordion-body">
       <label>Portfolio / project link (optional, self-declared)</label>
       <input type="text" id="s-portfolio-link" placeholder="e.g. https://github.com/yourname or a Figma/portfolio link" style="margin-bottom:16px;">
       <label>Verified skill challenges</label>
       <p class="whatsapp-card-sub" style="margin:-4px 0 10px;">Take a real 5-question challenge on any of your selected skills — score 4/5 or better to earn a verified badge employers can see on your profile.</p>
       <div id="skill-challenges-list"></div>
+      </div>
+      </details>
       <div class="btn-row">
         <button class="go-btn" style="margin-top:0;" onclick="findJobs()">Find matching jobs →</button>
         <button class="ai-btn" onclick="saveCurrentSearch()">🔔 Save this search &amp; get alerts</button>
@@ -4949,8 +4964,12 @@ function renderSkillRadar(){
   const el = document.getElementById('skill-radar');
   if(!el) return;
   const skills = [...seekerSkills];
-  const data = computeSkillCategoryCoverage(skills);
   const anySelected = skills.length > 0;
+  if(!anySelected){
+    el.innerHTML = `<p class="radar-hint">Tag a few skills above to see your coverage across categories.</p>`;
+    return;
+  }
+  const data = computeSkillCategoryCoverage(skills);
 
   const size = 300, cx = size / 2, cy = size / 2, maxR = 100;
   const n = data.length;
@@ -4976,7 +4995,7 @@ function renderSkillRadar(){
   el.innerHTML = `
     <div class="radar-card fade-up-in">
       <p class="radar-title">Your skill category coverage</p>
-      <p class="radar-sub">${anySelected ? "Based on the skills you've tagged above — how broadly you cover each area." : 'Tag some skills above to see your coverage across categories.'}</p>
+      <p class="radar-sub">Based on the skills you've tagged above — how broadly you cover each area.</p>
       <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="radar-svg">
         ${gridRings}
         ${axisLines}
