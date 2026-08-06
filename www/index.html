@@ -526,17 +526,19 @@ if('serviceWorker' in navigator){
             <p class="whatsapp-card-sub">Get high-match roles and employer messages the moment they happen.</p>
           </div>
           <label class="toggle-switch">
-            <input type="checkbox" id="s-whatsapp-enabled" onchange="syncWhatsappNumberFromPhone('s-whatsapp-cc', 's-whatsapp-number', this.checked)">
+            <input type="checkbox" id="s-whatsapp-enabled" onchange="syncWhatsappNumberFromPhone('s-whatsapp-cc', 's-whatsapp-number', this.checked); toggleWhatsappFieldsVisibility('s-whatsapp-fields', this.checked);">
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </div>
-        <label>WhatsApp number</label>
-        <div class="phone-field-row">
-          <select id="s-whatsapp-cc" onchange="formatPhoneInputLive(document.getElementById('s-whatsapp-number'), this)"></select>
-          <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567" oninput="formatPhoneInputLive(this, document.getElementById('s-whatsapp-cc'))">
+        <div id="s-whatsapp-fields" style="display:none;">
+          <label>WhatsApp number</label>
+          <div class="phone-field-row">
+            <select id="s-whatsapp-cc" onchange="formatPhoneInputLive(document.getElementById('s-whatsapp-number'), this)"></select>
+            <input type="tel" id="s-whatsapp-number" placeholder="803 123 4567" oninput="formatPhoneInputLive(this, document.getElementById('s-whatsapp-cc'))">
+          </div>
+          <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
+          <p class="ndpr-note"><span aria-hidden="true">🔒</span> Your phone number is encrypted at rest and used only to send you the alerts above — never shared with employers or anyone else, and you can remove it any time by clearing this field and saving.</p>
         </div>
-        <p class="whatsapp-status-note" id="whatsapp-status-note"></p>
-        <p class="ndpr-note"><span aria-hidden="true">🔒</span> Your phone number is encrypted at rest and used only to send you the alerts above — never shared with employers or anyone else, and you can remove it any time by clearing this field and saving.</p>
       </div>
       <label>Your skills — tap to select, or type your own</label>
       <div class="chip-field" id="s-skills"></div>
@@ -3058,6 +3060,11 @@ function focusProfileFieldFromHeader(id){
 // phone field — reads the live #s-phone-cc/#s-phone DOM values (not the saved profile), so this
 // works immediately for someone filling in both fields in the same sitting, before ever saving.
 // Never overwrites a WhatsApp number the user already typed themselves.
+function toggleWhatsappFieldsVisibility(wrapperId, isChecked){
+  const el = document.getElementById(wrapperId);
+  if(el) el.style.display = isChecked ? '' : 'none';
+}
+
 function syncWhatsappNumberFromPhone(ccId, numberId, isChecked){
   if(!isChecked) return;
   const numberEl = document.getElementById(numberId);
@@ -5404,6 +5411,7 @@ function fillSeekerFormFromProfile(profile){
   document.getElementById('s-whatsapp-cc').value = whatsappSplit.cc;
   document.getElementById('s-whatsapp-number').value = whatsappSplit.number;
   document.getElementById('s-whatsapp-enabled').checked = !!profile.whatsappAlertsEnabled;
+  toggleWhatsappFieldsVisibility('s-whatsapp-fields', !!profile.whatsappAlertsEnabled);
   document.getElementById('whatsapp-status-note').textContent = 'Your preference is saved now. Delivery depends on WhatsApp alerts being turned on for Bridge NG — if nothing arrives yet, that\'s on our end, not a mistake on yours.';
   renderWhatsappHeaderArea();
   document.getElementById('s-portfolio-link').value = profile.portfolioLink || '';
