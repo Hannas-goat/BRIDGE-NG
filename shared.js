@@ -155,6 +155,23 @@ const LOCATIONS = {
   "Edo": ["Benin City","Auchi","Ekpoma","Uromi"]
 };
 
+// Only ever touches a fully-lowercase word — an acronym or already-mixed-case word (UNILAG,
+// McDonald) is left exactly as typed rather than "corrected", since there's no reliable way to
+// tell an intentional acronym from a word someone just typed in caps by mistake.
+const TITLE_CASE_MINOR_WORDS = new Set(['of', 'and', 'the', 'in', 'for', 'at', 'on']);
+
+function toTitleCase(text){
+  return text.trim().split(/\s+/).map((word, i) => {
+    if(!word || word !== word.toLowerCase()) return word;
+    if(i > 0 && TITLE_CASE_MINOR_WORDS.has(word)) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(' ');
+}
+
+function titleCaseInputOnBlur(el){
+  if(el.value.trim()) el.value = toTitleCase(el.value);
+}
+
 function createChip(containerId, targetSet, label, startSelected){
   const el = document.getElementById(containerId);
   const c = document.createElement('div');

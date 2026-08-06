@@ -379,7 +379,7 @@ if('serviceWorker' in navigator){
         </div>
         <div>
           <label>Address</label>
-          <input type="text" id="s-address" placeholder="e.g. 14 Allen Avenue, Ikeja">
+          <input type="text" id="s-address" placeholder="e.g. 14 Allen Avenue, Ikeja" onblur="titleCaseInputOnBlur(this)">
         </div>
       </div>
 
@@ -409,7 +409,7 @@ if('serviceWorker' in navigator){
       <div class="field-row">
         <div>
           <label>Field of study / background</label>
-          <input type="text" id="s-field" placeholder="e.g. Computer Science, UNILAG">
+          <input type="text" id="s-field" placeholder="e.g. Computer Science, UNILAG" onblur="titleCaseInputOnBlur(this)">
         </div>
       </div>
       <label>Preferred location(s)</label>
@@ -433,7 +433,7 @@ if('serviceWorker' in navigator){
       <div class="field-row">
         <div>
           <label>University / Institution</label>
-          <input type="text" id="s-university" placeholder="e.g. University of Lagos" oninput="onUniversityFieldChange()">
+          <input type="text" id="s-university" placeholder="e.g. University of Lagos" oninput="onUniversityFieldChange()" onblur="titleCaseInputOnBlur(this)">
         </div>
         <div>
           <label>NYSC status (self-declared — not verified)</label>
@@ -3062,7 +3062,7 @@ function renderSkillChallenges(){
       ${badge
         ? `<span class="verified-badge" onclick="showBadgeDetail('${escapeHtml(skill)}', ${badge.score}, ${badge.total}, '${escapeHtml(badge.date)}')">✓ Verified (${badge.score}/${badge.total})</span>
            <button type="button" class="upload-btn" onclick="openCertificateModal('${jsStr(skill)}')">🏆 Get certificate</button>`
-        : `<button type="button" class="upload-btn" onclick="openSkillChallenge('${escapeHtml(skill)}')">Take challenge</button>`}
+        : `<button type="button" class="challenge-cta-btn" onclick="openSkillChallenge('${escapeHtml(skill)}')">🎯 Take challenge</button>`}
     </div>`;
   }).join('');
 }
