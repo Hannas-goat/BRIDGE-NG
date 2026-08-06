@@ -306,7 +306,34 @@ if('serviceWorker' in navigator){
       <p class="hero-cta-line">One click away from a tailored resume for that exact role.</p>
     </div>
     <div class="hero-photo-single" id="hero-photo-single">
-      <img id="hero-photo-img" data-src="images/Bridge NG - New Hire.webp" alt="A newly hired graduate celebrating his first day, cheered on by his new team">
+      <img id="hero-photo-img" data-src="images/Bridge NG - New Hire.webp" alt="A newly hired graduate celebrating his first day, cheered on by his new team" style="display:none;">
+      <!-- Real illustration of Bridge NG's own UI, not a stock photo — a candidate profile card
+           genuinely connecting to a job match, built from actual app content/colors. Zero network
+           cost (no image request at all), so it shows even in Low Data Mode. -->
+      <div class="hero-ui-mockup" id="hero-ui-mockup" aria-hidden="true">
+        <div class="hero-mockup-scene">
+          <div class="hero-mockup-card hero-mockup-card-profile">
+            <div class="hero-mockup-avatar">AN</div>
+            <p class="hero-mockup-card-name">Amaka Nwosu</p>
+            <p class="hero-mockup-card-sub" style="margin-bottom:0;">Early career · Lagos</p>
+          </div>
+          <div class="hero-mockup-connector">
+            <svg viewBox="0 0 120 50" width="120" height="50"><path d="M6 6 C 40 6, 80 44, 114 44" stroke="var(--gold)" stroke-width="2" stroke-dasharray="4 6" fill="none" stroke-linecap="round"/></svg>
+            <span class="hero-mockup-match-badge">92% match</span>
+          </div>
+          <div class="hero-mockup-card hero-mockup-card-job">
+            <div class="hero-mockup-card-row">
+              <span class="hero-mockup-card-title">Backend Engineer</span>
+              <span class="new-badge">New</span>
+            </div>
+            <p class="hero-mockup-card-sub">Moniepoint · Lagos</p>
+            <div class="hero-mockup-skills">
+              <span class="match">Python</span><span class="match">SQL</span><span>AWS</span>
+            </div>
+            <div class="hero-mockup-apply-btn">Apply via Company Site</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1705,12 +1732,19 @@ if('serviceWorker' in navigator){
   </button>
 </nav>
 
-<button class="settings-fab" id="settings-fab" onclick="toggleSettingsWidget()" aria-label="Settings">
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-</button>
-<button class="chat-fab" id="chat-fab" onclick="toggleChatWidget()" aria-label="Chat with Bridge AI">
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-</button>
+<div class="fab-cluster" id="fab-cluster">
+  <div class="fab-menu" id="fab-menu">
+    <button class="settings-fab fab-menu-item" id="settings-fab" onclick="chooseFabAction(toggleSettingsWidget)" aria-label="Settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="chat-fab fab-menu-item" id="chat-fab" onclick="chooseFabAction(toggleChatWidget)" aria-label="Chat with Bridge AI">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    </button>
+  </div>
+  <button class="fab-trigger" id="fab-trigger" onclick="toggleFabMenu()" aria-label="More actions" aria-haspopup="true" aria-expanded="false">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="fab-trigger-icon-plus"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
@@ -2053,10 +2087,14 @@ function applyButtonHtml(job){
   return `<button class="apply-btn${applied ? ' applied' : ''}" onclick="${escapeAttr(onclickJs)}">${label}</button>`;
 }
 
-function followButtonHtml(company){
+// Icon-only corner badge, not a full "+ Follow X" text button in the already-crowded action row
+// — it floats top-right of the card (see .follow-badge, position:absolute on a position:relative
+// .res-card) next to nothing in particular, just out of the way of Apply/pitch/report/share.
+function followBadgeHtml(company){
   const following = isFollowingCompany(company);
   const onclickJs = `toggleFollowCompany('${jsStr(company)}', this)`;
-  return `<button class="follow-btn${following ? ' following' : ''}" title="You'll get alerts when this company posts new roles." onclick="${escapeAttr(onclickJs)}">${following ? '✓ Following' : '+ Follow ' + escapeHtml(company)}</button>`;
+  const label = following ? `Following ${company} — click to unfollow` : `Follow ${company} for new-role alerts`;
+  return `<button class="follow-badge${following ? ' following' : ''}" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}" onclick="${escapeAttr(onclickJs)}">${following ? '✓' : '+'}</button>`;
 }
 
 function reportJobButtonHtml(job){
@@ -2189,8 +2227,11 @@ function reliabilityBadgeHtml(match){
 // Pitch button reuses the exact same real AI cover-letter plumbing as Resume Studio's "Write cover
 // letter" (apiGenerateResumeDoc mode:'cover' -> NVIDIA-backed handle_resume_generate on the server),
 // just surfaced as a modal directly from the job card instead of requiring a tab switch.
+// Icon-only, matching reportJobButtonHtml/shareJobButtonHtml's footprint — the point of this pass
+// is Apply being the one obviously-prominent action, with everything else (report/share/pitch)
+// as a compact row of equal-weight ghost icons instead of competing full-text buttons.
 function pitchButtonHtml(job){
-  return `<button class="pitch-btn" onclick="openPitchGenerator(${job.id})">✨ Generate pitch</button>`;
+  return `<button class="report-job-btn" title="Generate a tailored pitch for this role" aria-label="Generate pitch" onclick="openPitchGenerator(${job.id})">✨</button>`;
 }
 
 let pitchModalJob = null;
@@ -2279,17 +2320,19 @@ function renderRecentJobsFeed(){
     <div class="grid">
       ${recent.map(j => `
         <div class="res-card">
+          ${followBadgeHtml(j.company)}
           <div class="res-body">
             <p class="res-title">${escapeHtml(j.title)} <span class="new-badge">New</span> ${skillOverlapBadgeHtml(j)}</p>
             <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
             <span class="pay-pill">${payLabel(j)}</span>
             <div class="skill-row">${skillPills(j.skills, new Set())}</div>
             <div class="btn-row">
-              ${followButtonHtml(j.company)}
               ${applyButtonHtml(j)}
-              ${pitchButtonHtml(j)}
-              ${reportJobButtonHtml(j)}
-              ${shareJobButtonHtml(j)}
+              <div class="card-secondary-actions">
+                ${pitchButtonHtml(j)}
+                ${reportJobButtonHtml(j)}
+                ${shareJobButtonHtml(j)}
+              </div>
             </div>
           </div>
         </div>
@@ -2312,6 +2355,7 @@ function renderRemoteJobsFeed(){
     <div class="grid">
       ${remoteJobs.map(j => `
         <div class="res-card">
+          ${followBadgeHtml(j.company)}
           <div class="res-body">
             <p class="res-title">${escapeHtml(j.title)}${j.imported ? ' <span class="new-badge">New</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
             <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
@@ -2319,10 +2363,11 @@ function renderRemoteJobsFeed(){
             <div class="skill-row">${skillPills(j.skills, seekerSkills)}</div>
             <div class="btn-row">
               ${applyButtonHtml(j)}
-              ${followButtonHtml(j.company)}
-              ${pitchButtonHtml(j)}
-              ${reportJobButtonHtml(j)}
-              ${shareJobButtonHtml(j)}
+              <div class="card-secondary-actions">
+                ${pitchButtonHtml(j)}
+                ${reportJobButtonHtml(j)}
+                ${shareJobButtonHtml(j)}
+              </div>
             </div>
           </div>
         </div>
@@ -2460,6 +2505,7 @@ function renderExploreResults(){
     <div class="grid">
       ${jobs.map(j => `
         <div class="res-card">
+          ${followBadgeHtml(j.company)}
           <div class="res-body">
             <p class="res-title">${escapeHtml(j.title)}${j.imported ? ' <span class="new-badge">New</span>' : ''}${currentAccount && jobMatchesMyProfile(j) ? ' <span class="match-badge">Matches you</span>' : ''} ${skillOverlapBadgeHtml(j)}</p>
             <p class="res-sub">${companyHoverSpan(j.company)} · ${escapeHtml(j.loc)} · ${escapeHtml(j.level)}</p>
@@ -2467,11 +2513,12 @@ function renderExploreResults(){
             <div class="skill-row">${skillPills(j.skills, mySkills)}</div>
             <div class="btn-row">
               ${applyButtonHtml(j)}
-              ${followButtonHtml(j.company)}
               ${bridgeGapButtonHtml(j.skills, mySkills)}
-              ${pitchButtonHtml(j)}
-              ${reportJobButtonHtml(j)}
-              ${shareJobButtonHtml(j)}
+              <div class="card-secondary-actions">
+                ${pitchButtonHtml(j)}
+                ${reportJobButtonHtml(j)}
+                ${shareJobButtonHtml(j)}
+              </div>
             </div>
             <div class="bridge-gap-panel" style="display:none;"></div>
           </div>
@@ -2511,7 +2558,10 @@ async function toggleFollowCompany(company, btn){
     }
     if(btn){
       const following = isFollowingCompany(company);
-      btn.textContent = following ? '✓ Following' : '+ Follow ' + company;
+      btn.textContent = following ? '✓' : '+';
+      const label = following ? `Following ${company} — click to unfollow` : `Follow ${company} for new-role alerts`;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
       btn.classList.toggle('following', following);
     }
   }catch(err){
@@ -3609,6 +3659,36 @@ function renderThemeGrid(){
 function initTheme(){
   applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'daybreak');
 }
+
+// Single FAB trigger expanding into the two real actions (chat, settings) instead of two
+// permanently-visible circles crowding the same corner. chooseFabAction runs the real toggle
+// (unchanged — still just flips chat-panel/settings-panel display) then closes the mini-menu,
+// so opening chat/settings from here behaves exactly like the old direct buttons did.
+function toggleFabMenu(force){
+  const menu = document.getElementById('fab-menu');
+  const trigger = document.getElementById('fab-trigger');
+  const open = typeof force === 'boolean' ? force : !menu.classList.contains('open');
+  menu.classList.toggle('open', open);
+  trigger.classList.toggle('open', open);
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function closeFabMenu(){
+  toggleFabMenu(false);
+}
+
+function chooseFabAction(actionFn){
+  closeFabMenu();
+  actionFn();
+}
+
+document.addEventListener('click', (e) => {
+  const cluster = document.getElementById('fab-cluster');
+  if(cluster && !cluster.contains(e.target)) closeFabMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape') closeFabMenu();
+});
 
 let settingsOpen = false;
 function toggleSettingsWidget(){
@@ -5949,19 +6029,18 @@ function initLowDataMode(){
     enabled = ['slow-2g', '2g'].includes(navigator.connection.effectiveType);
   }
   applyLowDataMode(enabled);
-  // The default hero photo has no static src (see the hero-photo-img tag) specifically so a
-  // fresh page load with low data mode already on never fetches it at all — only promote
-  // data-src to src here, once, when it turns out we're NOT in low-data mode.
-  if(!enabled){
-    const img = document.getElementById('hero-photo-img');
-    if(img && img.dataset.src) img.src = img.dataset.src;
-  }
+  // No eager photo fetch here at all, in any mode: the default landing panel now shows the real
+  // UI-mockup illustration (zero network cost), and updateHeroPhoto() only ever promotes a real
+  // panel photo's data-src to src lazily, the moment that specific panel is actually shown — so a
+  // photo for a panel someone never visits is never fetched, low-data mode or not.
 }
 initLowDataMode();
 
 function updateHeroPhoto(page){
   const container = document.getElementById('hero-photo-single');
   const heroEl = document.querySelector('.hero');
+  const mockup = document.getElementById('hero-ui-mockup');
+  const img = document.getElementById('hero-photo-img');
   if(HERO_NO_PHOTO_PAGES.includes(page)){
     container.style.display = 'none';
     heroEl.classList.add('no-photo');
@@ -5969,9 +6048,19 @@ function updateHeroPhoto(page){
   }
   container.style.display = '';
   heroEl.classList.remove('no-photo');
-  if(document.body.classList.contains('low-data-mode')) return; // keep whichever photo already loaded, don't fetch another
   const photo = HERO_PHOTOS[page] || HERO_PHOTOS.default;
-  const img = document.getElementById('hero-photo-img');
+  if(photo === HERO_PHOTOS.default){
+    // The default panel uses the real UI-mockup illustration, not a photo — genuinely zero
+    // network cost, so (unlike the real photos below) it shows even in Low Data Mode.
+    mockup.style.display = '';
+    img.style.display = 'none';
+    container.classList.remove('no-mask');
+    playFadeIn(container);
+    return;
+  }
+  mockup.style.display = 'none';
+  img.style.display = '';
+  if(document.body.classList.contains('low-data-mode')) return; // keep whichever photo already loaded, don't fetch another
   img.src = photo.src;
   img.alt = photo.alt;
   container.classList.toggle('no-mask', !!photo.noMask);
@@ -6375,6 +6464,7 @@ function findJobs(){
         const score = breakdown.score;
         const c = gaugeColor(score);
         return `<div class="res-card">
+          ${followBadgeHtml(job.company)}
           <div class="gauge">
             <svg width="60" height="42" viewBox="0 0 60 42">
               <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
@@ -6392,7 +6482,6 @@ function findJobs(){
             <div class="skill-row">${skillPills(job.skills, seekerSkills)}</div>
             <div class="btn-row">
               ${applyButtonHtml(job)}
-              ${followButtonHtml(job.company)}
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'cover')">Write cover letter ↗</button>
               ${bridgeGapButtonHtml(job.skills, seekerSkills)}
@@ -6427,6 +6516,7 @@ function findAbroadJobs(){
       ${scored.map(({job,score})=>{
         const c = gaugeColor(score);
         return `<div class="res-card">
+          ${followBadgeHtml(job.company)}
           <div class="gauge">
             <svg width="60" height="42" viewBox="0 0 60 42">
               <path d="M4 34 C 4 10, 56 10, 56 34" stroke="${c.bg}" stroke-width="6" fill="none" stroke-linecap="round"/>
@@ -7076,7 +7166,6 @@ function renderJobMatchResults(resolved){
             <div class="skill-row">${skillPills(job.skills, jobMatchSkills)}</div>
             <div class="btn-row">
               ${applyButtonHtml(job)}
-              ${followButtonHtml(job.company)}
               <button class="ai-btn" onclick="goToResumeStudio(${job.id}, 'resume')">Tailor my resume ↗</button>
               ${reportJobButtonHtml(job)}
               ${shareJobButtonHtml(job)}

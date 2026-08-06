@@ -21,6 +21,7 @@
   --surface-2:rgba(20,33,61,0.035);
   --surface-3:rgba(20,33,61,0.06);
   --accent-deep:#6D28D9;
+  --on-accent:#fff;
   --elevated:rgba(255,255,255,0.92);
   --glass-blur:blur(16px) saturate(150%);
   --shadow-sm:0 4px 18px rgba(20,33,61,0.10);
@@ -37,7 +38,7 @@
   --indigo:#8B5CF6; --indigo-soft:#A78BFA; --gold:#D9A441; --gold-deep:#A66E1B;
   --green:#1FAE73; --green-deep:#0E8F5E; --green-pale:rgba(31,174,115,0.14); --gold-pale:rgba(217,164,65,0.18);
   --red:#C23B3B; --red-pale:rgba(194,59,59,0.14); --surface-2:rgba(20,33,61,0.035); --surface-3:rgba(20,33,61,0.06);
-  --accent-deep:#6D28D9; --elevated:rgba(255,255,255,0.92);
+  --accent-deep:#6D28D9; --on-accent:#fff; --elevated:rgba(255,255,255,0.92);
   --shadow-sm:0 4px 18px rgba(20,33,61,0.10); --shadow-md:0 14px 34px rgba(20,33,61,0.12), 0 0 24px rgba(139,92,246,0.10);
   --shadow-lg:0 26px 56px rgba(20,33,61,0.16), 0 0 40px rgba(217,164,65,0.16);
 }
@@ -47,7 +48,7 @@
   --indigo:#8B5CF6; --indigo-soft:#A78BFA; --gold:#E3B04B; --gold-deep:#C9932E;
   --green:#2ED18F; --green-deep:#17B37A; --green-pale:rgba(46,209,143,0.16); --gold-pale:rgba(227,176,75,0.18);
   --red:#F2726B; --red-pale:rgba(242,114,107,0.16); --surface-2:rgba(255,255,255,0.045); --surface-3:rgba(255,255,255,0.07);
-  --accent-deep:#7C3AED; --elevated:rgba(20,28,45,0.92);
+  --accent-deep:#7C3AED; --on-accent:#fff; --elevated:rgba(20,28,45,0.92);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.35); --shadow-md:0 14px 34px rgba(0,0,0,0.45), 0 0 24px rgba(139,92,246,0.16);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.55), 0 0 40px rgba(227,176,75,0.16);
 }
@@ -58,7 +59,7 @@
   --indigo:#8B5CF6; --indigo-soft:#A78BFA; --gold:#22D3EE; --gold-deep:#06B6D4;
   --green:#34D399; --green-deep:#10B981; --green-pale:rgba(52,211,153,0.14); --gold-pale:rgba(34,211,238,0.14);
   --red:#F87171; --red-pale:rgba(248,113,113,0.16); --surface-2:rgba(255,255,255,0.05); --surface-3:rgba(255,255,255,0.075);
-  --accent-deep:#6D28D9; --elevated:rgba(17,20,26,0.92);
+  --accent-deep:#6D28D9; --on-accent:#fff; --elevated:rgba(17,20,26,0.92);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.45); --shadow-md:0 14px 34px rgba(0,0,0,0.55), 0 0 26px rgba(139,92,246,0.14);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.65), 0 0 46px rgba(34,211,238,0.16);
 }
@@ -67,7 +68,7 @@
   --indigo:#3F8F5F; --indigo-soft:#5FAE7C; --gold:#D8A24B; --gold-deep:#B37F2E;
   --green:#4ADE80; --green-deep:#22C55E; --green-pale:rgba(74,222,128,0.16); --gold-pale:rgba(216,162,75,0.18);
   --red:#F87171; --red-pale:rgba(248,113,113,0.16); --surface-2:rgba(255,255,255,0.045); --surface-3:rgba(255,255,255,0.07);
-  --accent-deep:#2A6B45; --elevated:rgba(16,27,20,0.92);
+  --accent-deep:#2A6B45; --on-accent:#fff; --elevated:rgba(16,27,20,0.92);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.35); --shadow-md:0 14px 34px rgba(0,0,0,0.45), 0 0 24px rgba(63,143,95,0.16);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.55), 0 0 40px rgba(216,162,75,0.18);
 }
@@ -76,7 +77,7 @@
   --indigo:#2FA8C9; --indigo-soft:#5FC3DE; --gold:#E8B34A; --gold-deep:#C6912C;
   --green:#34D399; --green-deep:#10B981; --green-pale:rgba(52,211,153,0.16); --gold-pale:rgba(232,179,74,0.18);
   --red:#F87171; --red-pale:rgba(248,113,113,0.16); --surface-2:rgba(255,255,255,0.045); --surface-3:rgba(255,255,255,0.07);
-  --accent-deep:#1C7A93; --elevated:rgba(8,26,36,0.92);
+  --accent-deep:#1C7A93; --on-accent:#fff; --elevated:rgba(8,26,36,0.92);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.35); --shadow-md:0 14px 34px rgba(0,0,0,0.45), 0 0 24px rgba(47,168,201,0.18);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.55), 0 0 40px rgba(232,179,74,0.16);
 }
@@ -85,7 +86,7 @@
   --indigo:#FF6B6B; --indigo-soft:#FF8F8F; --gold:#FFB347; --gold-deep:#E8952B;
   --green:#34D399; --green-deep:#10B981; --green-pale:rgba(52,211,153,0.16); --gold-pale:rgba(255,179,71,0.2);
   --red:#E8534B; --red-pale:rgba(232,83,75,0.18); --surface-2:rgba(255,255,255,0.055); --surface-3:rgba(255,255,255,0.08);
-  --accent-deep:#C23B5A; --elevated:rgba(42,18,32,0.92);
+  --accent-deep:#C23B5A; --on-accent:#fff; --elevated:rgba(42,18,32,0.92);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.35); --shadow-md:0 14px 34px rgba(0,0,0,0.45), 0 0 24px rgba(255,107,107,0.18);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.55), 0 0 40px rgba(255,179,71,0.2);
 }
@@ -94,7 +95,7 @@
   --indigo:#C97B9E; --indigo-soft:#E0A0BE; --gold:#D9A441; --gold-deep:#B8823A;
   --green:#1FAE73; --green-deep:#0E8F5E; --green-pale:rgba(31,174,115,0.14); --gold-pale:rgba(217,164,65,0.18);
   --red:#C23B3B; --red-pale:rgba(194,59,59,0.14); --surface-2:rgba(61,36,54,0.035); --surface-3:rgba(61,36,54,0.06);
-  --accent-deep:#A85A82; --elevated:rgba(255,255,255,0.92);
+  --accent-deep:#A85A82; --on-accent:#fff; --elevated:rgba(255,255,255,0.92);
   --shadow-sm:0 4px 18px rgba(61,36,54,0.10); --shadow-md:0 14px 34px rgba(61,36,54,0.12), 0 0 24px rgba(201,123,158,0.14);
   --shadow-lg:0 26px 56px rgba(61,36,54,0.16), 0 0 40px rgba(217,164,65,0.16);
 }
@@ -103,7 +104,7 @@
   --indigo:#333333; --indigo-soft:#555555; --gold:#808080; --gold-deep:#5C5C5C;
   --green:#2E7D46; --green-deep:#1F5C33; --green-pale:rgba(46,125,70,0.14); --gold-pale:rgba(128,128,128,0.16);
   --red:#A33A3A; --red-pale:rgba(163,58,58,0.14); --surface-2:rgba(0,0,0,0.035); --surface-3:rgba(0,0,0,0.06);
-  --accent-deep:#000000; --elevated:rgba(255,255,255,0.95);
+  --accent-deep:#000000; --on-accent:#fff; --elevated:rgba(255,255,255,0.95);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.10); --shadow-md:0 14px 34px rgba(0,0,0,0.14), 0 0 0 rgba(0,0,0,0);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.18), 0 0 0 rgba(0,0,0,0);
 }
@@ -112,7 +113,7 @@
   --indigo:#8B5E34; --indigo-soft:#A97B4E; --gold:#C08A2E; --gold-deep:#9C6E20;
   --green:#4C7A3D; --green-deep:#37592C; --green-pale:rgba(76,122,61,0.16); --gold-pale:rgba(192,138,46,0.18);
   --red:#96402E; --red-pale:rgba(150,64,46,0.16); --surface-2:rgba(59,42,26,0.04); --surface-3:rgba(59,42,26,0.07);
-  --accent-deep:#6B4423; --elevated:rgba(241,227,198,0.94);
+  --accent-deep:#6B4423; --on-accent:#fff; --elevated:rgba(241,227,198,0.94);
   --shadow-sm:0 4px 18px rgba(59,42,26,0.12); --shadow-md:0 14px 34px rgba(59,42,26,0.16), 0 0 24px rgba(139,94,52,0.14);
   --shadow-lg:0 26px 56px rgba(59,42,26,0.2), 0 0 40px rgba(192,138,46,0.16);
 }
@@ -122,7 +123,7 @@
   --indigo:#FFFF00; --indigo-soft:#FFEE33; --gold:#00FFFF; --gold-deep:#33FFFF;
   --green:#00FF00; --green-deep:#00CC00; --green-pale:rgba(0,255,0,0.18); --gold-pale:rgba(0,255,255,0.18);
   --red:#FF3333; --red-pale:rgba(255,51,51,0.18); --surface-2:rgba(255,255,255,0.06); --surface-3:rgba(255,255,255,0.1);
-  --accent-deep:#CCCC00; --elevated:rgba(0,0,0,0.96);
+  --accent-deep:#CCCC00; --on-accent:#000; --elevated:rgba(0,0,0,0.96);
   --shadow-sm:0 4px 18px rgba(0,0,0,0.6); --shadow-md:0 14px 34px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.4);
   --shadow-lg:0 26px 56px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.4);
 }
@@ -325,7 +326,7 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:500;margin:0;}
   0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0.5);}
   50%{box-shadow:0 0 0 5px rgba(52,211,153,0);}
 }
-.hero-photo-single{position:relative;width:100%;aspect-ratio:3/2;display:flex;align-items:center;justify-content:center;}
+.hero-photo-single{position:relative;width:100%;min-width:0;aspect-ratio:3/2;display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .hero-photo-single::before{
   content:'';
   position:absolute;
@@ -351,6 +352,31 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:500;margin:0;}
   mask-image:none;
   border-radius:20px;
   filter:drop-shadow(0 10px 26px rgba(139,92,246,0.18));
+}
+
+/* Real illustration of Bridge NG's own UI (a candidate profile card genuinely connecting to a
+   job match), replacing what used to be a generic stock photo on the default landing panel —
+   built from the app's real content/colors, not a licensed or generated image. */
+.hero-ui-mockup{position:relative;z-index:1;width:100%;height:100%;display:flex;align-items:center;justify-content:center;perspective:1400px;}
+.hero-mockup-scene{position:relative;width:360px;height:340px;transform:rotateX(8deg) rotateY(-16deg);transform-style:preserve-3d;animation:hero-mockup-float 6s ease-in-out infinite;}
+@keyframes hero-mockup-float{0%,100%{transform:rotateX(8deg) rotateY(-16deg) translateY(0);}50%{transform:rotateX(8deg) rotateY(-16deg) translateY(-10px);}}
+.hero-mockup-card{position:absolute;width:172px;background:var(--elevated);border:0.5px solid var(--line);border-radius:16px;padding:13px 15px;box-shadow:var(--shadow-lg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);}
+.hero-mockup-card-profile{top:0;left:4px;transform:translateZ(20px);}
+.hero-mockup-card-job{top:235px;left:140px;transform:translateZ(80px);}
+.hero-mockup-avatar{width:34px;height:34px;border-radius:50%;background:var(--accent-deep);color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:600;font-size:13px;margin-bottom:8px;}
+.hero-mockup-card-name{font-family:'Fraunces',serif;font-size:14px;color:var(--ink);font-weight:600;margin:0;}
+.hero-mockup-card-sub{font-size:11px;color:var(--ink-soft);margin:2px 0 8px;}
+.hero-mockup-skills{display:flex;gap:5px;flex-wrap:wrap;}
+.hero-mockup-skills span{font-size:9.5px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--gold-pale);color:var(--gold-deep);}
+.hero-mockup-skills span.match{background:var(--green-pale);color:var(--green-deep);}
+.hero-mockup-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;}
+.hero-mockup-card-title{font-family:'Fraunces',serif;font-size:14px;color:var(--ink);font-weight:600;}
+.hero-mockup-connector{position:absolute;top:172px;left:70px;transform:translateZ(100px);display:flex;flex-direction:column;align-items:center;pointer-events:none;}
+.hero-mockup-connector svg{display:block;opacity:.8;}
+.hero-mockup-match-badge{font-size:10.5px;font-weight:700;color:var(--on-accent);background:var(--accent-deep);padding:3px 10px;border-radius:999px;margin-top:-8px;white-space:nowrap;}
+.hero-mockup-apply-btn{margin-top:10px;background:var(--accent-deep);color:var(--on-accent);font-size:10.5px;font-weight:700;padding:6px 12px;border-radius:8px;text-align:center;}
+@media (max-width:720px){
+  .hero-mockup-scene{animation:none;transform:rotateX(6deg) rotateY(-12deg) scale(.52);}
 }
 @keyframes fade-up{
   from{opacity:0;transform:translateY(16px) scale(.99);}
@@ -409,7 +435,10 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .consent-row{display:flex;align-items:flex-start;gap:10px;margin:18px 0;font-size:13px;line-height:1.5;color:var(--ink-soft);cursor:pointer;}
 .consent-row input[type=checkbox]{margin-top:3px;width:16px;height:16px;flex:none;cursor:pointer;}
 .consent-row a{color:var(--indigo);}
-.go-btn{position:relative;overflow:hidden;margin-top:20px;background:linear-gradient(135deg, var(--indigo-soft), var(--indigo) 60%);color:#fff;border:none;padding:13px 26px;border-radius:12px;font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.14), 0 6px 16px rgba(139,92,246,0.22);transition:transform .15s ease,box-shadow .15s ease,background .15s ease;}
+/* Same reasoning as .apply-btn above: solid --accent-deep + --on-accent text, not a light
+   indigo-soft/indigo gradient with hardcoded white — this is the app's single most-used button,
+   so it's the button where a broken-contrast theme (High Contrast's yellow --indigo) would hurt most. */
+.go-btn{position:relative;overflow:hidden;margin-top:20px;background:var(--accent-deep);color:var(--on-accent);border:none;padding:13px 26px;border-radius:12px;font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.14), 0 6px 16px rgba(139,92,246,0.22);transition:transform .15s ease,box-shadow .15s ease,background .15s ease;}
 .go-btn::after{
   content:'';
   position:absolute;
@@ -420,7 +449,7 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
   transition:left .6s ease;
 }
 .go-btn:hover::after{left:125%;}
-.go-btn:hover{background:linear-gradient(135deg, #7C3AED, var(--accent-deep) 60%);transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 24px rgba(139,92,246,0.32);}
+.go-btn:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 24px rgba(139,92,246,0.32);}
 .go-btn:active{transform:translateY(0) scale(.97);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1), 0 3px 10px rgba(139,92,246,0.22);}
 .results-head{display:flex;justify-content:space-between;align-items:baseline;margin:36px 0 16px;}
 .results-head h2{font-size:20px;color:var(--indigo);}
@@ -451,8 +480,24 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .skill-pill.match{background:var(--green-pale);color:var(--green-deep);}
 .skill-pill.missing{background:var(--red-pale);color:var(--red);}
 .pay-pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--green-pale);color:var(--green-deep);margin:2px 0 10px;}
-.apply-btn{border:1px solid var(--indigo);background:linear-gradient(135deg, var(--indigo-soft), var(--indigo) 60%);color:#fff;font-weight:700;font-size:13px;padding:8px 16px;border-radius:8px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.14);transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease;}
-.apply-btn:hover{background:var(--accent-deep);border-color:var(--accent-deep);transform:translateY(-2px);box-shadow:0 8px 18px rgba(139,92,246,0.28);}
+/* Dark-theme-only readability fix: the shared --green-pale/--green-deep pairing (a near-black
+   translucent background behind saturated bright-green text) sits right at the edge of WCAG AA
+   here and reads as neon-on-black. A more opaque, still-greenish background plus plain white
+   text reads as an ordinary SaaS chip instead (verified ~8.6:1 contrast) without losing the
+   "this matched" green cue the tint still carries. The light-theme version (deep green text on a
+   near-white pale background) already reads fine, so this is scoped to dark themes only. */
+[data-theme="midnight"] .skill-pill.match, [data-theme="midnight"] .pay-pill{background:rgba(46,209,143,0.28);color:#fff;}
+[data-theme="forest"] .skill-pill.match, [data-theme="forest"] .pay-pill{background:rgba(74,222,128,0.28);color:#fff;}
+[data-theme="cyberpunk"] .skill-pill.match, [data-theme="cyberpunk"] .pay-pill,
+[data-theme="ocean"] .skill-pill.match, [data-theme="ocean"] .pay-pill,
+[data-theme="sunset"] .skill-pill.match, [data-theme="sunset"] .pay-pill{background:rgba(52,211,153,0.28);color:#fff;}
+/* Solid --accent-deep, not the lighter indigo-soft/indigo gradient this used to run — that
+   gradient's light end fails WCAG AA against the hardcoded white text in every theme, and
+   catastrophically so in High Contrast, whose --indigo is pure yellow (~1:1 with white). Every
+   theme's --accent-deep is dark enough for white text except High Contrast, which is why the
+   text color is --on-accent (a per-theme override), not a literal #fff. */
+.apply-btn{border:1px solid var(--accent-deep);background:var(--accent-deep);color:var(--on-accent);font-weight:700;font-size:13px;padding:8px 16px;border-radius:8px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.14);transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease;}
+.apply-btn:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(139,92,246,0.28);}
 .apply-btn:active{transform:translateY(0) scale(.97);}
 .apply-btn.applied{border-color:var(--green-deep);background:var(--green-pale);color:var(--green-deep);cursor:default;}
 .apply-btn.applied:hover{background:var(--green-pale);color:var(--green-deep);}
@@ -480,7 +525,7 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .challenge-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
 .challenge-row:last-child{border-bottom:none;}
 .challenge-skill{font-size:13px;font-weight:600;color:var(--ink);}
-.challenge-cta-btn{border:none;background:linear-gradient(135deg, var(--indigo-soft), var(--indigo) 60%);color:#fff;font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.14), 0 3px 10px rgba(139,92,246,0.28);transition:transform .15s ease,box-shadow .15s ease;}
+.challenge-cta-btn{border:none;background:var(--accent-deep);color:var(--on-accent);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.14), 0 3px 10px rgba(139,92,246,0.28);transition:transform .15s ease,box-shadow .15s ease;}
 .challenge-cta-btn:hover{transform:translateY(-1px);}
 .challenge-cta-btn:active{transform:translateY(0);}
 .verified-badge{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(16,185,129,0.16);color:var(--green-deep);cursor:pointer;animation:verified-badge-glow 2.4s ease-in-out infinite;}
@@ -521,6 +566,16 @@ input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[ty
 .follow-btn.following:hover{background:var(--green-deep);color:#fff;}
 .report-job-btn{border:1px solid var(--line);background:transparent;color:var(--ink-soft);font-size:13px;padding:8px 10px;border-radius:8px;cursor:pointer;line-height:1;transition:border-color .15s ease,color .15s ease;}
 .report-job-btn:hover{border-color:var(--red);color:var(--red);}
+/* Icon-only corner badge — floats top-right of .res-card (position:relative already set there),
+   out of the action row entirely, so following a company isn't competing with Apply for
+   attention. Text-as-color (not background-fill), so it's never at risk of the white-on-light-
+   accent contrast problem the fixes above this file deal with. */
+.follow-badge{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;transition:all .15s ease;}
+.follow-badge:hover{border-color:var(--gold-deep);color:var(--gold-deep);transform:scale(1.08);}
+.follow-badge.following{border-color:var(--green-deep);background:var(--green-pale);color:var(--green-deep);}
+/* Equal-weight ghost icons (report/share/pitch) grouped so they read as one secondary cluster
+   instead of three buttons individually competing with Apply for visual weight. */
+.card-secondary-actions{display:flex;gap:6px;margin-left:auto;}
 .saved-search-chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;padding:6px 8px 6px 12px;border-radius:999px;background:var(--surface-3);color:var(--ink);margin:0 8px 8px 0;}
 .saved-search-chip button{border:none;background:transparent;color:var(--ink-soft);font-size:15px;line-height:1;cursor:pointer;padding:2px 4px;}
 .saved-search-chip button:hover{color:var(--red);}
@@ -968,11 +1023,31 @@ textarea#s-resume:disabled{background:var(--surface-3);color:var(--ink-soft);}
 .social-fab{width:44px;height:44px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--indigo);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,0.12);cursor:pointer;transition:transform .15s ease,background .15s ease,color .15s ease;}
 .social-fab:hover{background:var(--indigo);color:#fff;transform:translateY(-3px);}
 
-.chat-fab{position:fixed;bottom:24px;right:24px;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;z-index:300;
+/* Single always-visible trigger + a mini-menu of the two real actions (chat, settings) that
+   expands upward from it — replaces what used to be two permanently-visible circles crowding
+   the same corner. See toggleFabMenu/chooseFabAction in index.html. */
+.fab-cluster{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.fab-trigger{width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;flex:none;
+  background:var(--accent-deep);color:var(--on-accent);display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.16), var(--shadow-lg);transition:transform .2s ease,box-shadow .2s ease,background .2s ease;}
+.fab-trigger:hover{transform:scale(1.05);}
+.fab-trigger:active{transform:scale(.96);}
+.fab-trigger-icon-plus{transition:transform .25s cubic-bezier(.16,.84,.44,1);}
+.fab-trigger.open .fab-trigger-icon-plus{transform:rotate(45deg);}
+.fab-menu{display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;pointer-events:none;transform:translateY(10px) scale(.92);transition:opacity .18s ease,transform .18s cubic-bezier(.16,.84,.44,1);}
+.fab-menu.open{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);}
+.fab-menu-item{width:48px;height:48px;}
+@media (max-width:720px){
+  .fab-cluster{bottom:calc(64px + env(safe-area-inset-bottom));right:16px;}
+  .fab-trigger{width:52px;height:52px;}
+  .fab-menu-item{width:44px;height:44px;}
+}
+
+.chat-fab{border-radius:50%;border:none;cursor:pointer;
   background:linear-gradient(135deg, var(--indigo-soft), var(--indigo) 60%);color:#fff;display:flex;align-items:center;justify-content:center;
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.16), var(--shadow-lg);transition:transform .2s ease,box-shadow .2s ease;}
-.chat-fab:hover{transform:translateY(-3px) scale(1.05);}
-.chat-fab:active{transform:translateY(0) scale(.96);}
+.chat-fab:hover{transform:scale(1.08);}
+.chat-fab:active{transform:scale(.96);}
 
 .chat-panel{position:fixed;bottom:96px;right:24px;width:min(360px, calc(100vw - 32px));height:min(480px, calc(100vh - 140px));
   background:var(--elevated);border-radius:20px;box-shadow:var(--shadow-lg);border:0.5px solid var(--line);
@@ -993,20 +1068,19 @@ textarea#s-resume:disabled{background:var(--surface-3);color:var(--ink-soft);}
 .chat-send-btn:hover{transform:scale(1.06);}
 .chat-send-btn:active{transform:scale(.94);}
 @media (max-width:720px){
-  .chat-fab{bottom:calc(64px + env(safe-area-inset-bottom));right:16px;width:52px;height:52px;}
   .chat-panel{bottom:calc(128px + env(safe-area-inset-bottom));right:16px;}
 }
 
-/* Settings — stacked directly above the chat FAB (same right offset, not side-by-side) so the
-   two floating buttons don't crowd the same horizontal strip of the viewport; gold gradient
-   instead of indigo keeps them visually distinct at a glance regardless of position. */
-.settings-fab{position:fixed;bottom:94px;right:24px;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;z-index:300;
+/* Settings — gold gradient instead of indigo keeps the two mini-menu items visually distinct
+   from each other at a glance; both are now plain flex items inside .fab-menu (see above), not
+   independently fixed-positioned. */
+.settings-fab{border-radius:50%;border:none;cursor:pointer;
   background:linear-gradient(135deg, var(--gold), var(--gold-deep) 60%);color:#fff;display:flex;align-items:center;justify-content:center;
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.16), var(--shadow-lg);transition:transform .2s ease,box-shadow .2s ease;}
-.settings-fab:hover{transform:translateY(-3px) scale(1.05);}
-.settings-fab:active{transform:translateY(0) scale(.96);}
+.settings-fab:hover{transform:scale(1.08);}
+.settings-fab:active{transform:scale(.96);}
 
-.settings-panel{position:fixed;bottom:166px;right:24px;width:min(400px, calc(100vw - 32px));max-height:min(600px, calc(100vh - 140px));
+.settings-panel{position:fixed;bottom:96px;right:24px;width:min(400px, calc(100vw - 32px));max-height:min(600px, calc(100vh - 140px));
   background:var(--elevated);border-radius:20px;box-shadow:var(--shadow-lg);border:0.5px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;z-index:300;animation:card-enter .3s cubic-bezier(.16,.84,.44,1) both;backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);}
 .settings-panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:linear-gradient(135deg, var(--gold), var(--gold-deep) 60%);color:#fff;flex:none;}
@@ -1033,8 +1107,7 @@ textarea#s-resume:disabled{background:var(--surface-3);color:var(--ink-soft);}
 .settings-account-toggle button.active{background:var(--indigo);color:#fff;}
 .settings-signed-out{font-size:12.5px;color:var(--ink-soft);text-align:center;padding:10px 4px;}
 @media (max-width:720px){
-  .settings-fab{bottom:calc(126px + env(safe-area-inset-bottom));right:16px;width:52px;height:52px;}
-  .settings-panel{bottom:calc(192px + env(safe-area-inset-bottom));right:16px;}
+  .settings-panel{bottom:calc(128px + env(safe-area-inset-bottom));right:16px;}
   .theme-grid{grid-template-columns:repeat(4, 1fr);}
 }
 
