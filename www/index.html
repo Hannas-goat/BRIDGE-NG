@@ -6046,7 +6046,14 @@ function applyLowDataMode(enabled){
 }
 
 function toggleLowDataMode(){
-  applyLowDataMode(!document.body.classList.contains('low-data-mode'));
+  const enabling = !document.body.classList.contains('low-data-mode');
+  applyLowDataMode(enabling);
+  if(!enabling){
+    // Turning data-saving back off: fetch the current panel's photo right away rather than
+    // leaving it blank until the user happens to switch tabs and back.
+    const activePage = TAB_PANELS.find(key => document.getElementById('panel-' + key).style.display !== 'none');
+    if(activePage) updateHeroPhoto(activePage);
+  }
 }
 
 function initLowDataMode(){
@@ -6086,8 +6093,15 @@ function updateHeroPhoto(page){
     return;
   }
   mockup.style.display = 'none';
+  if(document.body.classList.contains('low-data-mode')){
+    // Keep whichever photo already loaded rather than fetching a new one — but if nothing has
+    // loaded yet (fresh session, or low data mode was on from the very first visit), there's
+    // nothing to "keep": leave the img hidden instead of showing a broken-image icon with
+    // whatever alt text happens to be left over from a previous panel.
+    img.style.display = img.src ? '' : 'none';
+    return;
+  }
   img.style.display = '';
-  if(document.body.classList.contains('low-data-mode')) return; // keep whichever photo already loaded, don't fetch another
   img.src = photo.src;
   img.alt = photo.alt;
   container.classList.toggle('no-mask', !!photo.noMask);
